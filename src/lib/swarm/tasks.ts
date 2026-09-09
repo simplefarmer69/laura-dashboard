@@ -20,17 +20,19 @@ import {
   usd,
 } from "@/lib/swarm/context";
 
+/* Generous caps: providers write long; hard failures cost a whole agent turn.
+   Anything display-constrained is truncated at the point of use instead. */
 export const briefSchema = z.object({
-  headline: z.string().max(140),
-  bullets: z.array(z.string().max(280)).min(3).max(6),
+  headline: z.string().max(400),
+  bullets: z.array(z.string().max(700)).min(2).max(8),
 });
 
 export const draftSchema = z.object({
   kind: z.enum(["thread", "article", "community", "outreach", "report", "video-script"]),
-  channel: z.string().max(60),
-  title: z.string().max(120),
-  body: z.string().max(6000),
-  rationale: z.string().max(400),
+  channel: z.string().max(100),
+  title: z.string().max(300),
+  body: z.string().max(20000),
+  rationale: z.string().max(1200),
 });
 
 export const draftsSchema = z.object({ drafts: z.array(draftSchema).min(1).max(3) });
@@ -39,18 +41,18 @@ export const proposalsSchema = z.object({
   lessons: z
     .array(
       z.object({
-        text: z.string().min(20).max(320),
-        evidence: z.string().max(200),
+        text: z.string().min(20).max(700),
+        evidence: z.string().max(500),
       }),
     )
     .max(3),
   proposals: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "narrative", "steward", "bd", "analyst"]),
-        proposedStrategy: z.string().min(80).max(1800),
-        rationale: z.string().max(600),
-        evidence: z.array(z.string().max(200)).min(1).max(5),
+        agentId: z.enum(["scout", "narrative", "steward", "bd", "analyst", "mint"]),
+        proposedStrategy: z.string().min(80).max(4000),
+        rationale: z.string().max(1500),
+        evidence: z.array(z.string().max(500)).min(1).max(6),
       }),
     )
     .max(2),
@@ -124,6 +126,7 @@ export function producerSystem(agent: Agent): string {
 export function producerPrompt(agent: Agent, ctx: CycleContext): string {
   const kinds = KIND_BY_AGENT[agent.id] ?? ["thread"];
   return [
+    `TODAY (UTC): ${ctx.grade.date}. Use this date; never invent another.`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
     `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
     `MISSION\n${missionDigest(ctx.mission)}`,
@@ -236,8 +239,8 @@ export const launchSchema = z.object({
       postTaxBps: z.number().min(0).max(500),
       sellsEnabled: z.boolean(),
       bufferSecs: z.number().min(600).max(3600),
-      concept: z.string().max(500),
-      rationale: z.string().max(500),
+      concept: z.string().max(1200),
+      rationale: z.string().max(1200),
     })
     .nullable(),
   skipReason: z.string().max(300).nullable(),
