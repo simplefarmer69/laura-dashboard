@@ -178,6 +178,16 @@ is in place.
   to real generation with no code change. Model override lives in Settings.
 - Run `npm run worker` under a process manager (systemd, pm2, or a container) next to `npm start`.
 
+### Phase 2a — Community interface *(built, token-gated)*
+- Done: LAURA speaks. A public persona (`src/lib/chat/`) with charter + public-chat
+  rules answers users in the console Chat tab today and connects to Discord
+  (discord.js, DMs + @mentions) and Telegram (long polling, DMs + commands/mentions)
+  the moment `DISCORD_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN` are set. Live metrics, grade
+  and mission are injected into every answer; rate-limited per user; deterministic
+  fallback answers without an LLM key.
+- Next: log community questions as signals for Scout (what the market keeps asking
+  is a content roadmap), and let Steward draft FAQ updates from recurring questions.
+
 ### Phase 2 — Distribution rails *(next build)*
 - Channel connectors behind the same approval gate: X API v2 (official account),
   Discord webhook, Telegram bot, Notion/Ghost for articles. "Mark published"

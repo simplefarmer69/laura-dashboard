@@ -8,6 +8,7 @@ import {
   GitBranch,
   Inbox,
   LineChart as LineChartIcon,
+  MessageCircle,
   Play,
   Radio,
   RefreshCw,
@@ -27,6 +28,7 @@ import { SettingsPanel } from "@/components/console/settings";
 import { ActivityFeed } from "@/components/console/activity";
 import { Growth } from "@/components/console/growth";
 import { Launchpad } from "@/components/console/launchpad";
+import { ChatPanel } from "@/components/console/chat";
 import { pct, usd } from "@/components/console/format";
 import type { CycleRun } from "@/lib/types";
 
@@ -153,6 +155,9 @@ export function Console() {
               <TabsTrigger value="growth">
                 <LineChartIcon /> Growth
               </TabsTrigger>
+              <TabsTrigger value="chat">
+                <MessageCircle /> Chat
+              </TabsTrigger>
               <TabsTrigger value="queue">
                 <Inbox /> Review queue
                 {pendingDrafts > 0 && (
@@ -195,6 +200,9 @@ export function Console() {
             </TabsContent>
             <TabsContent value="growth">
               <Growth state={state} />
+            </TabsContent>
+            <TabsContent value="chat">
+              <ChatPanel />
             </TabsContent>
             <TabsContent value="queue">
               <ReviewQueue state={state} refresh={refresh} />

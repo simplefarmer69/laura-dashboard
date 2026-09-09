@@ -70,6 +70,28 @@ parameters inside hard rails (cycle cadence 2–12h, draft budget 3–8):
 Every adjustment is logged to Activity with the numbers that justified it.
 Toggle it off in Settings ("Auto-tune parameters") to pin values manually.
 
+### Talk to LAURA (console, Discord, Telegram)
+
+The **Chat** tab talks to LAURA's public persona: charter-bound, live-data-aware
+(price, revenue, volume, pot, grade, mission), never gives financial advice, and
+always identifies as an AI. The same brain powers the community connectors —
+add a token and restart to bring her to your server:
+
+```bash
+# Telegram: create a bot with @BotFather, then
+TELEGRAM_BOT_TOKEN=123456:ABC...
+# Discord: create an app at discord.com/developers, enable the
+# "Message Content" intent, invite it with Send Messages permission, then
+DISCORD_BOT_TOKEN=...
+```
+
+Behaviour is deliberately polite: Telegram DMs are always answered, groups only
+on /commands, @mentions or replies to her; Discord only on DMs and @mentions.
+Per-user rate limiting, 1,800-character reply cap, and a public-chat rule set on
+top of the charter (no predictions, no internal ops, scam warnings). Without an
+LLM key she still answers the core topics (stats, mission, Clock In, launches)
+deterministically from live data.
+
 ### Launchpad (on-chain deploys)
 
 Mint proposes at most one token launch per cycle against the live
