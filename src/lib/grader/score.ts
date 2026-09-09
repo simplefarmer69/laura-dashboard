@@ -122,7 +122,7 @@ export function scoreExecution(state: SwarmState, now: number): GradeComponent {
       label: "Swarm execution",
       weight: WEIGHTS.execution,
       score: 50,
-      detail: `${recent.length} drafts awaiting review; neutral until reviewers act`,
+      detail: `No reviewer decisions in the last 24h (${recent.length} drafts pending); neutral until reviewers act`,
     };
   }
   const approvalRate = approved.length / reviewed.length;

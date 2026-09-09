@@ -1,12 +1,15 @@
 {
-  "name": "tmp-scaffold",
+  "name": "stonk-swarm",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 4747",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start -p 4747",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "worker": "tsx --tsconfig tsconfig.json scripts/worker.ts",
+    "cycle": "tsx --tsconfig tsconfig.json scripts/cycle.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.52",
@@ -35,5 +38,6 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"
-  }
+  },
+  "description": "Human-supervised growth swarm for StonkBrokers with a live daily grader."
 }

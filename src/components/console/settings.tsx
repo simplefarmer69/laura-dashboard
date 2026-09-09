@@ -1,0 +1,141 @@
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
+import { Save } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { patchJson, type ConsoleState } from "@/components/console/use-swarm-state";
+import type { Settings } from "@/lib/types";
+
+export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh: () => Promise<void> }) {
+  const [form, setForm] = useState<Settings>(state.settings);
+  const [busy, setBusy] = useState(false);
+
+  function set<K extends keyof Settings>(key: K, value: Settings[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      await patchJson("/api/settings", form);
+      toast.success("Settings saved");
+      await refresh();
+    } catch (err) {
+      toast.error("Save failed", { description: String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle className="text-sm">Grader targets</CardTitle>
+          <CardDescription>
+            Where the grader reads price (DexScreener) and protocol revenue/volume (DefiLlama).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <Field label="Token address" hint="ERC-20 graded on price">
+            <Input value={form.tokenAddress} onChange={(e) => set("tokenAddress", e.target.value)} className="font-mono text-xs" />
+          </Field>
+          <Field label="DexScreener chain slug">
+            <Input value={form.chainSlug} onChange={(e) => set("chainSlug", e.target.value)} />
+          </Field>
+          <Field label="Chain ID">
+            <Input type="number" value={form.chainId} onChange={(e) => set("chainId", Number(e.target.value))} />
+          </Field>
+          <Field label="DefiLlama protocol slug">
+            <Input value={form.llamaSlug} onChange={(e) => set("llamaSlug", e.target.value)} />
+          </Field>
+          <Field label="Project name">
+            <Input value={form.projectName} onChange={(e) => set("projectName", e.target.value)} />
+          </Field>
+          <Field label="Project site" hint="Docs are fetched from /docs">
+            <Input value={form.projectSite} onChange={(e) => set("projectSite", e.target.value)} />
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Swarm behaviour</CardTitle>
+          <CardDescription>Cadence, output budget and autonomy level.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Field label="Cycle interval (hours)" hint="Used by the scheduler worker">
+            <Input
+              type="number"
+              min={1}
+              max={24}
+              value={form.cycleIntervalHours}
+              onChange={(e) => set("cycleIntervalHours", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Max drafts per cycle">
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              value={form.maxDraftsPerCycle}
+              onChange={(e) => set("maxDraftsPerCycle", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="LLM model override" hint="Blank uses the provider default">
+            <Input value={form.llmModel} onChange={(e) => set("llmModel", e.target.value)} placeholder="e.g. claude-sonnet-4-5" />
+          </Field>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Auto-apply strategy proposals</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Lets the coach rewrite agent strategy text without review. Publishing drafts is always gated.
+              </p>
+            </div>
+            <Switch
+              checked={form.autoApplyStrategyProposals}
+              onCheckedChange={(v) => set("autoApplyStrategyProposals", Boolean(v))}
+            />
+          </div>
+          <Button className="w-full" disabled={busy} onClick={() => void save()}>
+            <Save className="size-3.5" /> Save settings
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-3">
+        <CardHeader>
+          <CardTitle className="text-sm">Runtime</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+          <p>
+            LLM provider: <span className="font-mono text-foreground">{state.runtime.llmProvider}</span>
+            {state.runtime.llmProvider === "mock" && " — set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable real generation."}
+          </p>
+          <p>
+            Model: <span className="font-mono text-foreground">{state.runtime.llmModel}</span>
+          </p>
+          <p>
+            Scheduler: run <span className="font-mono text-foreground">npm run worker</span> alongside the app for
+            unattended cycles.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      {children}
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
