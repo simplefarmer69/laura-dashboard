@@ -92,6 +92,24 @@ top of the charter (no predictions, no internal ops, scam warnings). Without an
 LLM key she still answers the core topics (stats, mission, Clock In, launches)
 deterministically from live data.
 
+### Publish to X
+
+Approved drafts targeting channel "X" get a **Publish to X** button that posts
+for real (threads become reply chains, split at 280 chars). Posting needs OAuth
+1.0a user context:
+
+```bash
+X_API_KEY=...              # app "API Key"
+X_API_SECRET=...           # app "API Key Secret"
+X_ACCESS_TOKEN=...         # account access token (Read & Write)
+X_ACCESS_TOKEN_SECRET=...
+X_BEARER_TOKEN=...         # optional, read-only lookups
+```
+
+Until the access token pair exists the button stays locked and "Mark published"
+covers manual posting. Publishing is always operator-clicked; the swarm never
+posts on its own.
+
 ### Launchpad (on-chain deploys)
 
 Mint proposes at most one token launch per cycle against the live
