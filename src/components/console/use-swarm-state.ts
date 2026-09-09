@@ -19,7 +19,8 @@ export function useSwarmState(pollMs = 15_000) {
     if (inflight.current) return;
     inflight.current = true;
     try {
-      const res = await fetch("/api/state", { cache: "no-store" });
+      // Timeout so a hung request can't wedge `inflight` and block every later poll.
+      const res = await fetch("/api/state", { cache: "no-store", signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setState((await res.json()) as ConsoleState);
       setError(null);

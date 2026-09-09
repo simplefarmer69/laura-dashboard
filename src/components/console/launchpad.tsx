@@ -37,7 +37,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
   useEffect(() => {
     let live = true;
     const load = () =>
-      fetch("/api/launchpad", { cache: "no-store" })
+      fetch("/api/launchpad", { cache: "no-store", signal: AbortSignal.timeout(20_000) })
         .then((r) => r.json())
         .then((d) => live && setInfo(d as LaunchpadInfo))
         .catch(() => undefined);
