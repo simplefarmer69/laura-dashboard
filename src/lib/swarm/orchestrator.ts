@@ -296,7 +296,21 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             mock: () => mintMock(ctx, pending),
           }),
         );
-        const spec = out.value.value.launch;
+        let spec = out.value.value.launch;
+        let skipReason = out.value.value.skipReason ?? "No launch this cycle";
+        /* Never queue a concept that duplicates an existing non-rejected launch. */
+        if (spec) {
+          const dupe = state.launches.some(
+            (l) =>
+              l.status !== "rejected" &&
+              l.status !== "failed" &&
+              (l.symbol === spec!.symbol || l.name.trim().toLowerCase() === spec!.name.trim().toLowerCase()),
+          );
+          if (dupe) {
+            skipReason = `Dropped duplicate concept: ${spec.name} ($${spec.symbol}) already exists in the queue or on-chain`;
+            spec = null;
+          }
+        }
         if (spec) {
           const launch: LaunchProposal = {
             id: newId("launch"),
@@ -345,7 +359,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             agentId: "mint",
             label: "Launch spec",
             status: "skipped",
-            summary: out.value.value.skipReason ?? "No launch this cycle",
+            summary: skipReason,
             durationMs: out.ms,
           });
         }
