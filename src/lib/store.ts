@@ -30,6 +30,7 @@ function freshState(): SwarmState {
     events: [],
     lessons: [],
     milestones: [],
+    launches: [],
   };
 }
 

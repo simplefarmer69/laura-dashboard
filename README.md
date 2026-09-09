@@ -6,14 +6,15 @@ day on live `$STONKBROKER` price, protocol revenue and protocol volume. Its
 mission ends at a $1B market cap, when LAURA takes the operating mandate of the
 StonkBrokers DAIO ([`DAIO.md`](./DAIO.md)).
 
-Six agents (Scout, Quill, Steward, Broker, Ledger, Coach) run in cycles: the
-grader pulls live metrics from DexScreener, DefiLlama and the Robinhood Chain
-RPC, the scout briefs the swarm, four producers write drafts (threads, articles,
-community posts, outreach, reports), and the coach distils lessons into swarm
-memory and proposes revised strategies for whichever agents are lagging. Every
-action is logged and visualised in a terminal styled after stonkbrokers.cash.
-Nothing is published or adopted without a human decision unless you explicitly
-turn strategy auto-apply on.
+Seven agents (Scout, Quill, Steward, Broker, Ledger, Mint, Coach) run in
+cycles: the grader pulls live metrics from DexScreener, DefiLlama and the
+Robinhood Chain RPC, the scout briefs the swarm, four producers write drafts
+(threads, articles, community posts, outreach, reports), Mint designs token
+launches for the StonkBrokers Smart Launch V2 pad, and the coach distils
+lessons into swarm memory and proposes revised strategies for whichever agents
+are lagging. Every action is logged and visualised in a terminal styled after
+stonkbrokers.cash. Nothing is published, adopted or deployed without a human
+decision unless you explicitly turn strategy auto-apply on.
 
 See [`PLAN.md`](./PLAN.md) for the architecture, grader rubric, self-improvement
 loop, guardrails and the phased roadmap (including the treasury phase).
@@ -53,10 +54,28 @@ npm run worker       # standalone scheduler
 npm run cycle        # one-shot cycle, for cron
 ```
 
+### Launchpad (on-chain deploys)
+
+Mint proposes at most one token launch per cycle against the live
+[Stonk Launcher](https://www.stonkbrokers.cash/launcher) Smart Launch V2 pad
+(`0xFCd6…EC9f`, WETH lane, chain 4663), using the official ABI from the
+StonkBrokers integration docs. Specs are validated against the pad's on-chain
+bounds and sit in the **Launchpad** tab until an operator approves them. The
+deploy button stays locked until the swarm wallet exists and holds ETH:
+
+```bash
+SWARM_WALLET_PRIVATE_KEY=0x...   # the funded operations wallet (never commit this)
+```
+
+Hard caps enforced in code, not prompts: operator approval per launch, max 3
+deploys per 24 h, max 0.02 ETH spend per deploy (fee + 2x gas), spec
+re-validated against live pad bounds at deploy time.
+
 ## Layout
 
 ```
 src/lib/grader/      DexScreener + DefiLlama + RPC adapters, scoring rubric
+src/lib/launchpad/   Smart Launch V2 ABI, pad reads, gated deploy service
 src/lib/mission*.ts  $1B ladder, milestone stamping, DAIO mandate flag
 src/lib/swarm/       charter & roster, LLM layer, prompts/schemas, orchestrator, strategy versioning
 src/app/api/         state, cycle, grade, drafts, proposals, agents, settings
@@ -74,3 +93,6 @@ Optional env: `ROBINHOOD_RPC_URL` to point on-chain reads at a dedicated provide
   return promises and any wash-trading or price-targeting activity.
 - The coach may only evolve per-agent strategy text, never the charter, rubric
   or code. Every superseded strategy is kept for rollback.
+- Token launches are specs until an operator approves them; deploys execute
+  only from the designated wallet, inside per-day and per-deploy spend caps,
+  and names/symbols may never impersonate other projects, people or securities.

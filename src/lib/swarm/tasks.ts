@@ -217,6 +217,72 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
   }
 }
 
+/* ---------------------------------- Mint ---------------------------------- */
+
+export const launchSchema = z.object({
+  launch: z
+    .object({
+      name: z.string().min(3).max(48),
+      symbol: z
+        .string()
+        .min(2)
+        .max(10)
+        .regex(/^[A-Z0-9]+$/),
+      supplyTokens: z.number().min(1_000_000).max(1e12),
+      startMcapUsd: z.number().min(1000).max(1_000_000),
+      gradMcapUsd: z.number().min(50_000).max(10_000_000),
+      startTaxBps: z.number().min(0).max(9900),
+      taxDecayPerMinuteBps: z.number().min(0).max(2000),
+      postTaxBps: z.number().min(0).max(500),
+      sellsEnabled: z.boolean(),
+      bufferSecs: z.number().min(600).max(3600),
+      concept: z.string().max(500),
+      rationale: z.string().max(500),
+    })
+    .nullable(),
+  skipReason: z.string().max(300).nullable(),
+});
+
+export type LaunchOut = z.infer<typeof launchSchema>;
+
+export function mintPrompt(ctx: CycleContext, floor: string, pendingLaunches: number): string {
+  return [
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `METRICS\n${metricsDigest(ctx.metrics)}`,
+    `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
+    `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
+    `PENDING LAURA LAUNCHES AWAITING REVIEW OR DEPLOY: ${pendingLaunches}`,
+    `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
+    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive. If 2+ LAURA launches are already pending, skip.`,
+  ].join("\n\n");
+}
+
+export function mintMock(ctx: CycleContext, pendingLaunches: number): LaunchOut {
+  if (pendingLaunches >= 2) {
+    return { launch: null, skipReason: "Two LAURA launches already await review; keeping the queue tight." };
+  }
+  const day = ctx.grade.date.replaceAll("-", "").slice(4);
+  return {
+    launch: {
+      name: "Opening Bell",
+      symbol: `BELL${day.slice(0, 2)}`,
+      supplyTokens: 1_000_000_000,
+      startMcapUsd: 5_000,
+      gradMcapUsd: 250_000,
+      startTaxBps: 2500,
+      taxDecayPerMinuteBps: 250,
+      postTaxBps: 100,
+      sellsEnabled: true,
+      bufferSecs: 600,
+      concept:
+        "A tribute to the launcher's VRNG Opening Bell buyback: the token that celebrates the moment the Buyback Bar fills and the bell rings. Ties directly into the launcher's own mechanic, so its story is the floor's story.",
+      rationale:
+        "Deterministic fallback spec (no LLM key). Fee flow from a curve token feeds the Buyback Bar and the launcher fee waterfall, which counts toward protocol revenue and volume - the two lagging grade levers.",
+    },
+    skipReason: null,
+  };
+}
+
 /* ---------------------------------- Coach --------------------------------- */
 
 export function coachSystem(agent: Agent): string {

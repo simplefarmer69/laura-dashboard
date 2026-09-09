@@ -1,0 +1,2413 @@
+[
+ {
+  "type": "constructor",
+  "inputs": [
+   {
+    "name": "stockBooster_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "treasury_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "ethUsdFeed_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "nfpm_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "boxLocker_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "quote_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "twapPool_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "quoteUsdFeed_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "weth_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "launchFeeWei_",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "v3Nfpm_",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "boxLockerV3_",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "receive",
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "BUFFER_TAX_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_BUFFER_SECS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_BUY_CAP_PPM",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MAX_POST_TAX_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "MIN_POST_TAX_BPS",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "V3_FEE",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint24",
+    "internalType": "uint24"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "abort",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "acceptOwnership",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "arm",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "supplyWei",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "bond",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "boughtOf",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "bounds",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "minStartMcapUsd8",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "maxStartMcapUsd8",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "minGradMcapUsd8",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "maxGradMcapUsd8",
+    "type": "uint64",
+    "internalType": "uint64"
+   },
+   {
+    "name": "maxStartTaxBps",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "minWindowSecs",
+    "type": "uint32",
+    "internalType": "uint32"
+   },
+   {
+    "name": "maxWindowSecs",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "boxLocker",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ISafeLaunchClLocker"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "boxLockerV3",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ISafeLaunchClLocker"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "bufferSecsOf",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "buy",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "quoteIn",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minTokensOut",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "ref",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "tokensOut",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "buyEth",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minTokensOut",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "ref",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "recipient",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "tokensOut",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "clFactory",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IUpClFactoryMinimal"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "clTickSpacing",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "int24",
+    "internalType": "int24"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "clockInCard",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "closedAt",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "createLaunch",
+  "inputs": [
+   {
+    "name": "p",
+    "type": "tuple",
+    "internalType": "struct StonkSafeLaunchpadV2.CreateParams",
+    "components": [
+     {
+      "name": "token",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "name",
+      "type": "string",
+      "internalType": "string"
+     },
+     {
+      "name": "symbol",
+      "type": "string",
+      "internalType": "string"
+     },
+     {
+      "name": "supply",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "vanitySalt",
+      "type": "bytes32",
+      "internalType": "bytes32"
+     },
+     {
+      "name": "startMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "gradMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "startTaxBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "taxDecayPerMinuteBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "sellsEnabled",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "bufferSecs",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "unsoldMode",
+      "type": "uint8",
+      "internalType": "uint8"
+     },
+     {
+      "name": "eoaOnly",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "openEnded",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "postTaxBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "bondVenue",
+      "type": "uint8",
+      "internalType": "uint8"
+     },
+     {
+      "name": "maxBuyPpm",
+      "type": "uint32",
+      "internalType": "uint32"
+     }
+    ]
+   }
+  ],
+  "outputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "token",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "payable"
+ },
+ {
+  "type": "function",
+  "name": "creatorFeeBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "creatorQuoteOwed",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "currentTaxBps",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "ethUsdFeed",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IAggregatorV3"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "flushCreatorQuote",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "getLaunch",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "tuple",
+    "internalType": "struct StonkSafeLaunchpadV2.Launch",
+    "components": [
+     {
+      "name": "token",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "creator",
+      "type": "address",
+      "internalType": "address"
+     },
+     {
+      "name": "startMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "gradMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "startTaxBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "decayPerMinuteBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "creatorFeeBpsSnap",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "protocolFeeBpsSnap",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "windowSecs",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "startTime",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "deadline",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "externalToken",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "sellsEnabled",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "armed",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "graduated",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "bonded",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "aborted",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "loadedSupply",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "vQuote",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "vToken",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "realQuote",
+      "type": "uint256",
+      "internalType": "uint256"
+     },
+     {
+      "name": "buyCount",
+      "type": "uint256",
+      "internalType": "uint256"
+     }
+    ]
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "graduate",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "icoKickstarter",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "isWethLane",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "launchCount",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "launchFeeWei",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "launchIdOfToken",
+  "inputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "legsOf",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "legs",
+    "type": "address[]",
+    "internalType": "address[]"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "lpFeeBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "lpFeeBpsSnapOf",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "lpQuoteOf",
+  "inputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "mcapUsd8",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "modesOf",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "tuple",
+    "internalType": "struct StonkSafeLaunchpadV2.LaunchModes",
+    "components": [
+     {
+      "name": "unsoldMode",
+      "type": "uint8",
+      "internalType": "uint8"
+     },
+     {
+      "name": "eoaOnly",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "openEnded",
+      "type": "bool",
+      "internalType": "bool"
+     },
+     {
+      "name": "postTaxBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "bondVenue",
+      "type": "uint8",
+      "internalType": "uint8"
+     },
+     {
+      "name": "maxBuyPpm",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "icoBoost",
+      "type": "bool",
+      "internalType": "bool"
+     }
+    ]
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "nfpm",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IUpNfpmMinimal"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "nfpmV3",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IUniV3NfpmMinimal"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "onERC721Received",
+  "inputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "bytes",
+    "internalType": "bytes"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes4",
+    "internalType": "bytes4"
+   }
+  ],
+  "stateMutability": "pure"
+ },
+ {
+  "type": "function",
+  "name": "operatorOf",
+  "inputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "owner",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "pendingOwner",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "poolsOf",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "pools",
+    "type": "address[]",
+    "internalType": "address[]"
+   },
+   {
+    "name": "lockIds",
+    "type": "uint256[]",
+    "internalType": "uint256[]"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "protocolFeeBps",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quote",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IERC20"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quoteDecimals",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint8",
+    "internalType": "uint8"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quoteIsToken0",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "quoteUsdFeed",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IAggregatorV3"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "renounceOwnership",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "rescueEth",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "rescueExcessQuote",
+  "inputs": [],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "rescueToken",
+  "inputs": [
+   {
+    "name": "asset",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "sell",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "tokensIn",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "minQuoteOut",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "ref",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   },
+   {
+    "name": "account",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "ethOut",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "quoteOut",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setBounds",
+  "inputs": [
+   {
+    "name": "b",
+    "type": "tuple",
+    "internalType": "struct StonkSafeLaunchpadV2.Bounds",
+    "components": [
+     {
+      "name": "minStartMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxStartMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "minGradMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxGradMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxStartTaxBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "minWindowSecs",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "maxWindowSecs",
+      "type": "uint32",
+      "internalType": "uint32"
+     }
+    ]
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setClockInCard",
+  "inputs": [
+   {
+    "name": "card",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setFeeSplit",
+  "inputs": [
+   {
+    "name": "creatorBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "protocolBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   },
+   {
+    "name": "lpBps_",
+    "type": "uint16",
+    "internalType": "uint16"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setIcoKickstarter",
+  "inputs": [
+   {
+    "name": "kick",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setLaunchFee",
+  "inputs": [
+   {
+    "name": "feeWei",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setOperator",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "operator",
+    "type": "address",
+    "internalType": "address"
+   },
+   {
+    "name": "approved",
+    "type": "bool",
+    "internalType": "bool"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setTickSpacing",
+  "inputs": [
+   {
+    "name": "spacing",
+    "type": "int24",
+    "internalType": "int24"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setTwapWindow",
+  "inputs": [
+   {
+    "name": "secs",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "setVanitySuffix",
+  "inputs": [
+   {
+    "name": "mask",
+    "type": "uint160",
+    "internalType": "uint160"
+   },
+   {
+    "name": "value",
+    "type": "uint160",
+    "internalType": "uint160"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "stockBooster",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "strictQuoteUsd8",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint64",
+    "internalType": "uint64"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "tokenInitCodeHash",
+  "inputs": [
+   {
+    "name": "name_",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "symbol_",
+    "type": "string",
+    "internalType": "string"
+   },
+   {
+    "name": "supply_",
+    "type": "uint256",
+    "internalType": "uint256"
+   },
+   {
+    "name": "to",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [
+   {
+    "name": "",
+    "type": "bytes32",
+    "internalType": "bytes32"
+   }
+  ],
+  "stateMutability": "pure"
+ },
+ {
+  "type": "function",
+  "name": "totalEscrowed",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "totalOwed",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint256",
+    "internalType": "uint256"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "transferOwnership",
+  "inputs": [
+   {
+    "name": "newOwner",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "outputs": [],
+  "stateMutability": "nonpayable"
+ },
+ {
+  "type": "function",
+  "name": "treasury",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "address"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "twapPool",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract ITwapPoolMinimal"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "twapWindowSecs",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint32",
+    "internalType": "uint32"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "v3Factory",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "address",
+    "internalType": "contract IUniV3FactoryMinimal"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "vanityMask",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint160",
+    "internalType": "uint160"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "function",
+  "name": "vanityValue",
+  "inputs": [],
+  "outputs": [
+   {
+    "name": "",
+    "type": "uint160",
+    "internalType": "uint160"
+   }
+  ],
+  "stateMutability": "view"
+ },
+ {
+  "type": "event",
+  "name": "BoundsSet",
+  "inputs": [
+   {
+    "name": "bounds",
+    "type": "tuple",
+    "indexed": false,
+    "internalType": "struct StonkSafeLaunchpadV2.Bounds",
+    "components": [
+     {
+      "name": "minStartMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxStartMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "minGradMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxGradMcapUsd8",
+      "type": "uint64",
+      "internalType": "uint64"
+     },
+     {
+      "name": "maxStartTaxBps",
+      "type": "uint16",
+      "internalType": "uint16"
+     },
+     {
+      "name": "minWindowSecs",
+      "type": "uint32",
+      "internalType": "uint32"
+     },
+     {
+      "name": "maxWindowSecs",
+      "type": "uint32",
+      "internalType": "uint32"
+     }
+    ]
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "ClockInCardSet",
+  "inputs": [
+   {
+    "name": "card",
+    "type": "address",
+    "indexed": false,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CreatorQuoteAccrued",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CreatorQuoteFlushed",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "amount",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "CurveClosed",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "raisedQuote",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "finalPriceQuoteWei",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "mcapUsd8",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "FeeSplitSet",
+  "inputs": [
+   {
+    "name": "creatorBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "protocolBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   },
+   {
+    "name": "lpBps",
+    "type": "uint16",
+    "indexed": false,
+    "internalType": "uint16"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "IcoKickstarterSet",
+  "inputs": [
+   {
+    "name": "kick",
+    "type": "address",
+    "indexed": false,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LaunchAborted",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "tokensSwept",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LaunchArmed",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "supply",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "vQuote0",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "quoteUsd8",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   },
+   {
+    "name": "deadline",
+    "type": "uint64",
+    "indexed": false,
+    "internalType": "uint64"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LaunchBonded",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "raisedQuote",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "burnedTokens",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LaunchCreated",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "token",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "creator",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "externalToken",
+    "type": "bool",
+    "indexed": false,
+    "internalType": "bool"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LaunchFeeSet",
+  "inputs": [
+   {
+    "name": "feeWei",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LegBonded",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "asset",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "pool",
+    "type": "address",
+    "indexed": false,
+    "internalType": "address"
+   },
+   {
+    "name": "lockTokenId",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "legQuote",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "LpFeeBonded",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "bondedQuoteWei",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "excessQuoteWei",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "OperatorSet",
+  "inputs": [
+   {
+    "name": "account",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "launchId",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "operator",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "approved",
+    "type": "bool",
+    "indexed": false,
+    "internalType": "bool"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "OwnershipTransferStarted",
+  "inputs": [
+   {
+    "name": "previousOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "newOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "OwnershipTransferred",
+  "inputs": [
+   {
+    "name": "previousOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "newOwner",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "SafeBuy",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "buyer",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "quoteIn",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "taxPaid",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "taxBps",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "tokensOut",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "mcapUsd8",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "SafeSell",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "seller",
+    "type": "address",
+    "indexed": true,
+    "internalType": "address"
+   },
+   {
+    "name": "tokensIn",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "taxPaid",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "taxBps",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "quoteOut",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "mcapUsd8",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "TickSpacingSet",
+  "inputs": [
+   {
+    "name": "spacing",
+    "type": "int24",
+    "indexed": false,
+    "internalType": "int24"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "TwapWindowSet",
+  "inputs": [
+   {
+    "name": "secs",
+    "type": "uint32",
+    "indexed": false,
+    "internalType": "uint32"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "UnsoldLpBonded",
+  "inputs": [
+   {
+    "name": "id",
+    "type": "uint256",
+    "indexed": true,
+    "internalType": "uint256"
+   },
+   {
+    "name": "pool",
+    "type": "address",
+    "indexed": false,
+    "internalType": "address"
+   },
+   {
+    "name": "lockTokenId",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   },
+   {
+    "name": "tokensPlaced",
+    "type": "uint256",
+    "indexed": false,
+    "internalType": "uint256"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "event",
+  "name": "VanitySuffixSet",
+  "inputs": [
+   {
+    "name": "mask",
+    "type": "uint160",
+    "indexed": false,
+    "internalType": "uint160"
+   },
+   {
+    "name": "value",
+    "type": "uint160",
+    "indexed": false,
+    "internalType": "uint160"
+   }
+  ],
+  "anonymous": false
+ },
+ {
+  "type": "error",
+  "name": "AbortedLaunch",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "AlreadyArmed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "AlreadyBonded",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "AlreadyGraduated",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "BadEconomics",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "BadParam",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "BuyCapExceeded",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "BuysPresent",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "FeeOnTransferToken",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "FeePushFailed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "InsufficientLaunchFee",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotArmed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotClosed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotCreator",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotEoa",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotGraduatable",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotOperator",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NotWethLane",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "NothingOwed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "OwnableInvalidOwner",
+  "inputs": [
+   {
+    "name": "owner",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "OwnableUnauthorizedAccount",
+  "inputs": [
+   {
+    "name": "account",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "ReentrancyGuardReentrantCall",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "SafeERC20FailedOperation",
+  "inputs": [
+   {
+    "name": "token",
+    "type": "address",
+    "internalType": "address"
+   }
+  ]
+ },
+ {
+  "type": "error",
+  "name": "SaltNotYours",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "SellExceedsCurve",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "SellsDisabled",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "SlippageExceeded",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "TokenInUse",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "TokenIsQuoteAsset",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "UnknownLaunch",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "VanitySuffix",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "WindowClosed",
+  "inputs": []
+ },
+ {
+  "type": "error",
+  "name": "ZeroTrade",
+  "inputs": []
+ }
+]

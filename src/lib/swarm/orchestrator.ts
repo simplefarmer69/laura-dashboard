@@ -13,6 +13,9 @@ import {
   coachPrompt,
   coachSystem,
   draftsSchema,
+  launchSchema,
+  mintMock,
+  mintPrompt,
   producerMock,
   producerPrompt,
   producerSystem,
@@ -21,11 +24,13 @@ import {
   scoutPrompt,
   type CycleContext,
 } from "@/lib/swarm/tasks";
+import { launcherGrid } from "@/lib/launchpad/service";
 import type {
   Agent,
   CycleRun,
   DailyGrade,
   Draft,
+  LaunchProposal,
   MetricsSnapshot,
   RunStep,
   StrategyProposal,
@@ -181,7 +186,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     await saveState(state);
 
     /* 3. Producers */
-    const producers = AGENT_ORDER.filter((id) => id !== "scout" && id !== "coach");
+    const producers = AGENT_ORDER.filter((id) => id !== "scout" && id !== "coach" && id !== "mint");
     let budget = state.settings.maxDraftsPerCycle;
     for (const id of producers) {
       const agent = agentById(state, id);
@@ -248,7 +253,97 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       await saveState(state);
     }
 
-    /* 4. Coach: lessons + proposals */
+    /* 4. Mint: launchpad specs */
+    const mint = agentById(state, "mint");
+    if (mint.status !== "paused") {
+      try {
+        let floor = "Launcher floor data unavailable this cycle.";
+        try {
+          const grid = await launcherGrid("new", 10);
+          floor = grid
+            .map(
+              (t) =>
+                `- ${t.name} ($${t.symbol}): mcap $${Math.round(t.mcapUsd).toLocaleString()}, curve ${t.curvePct.toFixed(1)}%, ${t.holderCount} holders${t.graduated ? ", graduated" : ""}`,
+            )
+            .join("\n");
+        } catch {
+          /* floor context is optional */
+        }
+        const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
+        const out = await timed(() =>
+          generateStructured(resolved, {
+            schema: launchSchema,
+            system: producerSystem(mint),
+            prompt: mintPrompt(ctx, floor, pending),
+            mock: () => mintMock(ctx, pending),
+          }),
+        );
+        const spec = out.value.value.launch;
+        if (spec) {
+          const launch: LaunchProposal = {
+            id: newId("launch"),
+            cycleId: run.id,
+            createdAt: Date.now(),
+            lane: "weth",
+            name: spec.name,
+            symbol: spec.symbol,
+            supplyTokens: spec.supplyTokens,
+            startMcapUsd: spec.startMcapUsd,
+            gradMcapUsd: spec.gradMcapUsd,
+            startTaxBps: spec.startTaxBps,
+            taxDecayPerMinuteBps: spec.taxDecayPerMinuteBps,
+            postTaxBps: spec.postTaxBps,
+            sellsEnabled: spec.sellsEnabled,
+            bufferSecs: spec.bufferSecs,
+            concept: spec.concept,
+            rationale: spec.rationale,
+            status: "pending",
+            reviewedAt: null,
+            reviewerNote: null,
+            txHash: null,
+            tokenAddress: null,
+            launchId: null,
+            deployedAt: null,
+            error: null,
+          };
+          state.launches.push(launch);
+          mint.stats.drafts += 1;
+          pushEvent(state, {
+            kind: "launch.proposed",
+            agentId: "mint",
+            title: `Mint designed launch: ${spec.name} ($${spec.symbol})`,
+            detail: spec.concept,
+            refId: launch.id,
+          });
+          step({
+            agentId: "mint",
+            label: "Launch spec",
+            status: "ok",
+            summary: `${spec.name} ($${spec.symbol}) start $${spec.startMcapUsd.toLocaleString()} -> grad $${spec.gradMcapUsd.toLocaleString()}${out.value.usedMock ? " (fallback)" : ""}`,
+            durationMs: out.ms,
+          });
+        } else {
+          step({
+            agentId: "mint",
+            label: "Launch spec",
+            status: "skipped",
+            summary: out.value.value.skipReason ?? "No launch this cycle",
+            durationMs: out.ms,
+          });
+        }
+        markRan(mint);
+      } catch (err) {
+        mint.status = "error";
+        mint.lastError = String(err);
+        step({ agentId: "mint", label: "Launch spec", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "mint", title: "Mint failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    } else {
+      step({ agentId: "mint", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    }
+
+    /* 5. Coach: lessons + proposals */
     const coach = agentById(state, "coach");
     if (coach.status !== "paused") {
       const out = await timed(() =>

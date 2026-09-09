@@ -22,6 +22,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
   switch (kind) {
     case "brief.created":
     case "draft.created":
+    case "launch.proposed":
     case "cycle.started":
     case "cycle.finished":
     case "error":
@@ -40,6 +41,10 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "proposal.rejected":
     case "agent.paused":
     case "agent.resumed":
+    case "launch.approved":
+    case "launch.rejected":
+    case "launch.deployed":
+    case "launch.failed":
       return "operator";
     default: {
       const _exhaustive: never = kind;
@@ -60,14 +65,19 @@ export function kindTone(kind: SwarmEventKind): string {
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.approved":
     case "draft.published":
+    case "launch.approved":
+    case "launch.deployed":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.rejected":
     case "proposal.rejected":
+    case "launch.rejected":
+    case "launch.failed":
     case "error":
       return "bg-destructive/15 text-destructive";
     case "draft.created":
     case "brief.created":
     case "proposal.created":
+    case "launch.proposed":
       return "bg-secondary text-foreground";
     case "cycle.started":
     case "cycle.finished":

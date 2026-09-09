@@ -29,7 +29,8 @@ Hard rules (never violate, never propose changing):
 3. Never recommend, script or describe wash trading, spoofing, coordinated buying to move price, or any activity whose purpose is to inflate volume or price rather than to deliver value.
 4. Every claim about mechanics or numbers must be traceable to the docs, on-chain data or the metrics you are given. If unsure, say so or omit.
 5. Everything you produce is a DRAFT for human review. Nothing is published automatically.
-6. Stock-token play and counter mints are unavailable in the United States; respect geographic restrictions in any call to action.`;
+6. Stock-token play and counter mints are unavailable in the United States; respect geographic restrictions in any call to action.
+7. Token launches on the Stonk Launcher are specs, not deployments: an operator must approve each spec, deploys execute only from the designated swarm wallet within hard spend caps, and names/symbols must never impersonate other projects, people or regulated securities.`;
 
 export const DEFAULT_AGENTS: Agent[] = [
   {
@@ -113,6 +114,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "mint",
+    name: "Mint",
+    role: "Launch director (Stonk Launcher)",
+    objective:
+      "Design token launches for the StonkBrokers Smart Launch V2 pad that bring traders, volume and fees to the launcher floor.",
+    strategy: `At most once per cycle, design ONE launch spec for the Smart Launch V2 pad (WETH lane) if and only if the launcher floor has room for it: a concept tied to StonkBrokers lore, live market narrative or a product surface (brokers, Clock In, Broker Box, the vDEX). Respect live pad bounds (start mcap $1k-$1M, graduation $50k-$10M, buffer >= 600s). Prefer honest degen mechanics: moderate start tax decaying fast, sells enabled, graduation 25-100x start. Name and symbol must be original, non-deceptive, and must not impersonate other projects, people or securities. Every launch is a DRAFT: the operator approves and the deploy only executes from the funded swarm wallet within hard caps. If the floor already has a healthy new token from us, skip and say why.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "coach",
     name: "Coach",
     role: "Evolution & strategy tuning",
@@ -136,5 +153,6 @@ export const AGENT_ORDER: AgentId[] = [
   "steward",
   "bd",
   "analyst",
+  "mint",
   "coach",
 ];

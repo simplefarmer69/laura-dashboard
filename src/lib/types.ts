@@ -67,6 +67,7 @@ export type AgentId =
   | "steward"
   | "bd"
   | "analyst"
+  | "mint"
   | "coach";
 
 export type AgentStatus = "idle" | "running" | "error" | "paused";
@@ -203,6 +204,11 @@ export type SwarmEventKind =
   | "milestone.reached"
   | "agent.paused"
   | "agent.resumed"
+  | "launch.proposed"
+  | "launch.approved"
+  | "launch.rejected"
+  | "launch.deployed"
+  | "launch.failed"
   | "error";
 
 export interface SwarmEvent {
@@ -232,6 +238,45 @@ export interface MilestoneRecord {
   priceUsd: number;
 }
 
+export type LaunchStatus =
+  | "pending"
+  | "approved"
+  | "deploying"
+  | "deployed"
+  | "failed"
+  | "rejected";
+
+/** A token launch on the StonkBrokers Smart Launch V2 pad, designed by Mint. */
+export interface LaunchProposal {
+  id: string;
+  cycleId: string;
+  createdAt: number;
+  /** Quote lane pad the launch deploys on */
+  lane: "weth" | "stonk";
+  name: string;
+  symbol: string;
+  /** Whole tokens; converted to wei at deploy */
+  supplyTokens: number;
+  startMcapUsd: number;
+  gradMcapUsd: number;
+  startTaxBps: number;
+  taxDecayPerMinuteBps: number;
+  postTaxBps: number;
+  sellsEnabled: boolean;
+  bufferSecs: number;
+  concept: string;
+  rationale: string;
+  status: LaunchStatus;
+  reviewedAt: number | null;
+  reviewerNote: string | null;
+  /** Populated after deploy */
+  txHash: string | null;
+  tokenAddress: string | null;
+  launchId: string | null;
+  deployedAt: number | null;
+  error: string | null;
+}
+
 export interface SwarmState {
   version: 1;
   settings: Settings;
@@ -245,6 +290,7 @@ export interface SwarmState {
   events: SwarmEvent[];
   lessons: Lesson[];
   milestones: MilestoneRecord[];
+  launches: LaunchProposal[];
 }
 
 export interface ResearchBrief {

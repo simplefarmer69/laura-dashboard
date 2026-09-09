@@ -11,6 +11,7 @@ import {
   Play,
   Radio,
   RefreshCw,
+  Rocket,
   Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import { RunsPanel } from "@/components/console/runs";
 import { SettingsPanel } from "@/components/console/settings";
 import { ActivityFeed } from "@/components/console/activity";
 import { Growth } from "@/components/console/growth";
+import { Launchpad } from "@/components/console/launchpad";
 import { pct, usd } from "@/components/console/format";
 import type { CycleRun } from "@/lib/types";
 
@@ -35,6 +37,8 @@ export function Console() {
 
   const pendingDrafts = state?.drafts.filter((d) => d.status === "pending").length ?? 0;
   const pendingProposals = state?.proposals.filter((p) => p.status === "pending").length ?? 0;
+  const pendingLaunches =
+    state?.launches.filter((l) => l.status === "pending" || l.status === "approved").length ?? 0;
   const cycleRunning = starting || (state?.runtime.cycleRunning ?? false);
   const latest = state?.metricsHistory.at(-1) ?? null;
   const grade = state?.grades.at(-1) ?? null;
@@ -157,6 +161,14 @@ export function Console() {
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="launchpad">
+                <Rocket /> Launchpad
+                {pendingLaunches > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+                    {pendingLaunches}
+                  </Badge>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="evolution">
                 <GitBranch /> Evolution
                 {pendingProposals > 0 && (
@@ -186,6 +198,9 @@ export function Console() {
             </TabsContent>
             <TabsContent value="queue">
               <ReviewQueue state={state} refresh={refresh} />
+            </TabsContent>
+            <TabsContent value="launchpad">
+              <Launchpad state={state} refresh={refresh} />
             </TabsContent>
             <TabsContent value="evolution">
               <Evolution state={state} refresh={refresh} />

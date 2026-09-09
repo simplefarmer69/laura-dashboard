@@ -108,6 +108,7 @@ reviewer decisions, docs excerpt fetched from stonkbrokers.cash/docs).
 | Steward | Community & education | 1 Discord/Telegram post that removes an onboarding blocker | revenue (activations, reactivations) |
 | Broker | Partnerships & integrations | 1 outreach message to a concrete counterparty type | volume & revenue (launches, LPs, aggregators) |
 | Ledger | Analytics & reporting | 1 daily metrics report with caveats and the single most likely lever | trust with integrators/holders |
+| Mint | Launch director | ≤ 1 Smart Launch V2 spec (or a reasoned skip), floor-aware | volume & revenue (launcher fees, Buyback Bar flow) |
 | Coach | Evolution | ≤ 2 strategy proposals for the weakest agents | the grade itself |
 
 Producers run in a fixed order and share a per-cycle draft budget
@@ -193,6 +194,19 @@ is in place.
   accrual, up. gauge weights, holder counts via a keyed indexer (Alchemy/Blockscout).
 - These become grader inputs with small weights and give Steward/Ledger exact figures
   ("pot is 62% to the next Clock In") instead of DefiLlama roll-ups.
+
+### Phase 3.5 — Launch pipeline *(built, deploy-gated)*
+- Done: **Mint**, the launch director, designs at most one Smart Launch V2 spec per
+  cycle (concept, name/symbol, supply, start/graduation mcap, tax curve) with the live
+  launcher floor as context. Specs are validated against the pad's on-chain `bounds()`
+  and queue in the Launchpad tab.
+- Done: gated deploy service against the official `StonkSafeLaunchpadV2` ABI
+  (`createLaunch`, WETH lane pad `0xFCd6…EC9f`): operator approval required, wallet
+  must be configured and funded, max 3 deploys/24 h, max 0.02 ETH per deploy,
+  simulate-before-send, tx + token address + launch id recorded and linked to
+  Blockscout.
+- Next (with wallet): first deploys, then curve monitoring (`/api/launcher/token/…`)
+  so Mint learns which concepts hold holders and feed the Buyback Bar.
 
 ### Phase 4 — Treasury wallet *(after the 24 h funding window)*
 The wallet is a **budgeted tool the swarm can request**, not a trading bot. Permissions
