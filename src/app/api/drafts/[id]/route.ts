@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { updateState } from "@/lib/store";
+import { pushEvent, updateState } from "@/lib/store";
 import type { DraftStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -30,10 +30,20 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/drafts/[id
     if (!draft) return null;
     const agent = state.agents.find((a) => a.id === draft.agentId);
     if (agent) bump(agent.stats, draft.status, parsed.data.status);
+    const from = draft.status;
     draft.status = parsed.data.status;
     draft.reviewedAt = parsed.data.status === "pending" ? null : Date.now();
     if (parsed.data.reviewerNote !== undefined) draft.reviewerNote = parsed.data.reviewerNote;
     if (parsed.data.body !== undefined) draft.body = parsed.data.body;
+    if (from !== draft.status && draft.status !== "pending") {
+      pushEvent(state, {
+        kind: `draft.${draft.status}`,
+        agentId: "operator",
+        title: `${draft.status === "published" ? "Published" : draft.status === "approved" ? "Approved" : "Rejected"}: ${draft.title}`,
+        detail: `${agent?.name ?? draft.agentId} · ${draft.kind} for ${draft.channel}${draft.reviewerNote ? ` · note: ${draft.reviewerNote}` : ""}`,
+        refId: draft.id,
+      });
+    }
     return draft;
   });
   if (!result) return NextResponse.json({ error: "Draft not found" }, { status: 404 });

@@ -1,4 +1,5 @@
-import type { MetricsSnapshot, Settings } from "@/lib/types";
+import type { MetricsSnapshot, OnchainReads, Settings } from "@/lib/types";
+import { fetchOnchain } from "@/lib/grader/onchain";
 
 const TIMEOUT_MS = 15_000;
 
@@ -25,6 +26,7 @@ interface DexPair {
   baseToken: { address: string; symbol: string };
   quoteToken: { address: string; symbol: string };
   priceUsd?: string;
+  priceNative?: string;
   priceChange?: { h24?: number };
   volume?: { h24?: number };
   liquidity?: { usd?: number };
@@ -40,6 +42,8 @@ export interface TokenMarket {
   marketCapUsd: number;
   fdvUsd: number;
   pairCount: number;
+  /** Derived from the deepest ETH-quoted pair (priceUsd / priceNative) */
+  ethPriceUsd: number;
 }
 
 /**
@@ -59,8 +63,6 @@ export async function fetchTokenMarket(settings: Settings): Promise<TokenMarket>
   let priceWeighted = 0;
   let changeWeighted = 0;
   let volume = 0;
-  let marketCap = 0;
-  let fdv = 0;
   for (const p of basePairs) {
     const liq = p.liquidity?.usd ?? 0;
     const w = Math.max(liq, 1);
@@ -68,10 +70,16 @@ export async function fetchTokenMarket(settings: Settings): Promise<TokenMarket>
     priceWeighted += Number(p.priceUsd) * w;
     changeWeighted += (p.priceChange?.h24 ?? 0) * w;
     volume += p.volume?.h24 ?? 0;
-    marketCap = Math.max(marketCap, p.marketCap ?? 0);
-    fdv = Math.max(fdv, p.fdv ?? 0);
   }
+  // Thin pairs can print absurd caps; trust the deepest pool for cap and FDV.
+  const deepest = [...basePairs].sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+  const marketCap = deepest.marketCap ?? 0;
+  const fdv = deepest.fdv ?? 0;
   const wSum = basePairs.reduce((s, p) => s + Math.max(p.liquidity?.usd ?? 0, 1), 0);
+  const ethPair = basePairs
+    .filter((p) => /^W?ETH$/i.test(p.quoteToken.symbol) && Number(p.priceNative) > 0)
+    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+  const ethPriceUsd = ethPair ? Number(ethPair.priceUsd) / Number(ethPair.priceNative) : 0;
   return {
     priceUsd: priceWeighted / wSum,
     priceChange24hPct: changeWeighted / wSum,
@@ -80,6 +88,7 @@ export async function fetchTokenMarket(settings: Settings): Promise<TokenMarket>
     marketCapUsd: marketCap,
     fdvUsd: fdv,
     pairCount: basePairs.length,
+    ethPriceUsd,
   };
 }
 
@@ -181,6 +190,13 @@ export async function collectMetrics(
   }
   const m = market.status === "fulfilled" ? market.value : null;
   const p = protocol.status === "fulfilled" ? protocol.value : null;
+  let onchain: OnchainReads | undefined;
+  try {
+    onchain = await fetchOnchain(settings, m?.ethPriceUsd ?? prev?.onchain?.ethPriceUsd ?? 0);
+  } catch (err) {
+    warnings.push(`RPC: ${String(err)}`);
+    onchain = prev?.onchain;
+  }
   return {
     ts: Date.now(),
     priceUsd: m?.priceUsd ?? prev?.priceUsd ?? 0,
@@ -197,7 +213,8 @@ export async function collectMetrics(
     protocolRevenue7dUsd: p?.revenue7d ?? prev?.protocolRevenue7dUsd ?? 0,
     protocolVolume7dUsd: p?.volume7d ?? prev?.protocolVolume7dUsd ?? 0,
     tvlUsd: p?.tvl ?? prev?.tvlUsd ?? 0,
-    source: warnings.length ? "partial" : "live",
+    onchain,
+    source: market.status === "rejected" || protocol.status === "rejected" ? "partial" : "live",
     warnings,
   };
 }

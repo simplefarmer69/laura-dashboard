@@ -18,8 +18,23 @@ export interface MetricsSnapshot {
   protocolRevenue7dUsd: number;
   protocolVolume7dUsd: number;
   tvlUsd: number;
+  /** Direct reads from Robinhood Chain RPC; absent when the RPC was unreachable */
+  onchain?: OnchainReads;
   source: MetricSource;
   warnings: string[];
+}
+
+export interface OnchainReads {
+  blockNumber: number;
+  ethPriceUsd: number;
+  /** ETH sitting in Clock In v2 waiting to be swapped into stock tokens */
+  clockInPotEth: number;
+  clockInPotUsd: number;
+  /** Broker NFTs held by the Anvil AMM vault (4444 minus this = in holders' hands) */
+  brokersInVault: number;
+  brokersInCirculation: number;
+  /** Current $STONKBROKER total supply; falls as activation fees burn */
+  tokenTotalSupply: number;
 }
 
 export interface GradeComponent {
@@ -61,6 +76,10 @@ export interface AgentStrategyVersion {
   strategy: string;
   adoptedAt: number;
   reason: string;
+  /** Swarm grade when this version went live, for before/after comparison */
+  gradeAtAdoption: number | null;
+  /** Swarm grade when this version was retired */
+  gradeAtRetirement: number | null;
 }
 
 export interface Agent {
@@ -71,6 +90,8 @@ export interface Agent {
   /** Live, editable operating instructions. Versioned via proposals. */
   strategy: string;
   strategyVersion: number;
+  versionAdoptedAt: number | null;
+  gradeAtVersionAdoption: number | null;
   history: AgentStrategyVersion[];
   status: AgentStatus;
   lastRunAt: number | null;
@@ -165,6 +186,52 @@ export interface Settings {
   llmModel: string;
 }
 
+export type SwarmEventKind =
+  | "cycle.started"
+  | "cycle.finished"
+  | "grade.stamped"
+  | "brief.created"
+  | "draft.created"
+  | "draft.approved"
+  | "draft.rejected"
+  | "draft.published"
+  | "proposal.created"
+  | "proposal.adopted"
+  | "proposal.rejected"
+  | "strategy.edited"
+  | "lesson.learned"
+  | "milestone.reached"
+  | "agent.paused"
+  | "agent.resumed"
+  | "error";
+
+export interface SwarmEvent {
+  id: string;
+  ts: number;
+  kind: SwarmEventKind;
+  agentId: AgentId | "grader" | "operator" | "system";
+  title: string;
+  detail: string;
+  refId: string | null;
+}
+
+/** A durable insight the coach distilled; injected into every producer prompt as swarm memory. */
+export interface Lesson {
+  id: string;
+  ts: number;
+  cycleId: string;
+  text: string;
+  evidence: string;
+}
+
+export interface MilestoneRecord {
+  id: string;
+  label: string;
+  marketCapUsd: number;
+  reachedAt: number;
+  priceUsd: number;
+}
+
 export interface SwarmState {
   version: 1;
   settings: Settings;
@@ -175,6 +242,9 @@ export interface SwarmState {
   grades: DailyGrade[];
   metricsHistory: MetricsSnapshot[];
   researchBriefs: ResearchBrief[];
+  events: SwarmEvent[];
+  lessons: Lesson[];
+  milestones: MilestoneRecord[];
 }
 
 export interface ResearchBrief {

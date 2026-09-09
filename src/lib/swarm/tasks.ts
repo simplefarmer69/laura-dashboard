@@ -4,10 +4,12 @@ import type {
   DailyGrade,
   Draft,
   DraftKind,
+  Lesson,
   MetricsSnapshot,
   ResearchBrief,
   Settings,
 } from "@/lib/types";
+import { missionDigest, type MissionStatus } from "@/lib/mission";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import {
   briefDigest,
@@ -34,6 +36,14 @@ export const draftSchema = z.object({
 export const draftsSchema = z.object({ drafts: z.array(draftSchema).min(1).max(3) });
 
 export const proposalsSchema = z.object({
+  lessons: z
+    .array(
+      z.object({
+        text: z.string().min(20).max(320),
+        evidence: z.string().max(200),
+      }),
+    )
+    .max(3),
   proposals: z
     .array(
       z.object({
@@ -59,6 +69,14 @@ export interface CycleContext {
   docs: string;
   drafts: Draft[];
   agents: Agent[];
+  lessons: Lesson[];
+  mission: MissionStatus;
+}
+
+function lessonsDigest(lessons: Lesson[], limit = 12): string {
+  const recent = lessons.slice(-limit);
+  if (recent.length === 0) return "No lessons recorded yet.";
+  return recent.map((l) => `- ${l.text} (evidence: ${l.evidence})`).join("\n");
 }
 
 function systemFor(agent: Agent): string {
@@ -68,7 +86,7 @@ function systemFor(agent: Agent): string {
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `METRICS\n${metricsDigest(ctx.metrics)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {
@@ -83,7 +101,9 @@ export function scoutMock(ctx: CycleContext): BriefOut {
       `Protocol revenue ${usd(m.protocolRevenue24hUsd)} vs ${usd(rev7)} 7d average; protocol volume ${usd(m.protocolVolume24hUsd)} vs ${usd(vol7)} average.`,
       `Token DEX volume (${usd(m.tokenDexVolume24hUsd)}) is running well above protocol-surface volume, so attention is concentrated in swaps rather than Anvil, loans or lockers.`,
       `Hook for today: the Clock In mechanism converts fee flow into stock-token drops; explain the fee pot state and who can trigger it.`,
-      `Weakest grade lever: ${weakest.label.toLowerCase()} (${weakest.score.toFixed(0)}/100). Caveat: DexScreener aggregates 30 pairs, some near-empty; quote liquidity-weighted figures only.`,
+      m.onchain
+        ? `On-chain: Clock In pot holds ${m.onchain.clockInPotEth.toFixed(3)} ETH (${usd(m.onchain.clockInPotUsd)}); ${m.onchain.brokersInCirculation} of 4444 brokers are in holders' hands, ${m.onchain.brokersInVault} sit in the Anvil vault.`
+        : `Weakest grade lever: ${weakest.label.toLowerCase()} (${weakest.score.toFixed(0)}/100). Caveat: DexScreener aggregates ${m.pairCount} pairs, some near-empty; quote liquidity-weighted figures only.`,
     ],
   };
 }
@@ -106,7 +126,9 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
   return [
     `METRICS\n${metricsDigest(ctx.metrics)}`,
     `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
+    `SWARM MEMORY (lessons distilled by the coach; apply them)\n${lessonsDigest(ctx.lessons)}`,
     `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
     `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever.`,
@@ -204,12 +226,22 @@ export function coachSystem(agent: Agent): string {
 export function coachPrompt(ctx: CycleContext): string {
   const roster = ctx.agents
     .filter((a) => a.id !== "coach")
-    .map(
-      (a) =>
-        `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected.\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`,
-    )
+    .map((a) => {
+      const perf =
+        a.gradeAtVersionAdoption !== null
+          ? `Grade when v${a.strategyVersion} went live: ${a.gradeAtVersionAdoption.toFixed(1)}; now ${ctx.grade.score.toFixed(1)}.`
+          : `v${a.strategyVersion} is the original strategy.`;
+      const past = a.history
+        .slice(-3)
+        .map(
+          (h) =>
+            `v${h.version}: ${h.gradeAtAdoption?.toFixed(1) ?? "?"} -> ${h.gradeAtRetirement?.toFixed(1) ?? "?"} (${h.reason})`,
+        )
+        .join("; ");
+      return `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected. ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
+    })
     .join("\n\n");
-  return `GRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nROSTER\n${roster}\n\nPropose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or the review requirement.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Then propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or the review requirement.`;
 }
 
 export function coachMock(ctx: CycleContext): ProposalsOut {
@@ -220,7 +252,20 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
     (weakest.key === "revenue" || weakest.key === "volume"
       ? candidates.find((a) => a.id === "bd")
       : candidates.find((a) => a.id === "narrative"));
-  if (!target) return { proposals: [] };
+  const lessons: ProposalsOut["lessons"] = [];
+  if (ctx.lessons.length === 0) {
+    lessons.push({
+      text: "Anchor every piece in one live number from the metrics digest; unsourced claims are the fastest way to a rejection.",
+      evidence: "Charter rule 4; grader weights price/revenue/volume at 85%",
+    });
+  }
+  if (weakest.key === "price" && !ctx.lessons.some((l) => l.text.includes("liquidity"))) {
+    lessons.push({
+      text: "When price is the weakest lever, explain liquidity depth and the fixed 666,666 swap unit rather than commenting on the move itself.",
+      evidence: `price component ${weakest.score.toFixed(0)}/100 today`,
+    });
+  }
+  if (!target) return { lessons, proposals: [] };
   const addition =
     weakest.key === "price"
       ? "Lead with the fixed 666,666 $STONKBROKER swap unit and current pool depth so readers understand why liquidity, not hype, sets the path into a broker."
@@ -230,6 +275,7 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
           ? "Aim each piece at one concrete flow-routing counterparty (aggregator, launchpad user, LP) and name the next step they can take this week."
           : "Tighten to the formats reviewers approved most recently and drop any section that was rejected twice.";
   return {
+    lessons,
     proposals: [
       {
         agentId: target.id as ProposalsOut["proposals"][number]["agentId"],

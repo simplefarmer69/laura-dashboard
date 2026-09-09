@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { updateState } from "@/lib/store";
-import { applyProposal } from "@/lib/swarm/orchestrator";
+import { pushEvent, updateState } from "@/lib/store";
+import { applyProposal } from "@/lib/swarm/strategy";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +20,19 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/proposals/
     if (!proposal) return { error: "not_found" as const };
     if (proposal.status !== "pending") return { error: "already_reviewed" as const };
     if (parsed.data.proposedStrategy) proposal.proposedStrategy = parsed.data.proposedStrategy;
+    const agent = state.agents.find((a) => a.id === proposal.agentId);
     if (parsed.data.status === "approved") {
-      applyProposal(state, proposal, "Approved by operator");
+      applyProposal(state, proposal, "Approved by operator", "operator");
     } else {
       proposal.status = "rejected";
       proposal.reviewedAt = Date.now();
+      pushEvent(state, {
+        kind: "proposal.rejected",
+        agentId: "operator",
+        title: `Proposal for ${agent?.name ?? proposal.agentId} rejected`,
+        detail: proposal.rationale,
+        refId: proposal.id,
+      });
     }
     return { proposal };
   });

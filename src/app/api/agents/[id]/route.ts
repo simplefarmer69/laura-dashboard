@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { updateState } from "@/lib/store";
+import { pushEvent, updateState } from "@/lib/store";
+import { adoptStrategy } from "@/lib/swarm/strategy";
 
 export const dynamic = "force-dynamic";
 
@@ -17,16 +18,18 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/agents/[id
   const agent = await updateState((state) => {
     const a = state.agents.find((x) => x.id === id);
     if (!a) return null;
-    if (parsed.data.status) a.status = parsed.data.status;
-    if (parsed.data.strategy && parsed.data.strategy !== a.strategy) {
-      a.history.push({
-        version: a.strategyVersion,
-        strategy: a.strategy,
-        adoptedAt: Date.now(),
-        reason: "Superseded: manual edit by operator",
+    if (parsed.data.status && parsed.data.status !== a.status) {
+      a.status = parsed.data.status;
+      pushEvent(state, {
+        kind: parsed.data.status === "paused" ? "agent.paused" : "agent.resumed",
+        agentId: "operator",
+        title: `${a.name} ${parsed.data.status === "paused" ? "paused" : "resumed"}`,
+        detail: "Operator action from the console",
+        refId: a.id,
       });
-      a.strategy = parsed.data.strategy;
-      a.strategyVersion += 1;
+    }
+    if (parsed.data.strategy && parsed.data.strategy !== a.strategy) {
+      adoptStrategy(state, a, parsed.data.strategy, "Manual edit by operator", "operator");
     }
     return a;
   });

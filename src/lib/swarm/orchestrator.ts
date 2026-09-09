@@ -1,9 +1,11 @@
 import { collectMetrics } from "@/lib/grader/sources";
 import { computeGrade } from "@/lib/grader/score";
-import { loadState, newId, saveState } from "@/lib/store";
+import { loadState, newId, pushEvent, saveState } from "@/lib/store";
+import { checkMilestones, missionStatus } from "@/lib/mission";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt } from "@/lib/swarm/context";
 import { AGENT_ORDER, SWARM_CHARTER } from "@/lib/swarm/roster";
+import { applyProposal } from "@/lib/swarm/strategy";
 import {
   briefSchema,
   coachMock,
@@ -23,6 +25,7 @@ import type {
   CycleRun,
   DailyGrade,
   Draft,
+  MetricsSnapshot,
   RunStep,
   StrategyProposal,
   SwarmState,
@@ -34,22 +37,32 @@ export function isCycleRunning(): boolean {
   return cycleInFlight !== null;
 }
 
-/** Runs the grader only (used by the daily scheduler tick). */
-export async function runGrader(): Promise<DailyGrade> {
-  const state = await loadState();
+/** Collects metrics, grades, records milestones. Shared by cycles and the daily stamp. */
+async function gradeNow(state: SwarmState): Promise<{ metrics: MetricsSnapshot; grade: DailyGrade }> {
   const prev = state.metricsHistory.at(-1) ?? null;
   const metrics = await collectMetrics(state.settings, prev);
   state.metricsHistory.push(metrics);
   const grade = computeGrade(state, metrics);
-  upsertGrade(state, grade);
-  await saveState(state);
-  return grade;
-}
-
-function upsertGrade(state: SwarmState, grade: DailyGrade): void {
   const idx = state.grades.findIndex((g) => g.date === grade.date);
   if (idx >= 0) state.grades[idx] = grade;
   else state.grades.push(grade);
+  pushEvent(state, {
+    kind: "grade.stamped",
+    agentId: "grader",
+    title: `Grade ${grade.letter} (${grade.score.toFixed(1)}) for ${grade.date}`,
+    detail: grade.summary,
+    refId: grade.id,
+  });
+  checkMilestones(state, metrics);
+  return { metrics, grade };
+}
+
+/** Runs the grader only (used by the daily scheduler tick). */
+export async function runGrader(): Promise<DailyGrade> {
+  const state = await loadState();
+  const { grade } = await gradeNow(state);
+  await saveState(state);
+  return grade;
 }
 
 function agentById(state: SwarmState, id: Agent["id"]): Agent {
@@ -87,21 +100,21 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     error: null,
   };
   state.runs.push(run);
-  for (const a of state.agents) a.status = "running";
+  for (const a of state.agents) if (a.status !== "paused") a.status = "running";
+  pushEvent(state, {
+    kind: "cycle.started",
+    agentId: "system",
+    title: `Cycle ${run.id} started (${trigger})`,
+    detail: `LLM: ${run.llmProvider}`,
+    refId: run.id,
+  });
   await saveState(state);
 
   const step = (s: RunStep) => run.steps.push(s);
 
   try {
     /* 1. Grader */
-    const grader = await timed(async () => {
-      const prev = state.metricsHistory.at(-1) ?? null;
-      const metrics = await collectMetrics(state.settings, prev);
-      state.metricsHistory.push(metrics);
-      const grade = computeGrade(state, metrics);
-      upsertGrade(state, grade);
-      return { metrics, grade };
-    });
+    const grader = await timed(() => gradeNow(state));
     step({
       agentId: "grader",
       label: "Collect metrics & grade",
@@ -120,6 +133,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       docs,
       drafts: state.drafts,
       agents: state.agents,
+      lessons: state.lessons,
+      mission: missionStatus(state, grader.value.metrics),
     };
 
     /* 2. Scout */
@@ -141,12 +156,20 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       sources: [
         `https://api.dexscreener.com/token-pairs/v1/${state.settings.chainSlug}/${state.settings.tokenAddress}`,
         `https://api.llama.fi/summary/fees/${state.settings.llamaSlug}`,
+        "https://rpc.mainnet.chain.robinhood.com",
         `${state.settings.projectSite}/docs`,
       ],
     };
     state.researchBriefs.push(ctx.brief);
     state.researchBriefs = state.researchBriefs.slice(-50);
     markRan(scout);
+    pushEvent(state, {
+      kind: "brief.created",
+      agentId: "scout",
+      title: brief.value.value.headline,
+      detail: brief.value.value.bullets[0] ?? "",
+      refId: ctx.brief.id,
+    });
     step({
       agentId: "scout",
       label: "Research brief",
@@ -167,6 +190,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       }
       if (budget <= 0) {
         step({ agentId: id, label: "Skipped", status: "skipped", summary: "Draft budget exhausted", durationMs: 0 });
+        agent.status = "idle";
         continue;
       }
       try {
@@ -198,6 +222,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           state.drafts.push(draft);
           agent.stats.drafts += 1;
           run.draftsCreated += 1;
+          pushEvent(state, {
+            kind: "draft.created",
+            agentId: id,
+            title: `${agent.name} drafted: ${d.title}`,
+            detail: `${d.kind} for ${d.channel} · ${d.rationale}`,
+            refId: draft.id,
+          });
         }
         markRan(agent);
         step({
@@ -211,11 +242,12 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         agent.status = "error";
         agent.lastError = String(err);
         step({ agentId: id, label: "Drafts", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: id, title: `${agent.name} failed`, detail: String(err), refId: run.id });
       }
       await saveState(state);
     }
 
-    /* 4. Coach */
+    /* 4. Coach: lessons + proposals */
     const coach = agentById(state, "coach");
     if (coach.status !== "paused") {
       const out = await timed(() =>
@@ -226,11 +258,16 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           mock: () => coachMock(ctx),
         }),
       );
+      for (const l of out.value.value.lessons) {
+        const duplicate = state.lessons.some((x) => x.text.trim().toLowerCase() === l.text.trim().toLowerCase());
+        if (duplicate) continue;
+        const lesson = { id: newId("lesson"), ts: Date.now(), cycleId: run.id, text: l.text, evidence: l.evidence };
+        state.lessons.push(lesson);
+        pushEvent(state, { kind: "lesson.learned", agentId: "coach", title: l.text, detail: l.evidence, refId: lesson.id });
+      }
       for (const p of out.value.value.proposals) {
         const target = agentById(state, p.agentId);
-        const hasPending = state.proposals.some(
-          (x) => x.agentId === target.id && x.status === "pending",
-        );
+        const hasPending = state.proposals.some((x) => x.agentId === target.id && x.status === "pending");
         if (hasPending) continue;
         const proposal: StrategyProposal = {
           id: newId("prop"),
@@ -248,26 +285,41 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         };
         state.proposals.push(proposal);
         run.proposalsCreated += 1;
+        pushEvent(state, {
+          kind: "proposal.created",
+          agentId: "coach",
+          title: `Coach proposed v${target.strategyVersion + 1} for ${target.name}`,
+          detail: p.rationale,
+          refId: proposal.id,
+        });
         if (state.settings.autoApplyStrategyProposals) {
-          applyProposal(state, proposal, "Auto-applied by coach (operator enabled auto-apply)");
+          applyProposal(state, proposal, "Auto-applied by coach (operator enabled auto-apply)", "coach");
           proposal.autoApplied = true;
         }
       }
       markRan(coach);
       step({
         agentId: "coach",
-        label: "Strategy proposals",
+        label: "Lessons & proposals",
         status: "ok",
-        summary: `${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals ? ", auto-applied" : ", awaiting review"}${out.value.usedMock ? " (fallback)" : ""}`,
+        summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}`,
         durationMs: out.ms,
       });
     }
   } catch (err) {
     run.error = String(err);
     step({ agentId: "system", label: "Cycle failed", status: "error", summary: String(err), durationMs: 0 });
+    pushEvent(state, { kind: "error", agentId: "system", title: "Cycle failed", detail: String(err), refId: run.id });
   } finally {
     for (const a of state.agents) if (a.status === "running") a.status = "idle";
     run.finishedAt = Date.now();
+    pushEvent(state, {
+      kind: "cycle.finished",
+      agentId: "system",
+      title: `Cycle ${run.id} finished: ${run.draftsCreated} drafts, ${run.proposalsCreated} proposals`,
+      detail: `${((run.finishedAt - run.startedAt) / 1000).toFixed(1)}s${run.error ? ` · ${run.error}` : ""}`,
+      refId: run.id,
+    });
     await saveState(state);
   }
   return run;
@@ -278,18 +330,4 @@ function markRan(agent: Agent): void {
   agent.lastRunAt = Date.now();
   agent.lastError = null;
   agent.status = "idle";
-}
-
-export function applyProposal(state: SwarmState, proposal: StrategyProposal, reason: string): void {
-  const agent = agentById(state, proposal.agentId);
-  agent.history.push({
-    version: agent.strategyVersion,
-    strategy: agent.strategy,
-    adoptedAt: Date.now(),
-    reason: `Superseded: ${reason}`,
-  });
-  agent.strategy = proposal.proposedStrategy;
-  agent.strategyVersion += 1;
-  proposal.status = "approved";
-  proposal.reviewedAt = Date.now();
 }

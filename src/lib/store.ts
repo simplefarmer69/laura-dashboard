@@ -1,14 +1,16 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { SwarmState } from "@/lib/types";
+import type { SwarmEvent, SwarmState } from "@/lib/types";
 import { DEFAULT_AGENTS, DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 
 const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 
 const MAX_RUNS = 200;
-const MAX_METRICS = 2000;
+const MAX_METRICS = 4000;
+const MAX_EVENTS = 1500;
+const MAX_LESSONS = 60;
 
 function freshState(): SwarmState {
   return {
@@ -25,6 +27,9 @@ function freshState(): SwarmState {
     grades: [],
     metricsHistory: [],
     researchBriefs: [],
+    events: [],
+    lessons: [],
+    milestones: [],
   };
 }
 
@@ -33,8 +38,18 @@ let writeChain: Promise<unknown> = Promise.resolve();
 export async function loadState(): Promise<SwarmState> {
   try {
     const raw = await fs.readFile(STATE_FILE, "utf8");
-    const parsed = JSON.parse(raw) as SwarmState;
-    return { ...freshState(), ...parsed, settings: { ...DEFAULT_SETTINGS, ...parsed.settings } };
+    const parsed = JSON.parse(raw) as Partial<SwarmState>;
+    const base = freshState();
+    const agents = base.agents.map((def) => {
+      const saved = parsed.agents?.find((a) => a.id === def.id);
+      return saved ? { ...def, ...saved, stats: { ...def.stats, ...saved.stats } } : def;
+    });
+    return {
+      ...base,
+      ...parsed,
+      agents,
+      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+    };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       const state = freshState();
@@ -48,6 +63,8 @@ export async function loadState(): Promise<SwarmState> {
 export async function saveState(state: SwarmState): Promise<void> {
   state.runs = state.runs.slice(-MAX_RUNS);
   state.metricsHistory = state.metricsHistory.slice(-MAX_METRICS);
+  state.events = state.events.slice(-MAX_EVENTS);
+  state.lessons = state.lessons.slice(-MAX_LESSONS);
   const run = async () => {
     await fs.mkdir(DATA_DIR, { recursive: true });
     const tmp = `${STATE_FILE}.${randomUUID()}.tmp`;
@@ -70,4 +87,13 @@ export async function updateState<T>(
 
 export function newId(prefix: string): string {
   return `${prefix}_${randomUUID().slice(0, 8)}`;
+}
+
+export function pushEvent(
+  state: SwarmState,
+  event: Omit<SwarmEvent, "id" | "ts"> & { ts?: number },
+): SwarmEvent {
+  const full: SwarmEvent = { id: newId("evt"), ts: event.ts ?? Date.now(), ...event };
+  state.events.push(full);
+  return full;
 }
