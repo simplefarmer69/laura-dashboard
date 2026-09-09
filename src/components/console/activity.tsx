@@ -31,6 +31,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "proposal.adopted":
     case "lesson.learned":
     case "strategy.edited":
+    case "tuner.adjusted":
       return "evolution";
     case "grade.stamped":
     case "milestone.reached":
@@ -62,6 +63,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "lesson.learned":
     case "proposal.adopted":
     case "strategy.edited":
+    case "tuner.adjusted":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.approved":
     case "draft.published":

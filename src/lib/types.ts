@@ -185,6 +185,8 @@ export interface Settings {
   autoApplyStrategyProposals: boolean;
   maxDraftsPerCycle: number;
   llmModel: string;
+  /** Daily data-driven adjustment of cadence and draft budget inside hard rails. */
+  autoTune: boolean;
 }
 
 export type SwarmEventKind =
@@ -209,6 +211,7 @@ export type SwarmEventKind =
   | "launch.rejected"
   | "launch.deployed"
   | "launch.failed"
+  | "tuner.adjusted"
   | "error";
 
 export interface SwarmEvent {
@@ -291,6 +294,8 @@ export interface SwarmState {
   lessons: Lesson[];
   milestones: MilestoneRecord[];
   launches: LaunchProposal[];
+  /** UTC date the auto-tuner last ran (it runs at most once per day). */
+  lastTuneDate: string | null;
 }
 
 export interface ResearchBrief {

@@ -195,6 +195,19 @@ is in place.
 - These become grader inputs with small weights and give Steward/Ledger exact figures
   ("pot is 62% to the next Clock In") instead of DefiLlama roll-ups.
 
+### Phase 2.5 — Parameter auto-tuning *(built)*
+- Done: a deterministic controller (`src/lib/swarm/tuner.ts`) runs after the first
+  grade stamp of each UTC day and moves settings inside hard rails using the swarm's
+  own data: review backlog and oldest-pending age govern the draft budget (3–8); the
+  3-day grade trend and backlog govern cadence (2–12h). Producers draw the shared
+  budget in evidence order (weakest-lever agent first, then approval rate), the coach's
+  proposal budget flexes 0–2 with the trend and pending-proposal count, and Mint is
+  paced by launch data (36h cooldown after a deploy, ≤2 open specs).
+- Every adjustment is a `tuner.adjusted` event with the justifying numbers; the
+  operator can disable auto-tune in Settings.
+- Next: feed reviewer edit-distance (how much operators rewrite drafts before
+  approving) and per-channel attribution into the same controller.
+
 ### Phase 3.5 — Launch pipeline *(built, deploy-gated)*
 - Done: **Mint**, the launch director, designs at most one Smart Launch V2 spec per
   cycle (concept, name/symbol, supply, start/graduation mcap, tax curve) with the live

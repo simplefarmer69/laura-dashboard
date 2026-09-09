@@ -31,6 +31,7 @@ function freshState(): SwarmState {
     lessons: [],
     milestones: [],
     launches: [],
+    lastTuneDate: null,
   };
 }
 

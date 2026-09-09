@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoApplyStrategyProposals: false,
   maxDraftsPerCycle: 6,
   llmModel: "",
+  autoTune: true,
 };
 
 /**

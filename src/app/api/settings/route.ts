@@ -16,6 +16,7 @@ const settingsSchema = z
     autoApplyStrategyProposals: z.boolean(),
     maxDraftsPerCycle: z.number().int().min(1).max(20),
     llmModel: z.string().max(80),
+    autoTune: z.boolean(),
   })
   .partial();
 

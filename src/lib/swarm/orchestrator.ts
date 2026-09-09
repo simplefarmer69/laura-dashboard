@@ -25,6 +25,8 @@ import {
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
+import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
+import { utcDate } from "@/lib/grader/score";
 import type {
   Agent,
   CycleRun,
@@ -60,6 +62,12 @@ async function gradeNow(state: SwarmState): Promise<{ metrics: MetricsSnapshot; 
     refId: grade.id,
   });
   checkMilestones(state, metrics);
+  /* Auto-tune once per UTC day, after the day's first grade stamp. */
+  const today = utcDate(metrics.ts);
+  if (state.settings.autoTune && state.lastTuneDate !== today) {
+    state.lastTuneDate = today;
+    tuneSettings(state);
+  }
   return { metrics, grade };
 }
 
@@ -185,8 +193,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     });
     await saveState(state);
 
-    /* 3. Producers */
-    const producers = AGENT_ORDER.filter((id) => id !== "scout" && id !== "coach" && id !== "mint");
+    /* 3. Producers — ordered by the data: weakest-lever agent first, then by approval rate */
+    const weakest = [...ctx.grade.components].sort((a, b) => a.score - b.score)[0];
+    const producers = producerOrder(
+      state,
+      AGENT_ORDER.filter((id) => id !== "scout" && id !== "coach" && id !== "mint"),
+      weakest.key,
+    );
     let budget = state.settings.maxDraftsPerCycle;
     for (const id of producers) {
       const agent = agentById(state, id);
@@ -255,7 +268,12 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
 
     /* 4. Mint: launchpad specs */
     const mint = agentById(state, "mint");
-    if (mint.status !== "paused") {
+    const gate = mintGate(state);
+    if (mint.status === "paused") {
+      step({ agentId: "mint", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (gate.blocked) {
+      step({ agentId: "mint", label: "Launch spec", status: "skipped", summary: gate.reason, durationMs: 0 });
+    } else {
       try {
         let floor = "Launcher floor data unavailable this cycle.";
         try {
@@ -339,8 +357,6 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         pushEvent(state, { kind: "error", agentId: "mint", title: "Mint failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
-    } else {
-      step({ agentId: "mint", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
     }
 
     /* 5. Coach: lessons + proposals */
@@ -361,7 +377,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         state.lessons.push(lesson);
         pushEvent(state, { kind: "lesson.learned", agentId: "coach", title: l.text, detail: l.evidence, refId: lesson.id });
       }
-      for (const p of out.value.value.proposals) {
+      const proposalBudget = coachProposalBudget(state);
+      for (const p of out.value.value.proposals.slice(0, proposalBudget)) {
         const target = agentById(state, p.agentId);
         const hasPending = state.proposals.some((x) => x.agentId === target.id && x.status === "pending");
         if (hasPending) continue;

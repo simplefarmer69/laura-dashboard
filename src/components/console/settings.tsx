@@ -92,6 +92,16 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
           </Field>
           <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
             <div>
+              <Label className="text-xs">Auto-tune parameters</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Once per day the tuner adjusts cadence (2–12h) and draft budget (3–8) from grade trend,
+                review backlog and approval rates. Every change is logged in Activity.
+              </p>
+            </div>
+            <Switch checked={form.autoTune} onCheckedChange={(v) => set("autoTune", Boolean(v))} />
+          </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
               <Label className="text-xs">Auto-apply strategy proposals</Label>
               <p className="text-[11px] text-muted-foreground">
                 Lets the coach rewrite agent strategy text without review. Publishing drafts is always gated.

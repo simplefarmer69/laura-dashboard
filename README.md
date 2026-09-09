@@ -54,6 +54,22 @@ npm run worker       # standalone scheduler
 npm run cycle        # one-shot cycle, for cron
 ```
 
+### Auto-tuning
+
+Once per UTC day the tuner reads the swarm's own operating data and adjusts
+parameters inside hard rails (cycle cadence 2–12h, draft budget 3–8):
+
+- Review backlog above 2x budget → smaller budget; a clearing queue with ≥70%
+  approval over ≥5 reviews → bigger budget.
+- Grade down ≥3 points over 3 days → faster cycles (and the coach may file 2
+  proposals instead of 1); a queue above 3x budget → slower cycles.
+- Each cycle, the shared draft budget is spent in a data-driven order: the
+  agent targeting the weakest grade lever first, then by approval rate.
+- Mint waits 36h after each deploy and never stacks more than 2 open specs.
+
+Every adjustment is logged to Activity with the numbers that justified it.
+Toggle it off in Settings ("Auto-tune parameters") to pin values manually.
+
 ### Launchpad (on-chain deploys)
 
 Mint proposes at most one token launch per cycle against the live
