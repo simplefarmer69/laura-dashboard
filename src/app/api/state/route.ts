@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadState } from "@/lib/store";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
+import { schedulerRunning } from "@/lib/swarm/scheduler";
 import { resolveModel } from "@/lib/swarm/llm";
 import { missionStatus } from "@/lib/mission-status";
 
@@ -15,6 +16,7 @@ export async function GET() {
     mission: missionStatus(state, state.metricsHistory.at(-1) ?? null),
     runtime: {
       cycleRunning: isCycleRunning(),
+      autopilot: schedulerRunning(),
       llmProvider: model.provider,
       llmModel: model.modelId,
     },

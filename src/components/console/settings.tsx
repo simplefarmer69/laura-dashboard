@@ -121,8 +121,13 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
             Model: <span className="font-mono text-foreground">{state.runtime.llmModel}</span>
           </p>
           <p>
-            Scheduler: run <span className="font-mono text-foreground">npm run worker</span> alongside the app for
-            unattended cycles.
+            Autopilot:{" "}
+            <span className={`font-mono ${state.runtime.autopilot ? "text-[var(--sb-green)]" : "text-destructive"}`}>
+              {state.runtime.autopilot ? "running in-process" : "off"}
+            </span>
+            {state.runtime.autopilot
+              ? ` — a cycle every ${state.settings.cycleIntervalHours}h and a grade stamp every UTC day.`
+              : " — set SWARM_AUTOPILOT=1 (default) or run npm run worker."}
           </p>
         </CardContent>
       </Card>

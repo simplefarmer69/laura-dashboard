@@ -77,6 +77,11 @@ export function Console() {
                 LLM {state.runtime.llmProvider === "mock" ? "fallback (no key)" : state.runtime.llmModel}
               </Badge>
             )}
+            {state?.runtime.autopilot && !cycleRunning && (
+              <Badge variant="outline" className="hidden text-[10px] text-[var(--sb-green)] sm:inline-flex">
+                <Radio className="size-3" /> autopilot
+              </Badge>
+            )}
             {cycleRunning && (
               <Badge className="bg-primary/15 text-primary">
                 <Radio className="size-3 sb-blink" /> cycle running

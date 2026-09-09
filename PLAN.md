@@ -65,7 +65,8 @@ Key files:
 - `src/lib/swarm/roster.ts` — the immutable charter and the six agents' default strategies.
 - `src/lib/swarm/tasks.ts` — per-agent schemas, prompts and deterministic fallbacks.
 - `src/lib/swarm/orchestrator.ts` — the cycle, proposal application, run logging.
-- `scripts/worker.ts` — unattended scheduler. `scripts/cycle.ts` — one-shot for cron.
+- `src/lib/swarm/scheduler.ts` — autopilot loop, hosted in-process via `src/instrumentation.ts`
+  (or standalone through `scripts/worker.ts`). `scripts/cycle.ts` — one-shot for cron.
 
 ---
 

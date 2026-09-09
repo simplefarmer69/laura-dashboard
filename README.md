@@ -41,14 +41,17 @@ OPENAI_API_KEY=sk-...
 SWARM_LLM_PROVIDER=anthropic
 ```
 
-### Run unattended
+### Autopilot
+
+The console hosts LAURA's scheduler in-process: with `npm run dev` or
+`npm start` running, a full cycle fires every N hours (Settings, default 6) and
+a grade is stamped every UTC day, so the Activity and Growth tabs fill in on
+their own. Set `SWARM_AUTOPILOT=0` to turn that off and run the loop separately:
 
 ```bash
-npm run worker       # full cycle every N hours (Settings) + daily grade stamp
+npm run worker       # standalone scheduler
 npm run cycle        # one-shot cycle, for cron
 ```
-
-Run the worker next to `npm run build && npm start` under your process manager.
 
 ## Layout
 

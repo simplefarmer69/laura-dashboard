@@ -6,7 +6,7 @@ import type { MissionStatus } from "@/lib/mission-status";
 
 export interface ConsoleState extends SwarmState {
   mission: MissionStatus;
-  runtime: { cycleRunning: boolean; llmProvider: LlmProvider; llmModel: string };
+  runtime: { cycleRunning: boolean; autopilot: boolean; llmProvider: LlmProvider; llmModel: string };
 }
 
 export function useSwarmState(pollMs = 15_000) {
