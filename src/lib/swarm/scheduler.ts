@@ -1,3 +1,4 @@
+import os from "node:os";
 import { loadState } from "@/lib/store";
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { utcDate } from "@/lib/grader/score";
@@ -22,6 +23,21 @@ export function schedulerRunning(): boolean {
   return globalThis.__lauraScheduler?.started ?? false;
 }
 
+/**
+ * Capacity guard: the swarm grows only within what this machine can carry.
+ * A scheduled cycle is deferred (never dropped — the next tick retries) when
+ * the 1-minute load average exceeds the core count or free memory is under
+ * 300 MB. Operator-triggered cycles are unaffected.
+ */
+function machineBusy(): string | null {
+  const cores = os.cpus().length || 1;
+  const load1 = os.loadavg()[0];
+  if (load1 > cores) return `load ${load1.toFixed(1)} > ${cores} cores`;
+  const freeMb = os.freemem() / 1_048_576;
+  if (freeMb < 300) return `free memory ${freeMb.toFixed(0)} MB < 300 MB`;
+  return null;
+}
+
 async function tick(): Promise<void> {
   const s = globalThis.__lauraScheduler;
   if (!s) return;
@@ -34,6 +50,11 @@ async function tick(): Promise<void> {
   const hasGradeToday = state.grades.some((g) => g.date === today);
 
   if (Date.now() - s.lastCycleAt >= intervalMs) {
+    const busy = machineBusy();
+    if (busy) {
+      log(`deferring scheduled cycle: ${busy}`);
+      return;
+    }
     log("starting scheduled cycle");
     const run = await runCycle("scheduler");
     s.lastCycleAt = Date.now();
