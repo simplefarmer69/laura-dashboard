@@ -1,0 +1,245 @@
+import { z } from "zod";
+import type {
+  Agent,
+  DailyGrade,
+  Draft,
+  DraftKind,
+  MetricsSnapshot,
+  ResearchBrief,
+  Settings,
+} from "@/lib/types";
+import { SWARM_CHARTER } from "@/lib/swarm/roster";
+import {
+  briefDigest,
+  gradeDigest,
+  metricsDigest,
+  pct,
+  reviewerFeedback,
+  usd,
+} from "@/lib/swarm/context";
+
+export const briefSchema = z.object({
+  headline: z.string().max(140),
+  bullets: z.array(z.string().max(280)).min(3).max(6),
+});
+
+export const draftSchema = z.object({
+  kind: z.enum(["thread", "article", "community", "outreach", "report", "video-script"]),
+  channel: z.string().max(60),
+  title: z.string().max(120),
+  body: z.string().max(6000),
+  rationale: z.string().max(400),
+});
+
+export const draftsSchema = z.object({ drafts: z.array(draftSchema).min(1).max(3) });
+
+export const proposalsSchema = z.object({
+  proposals: z
+    .array(
+      z.object({
+        agentId: z.enum(["scout", "narrative", "steward", "bd", "analyst"]),
+        proposedStrategy: z.string().min(80).max(1800),
+        rationale: z.string().max(600),
+        evidence: z.array(z.string().max(200)).min(1).max(5),
+      }),
+    )
+    .max(2),
+});
+
+export type BriefOut = z.infer<typeof briefSchema>;
+export type DraftsOut = z.infer<typeof draftsSchema>;
+export type ProposalsOut = z.infer<typeof proposalsSchema>;
+
+export interface CycleContext {
+  settings: Settings;
+  metrics: MetricsSnapshot;
+  grade: DailyGrade;
+  grades: DailyGrade[];
+  brief: ResearchBrief | null;
+  docs: string;
+  drafts: Draft[];
+  agents: Agent[];
+}
+
+function systemFor(agent: Agent): string {
+  return `${SWARM_CHARTER}\n\nYour name is ${agent.name}. Role: ${agent.role}.\nObjective: ${agent.objective}\n\nCurrent strategy (v${agent.strategyVersion}):\n${agent.strategy}`;
+}
+
+/* ---------------------------------- Scout --------------------------------- */
+
+export function scoutPrompt(ctx: CycleContext): string {
+  return `METRICS\n${metricsDigest(ctx.metrics)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
+}
+
+export function scoutMock(ctx: CycleContext): BriefOut {
+  const m = ctx.metrics;
+  const rev7 = m.protocolRevenue7dUsd / 7;
+  const vol7 = m.protocolVolume7dUsd / 7;
+  const weakest = [...ctx.grade.components].sort((a, b) => a.score - b.score)[0];
+  return {
+    headline: `Price ${pct(m.priceChange24hPct)} 24h; revenue ${rev7 > 0 ? (m.protocolRevenue24hUsd / rev7).toFixed(2) : "n/a"}x trailing; grade ${ctx.grade.letter}`,
+    bullets: [
+      `$STONKBROKER at ${usd(m.priceUsd, 5)}, ${pct(m.priceChange24hPct)} over 24h with ${usd(m.liquidityUsd)} liquidity across ${m.pairCount} pairs.`,
+      `Protocol revenue ${usd(m.protocolRevenue24hUsd)} vs ${usd(rev7)} 7d average; protocol volume ${usd(m.protocolVolume24hUsd)} vs ${usd(vol7)} average.`,
+      `Token DEX volume (${usd(m.tokenDexVolume24hUsd)}) is running well above protocol-surface volume, so attention is concentrated in swaps rather than Anvil, loans or lockers.`,
+      `Hook for today: the Clock In mechanism converts fee flow into stock-token drops; explain the fee pot state and who can trigger it.`,
+      `Weakest grade lever: ${weakest.label.toLowerCase()} (${weakest.score.toFixed(0)}/100). Caveat: DexScreener aggregates 30 pairs, some near-empty; quote liquidity-weighted figures only.`,
+    ],
+  };
+}
+
+/* ---------------------------- Content producers --------------------------- */
+
+const KIND_BY_AGENT: Record<string, DraftKind[]> = {
+  narrative: ["thread", "article"],
+  steward: ["community"],
+  bd: ["outreach"],
+  analyst: ["report"],
+};
+
+export function producerSystem(agent: Agent): string {
+  return systemFor(agent);
+}
+
+export function producerPrompt(agent: Agent, ctx: CycleContext): string {
+  const kinds = KIND_BY_AGENT[agent.id] ?? ["thread"];
+  return [
+    `METRICS\n${metricsDigest(ctx.metrics)}`,
+    `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
+    `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
+    `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, agent.id)}`,
+    `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
+    `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever.`,
+  ].join("\n\n");
+}
+
+export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
+  const m = ctx.metrics;
+  const weakest = [...ctx.grade.components].sort((a, b) => a.score - b.score)[0];
+  const rationale = `Deterministic fallback (no LLM key configured). Targets the ${weakest.label.toLowerCase()} lever, currently ${weakest.score.toFixed(0)}/100.`;
+  switch (agent.id) {
+    case "narrative":
+      return {
+        drafts: [
+          {
+            kind: "thread",
+            channel: "X",
+            title: "How a StonkBroker turns fees into stock",
+            body: [
+              `1/ Every StonkBroker NFT on Robinhood Chain owns a wallet (ERC-6551). Activate it and it becomes eligible for stock-token drops funded by protocol fees. Here is the loop, with today's numbers.`,
+              `2/ Anvil NFT AMM: swap 666,666 $STONKBROKER + an ETH fee for the next broker in the vault, or snipe an exact # for a higher fee. 70% of that ETH fee goes to the Stock Booster pot, 30% to the protocol.`,
+              `3/ Activation is paid in $STONKBROKER, tiered by broker. 50% of every activation fee is burned. Selling or transferring clears activation, so the new owner reactivates.`,
+              `4/ When the pot fills, any wallet can Clock In. The round's ETH swaps into the configured stock token (TSLA, NVDA, AMZN...) and airdrops to activated brokers, weighted by tier.`,
+              `5/ Last 24h: protocol fees ${usd(m.protocolFees24hUsd)}, protocol revenue ${usd(m.protocolRevenue24hUsd)}, protocol volume ${usd(m.protocolVolume24hUsd)}. Source: DefiLlama.`,
+              `6/ These are smart-contract distributions funded by fees, not dividends or equity. Stock-token features are unavailable in the US. Docs: stonkbrokers.cash/docs`,
+            ].join("\n\n"),
+            rationale,
+          },
+          {
+            kind: "article",
+            channel: "Blog",
+            title: "Reading the Stonk Exchange dashboard like an integrator",
+            body: `The StonkBrokers stack publishes three numbers that matter more than the token chart: protocol fees, protocol revenue and protocol volume. Today they read ${usd(m.protocolFees24hUsd)}, ${usd(m.protocolRevenue24hUsd)} and ${usd(m.protocolVolume24hUsd)} over 24 hours, against a 7-day daily average of ${usd(m.protocolRevenue7dUsd / 7)} in revenue.\n\nFees are the ETH paid on Anvil AMM swaps and NFT-backed loans plus $STONKBROKER activation and upgrade fees. Revenue is the portion retained by the protocol after the 70/30 split into the Stock Booster pot. Volume is notional traded across every surface, from Anvil fills to Broker Box tickets to Stonk Launcher window buys.\n\nWhy does an integrator care? Because the Clock In distribution is a function of fees, not of price. A wallet, aggregator or launchpad that routes flow through the Anvil AMM or the up.-powered vDEX directly increases the pot that activated brokers share. The Safety Deposit Box lockers route 90% of their fees to the community side of that same rail.\n\nThe $STONKBROKER token sits at ${usd(m.priceUsd, 5)} with ${usd(m.liquidityUsd)} of DEX liquidity across ${m.pairCount} pairs. Liquidity depth matters here because the 666,666 token swap unit is fixed: deeper pools mean a cheaper path from any chain into a broker.\n\nAll figures from DexScreener and DefiLlama. Rewards are smart-contract distributions, not dividends or equity. Stock-token features are unavailable in the United States. Full mechanics: stonkbrokers.cash/docs`,
+            rationale,
+          },
+        ],
+      };
+    case "steward":
+      return {
+        drafts: [
+          {
+            kind: "community",
+            channel: "Discord",
+            title: "Today on the trading floor",
+            body: `Morning brokers. Quick state of the exchange:\n\n- $STONKBROKER ${usd(m.priceUsd, 5)} (${pct(m.priceChange24hPct)} 24h), ${usd(m.liquidityUsd)} in DEX liquidity.\n- Protocol fees last 24h: ${usd(m.protocolFees24hUsd)}. 70% of Anvil ETH fees feed the Stock Booster pot.\n- If you moved a broker recently: transfers clear activation. Reactivate under Marketplace before the next Clock In or you miss the drop.\n- Need ETH on chain 4663? Bridge via portal.arbitrum.io/bridge or Relay/Across. Gas is plain ETH.\n\nQuestion for the room: which stock token do you want configured for the next round, and why?`,
+            rationale,
+          },
+        ],
+      };
+    case "bd":
+      return {
+        drafts: [
+          {
+            kind: "outreach",
+            channel: "Email",
+            title: "Launch on Stonk Launcher - intro to a Robinhood Chain builder",
+            body: `Subject: Launching on Robinhood Chain? Route it through Stonk Launcher\n\nHi team,\n\nWe run StonkBrokers, the DeFi suite on Robinhood Chain (4,444 ERC-6551 brokers, Anvil NFT AMM, up.-powered vDEX). Over the last 24h the protocol did ${usd(m.protocolVolume24hUsd)} in volume and ${usd(m.protocolFees24hUsd)} in fees, with ${usd(m.liquidityUsd)} of $STONKBROKER liquidity on chain.\n\nStonk Launcher supports fixed-price, bonding-curve and custom launches that finalize into Uniswap V3 liquidity with fee splitting. Launching through it puts your token in front of an active holder base and routes launch fees into the same rails that pay activated brokers, which makes our community a natural early audience for you.\n\nProposed next step: a 20-minute call this week to walk through the launch parameters and the locker options for your LP.\n\nWhat we need from you: token spec, target launch window, and who owns liquidity decisions on your side.\n\nBest,\nClutch Markets / StonkBrokers`,
+            rationale,
+          },
+        ],
+      };
+    case "analyst":
+      return {
+        drafts: [
+          {
+            kind: "report",
+            channel: "Notion",
+            title: `Daily metrics report - ${ctx.grade.date}`,
+            body: `## StonkBrokers daily metrics (${ctx.grade.date})\n\n| Metric | 24h | 7d avg |\n|---|---|---|\n| $STONKBROKER price | ${usd(m.priceUsd, 5)} (${pct(m.priceChange24hPct)}) | - |\n| Token DEX volume | ${usd(m.tokenDexVolume24hUsd)} | - |\n| DEX liquidity | ${usd(m.liquidityUsd)} | - |\n| Protocol fees | ${usd(m.protocolFees24hUsd)} | ${usd(m.protocolFees7dUsd / 7)} |\n| Protocol revenue | ${usd(m.protocolRevenue24hUsd)} | ${usd(m.protocolRevenue7dUsd / 7)} |\n| Protocol volume | ${usd(m.protocolVolume24hUsd)} | ${usd(m.protocolVolume7dUsd / 7)} |\n| TVL | ${usd(m.tvlUsd)} | - |\n\n**Interpretation.** ${ctx.grade.components.map((c) => c.detail).join(". ")}.\n\n**Caveats.** Price and 24h change are liquidity-weighted across ${m.pairCount} DexScreener pairs; several are thin. DefiLlama volume is notional across all StonkBrokers surfaces per its published methodology. Data source status: ${m.source}.\n\n**Swarm grade:** ${ctx.grade.letter} (${ctx.grade.score.toFixed(1)}). Single lever most likely to move it: ${weakest.label.toLowerCase()}.`,
+            rationale,
+          },
+        ],
+      };
+    default:
+      return {
+        drafts: [
+          {
+            kind: "thread",
+            channel: "X",
+            title: "Fallback",
+            body: "No producer mapped for this agent.",
+            rationale,
+          },
+        ],
+      };
+  }
+}
+
+/* ---------------------------------- Coach --------------------------------- */
+
+export function coachSystem(agent: Agent): string {
+  return systemFor(agent);
+}
+
+export function coachPrompt(ctx: CycleContext): string {
+  const roster = ctx.agents
+    .filter((a) => a.id !== "coach")
+    .map(
+      (a) =>
+        `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected.\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`,
+    )
+    .join("\n\n");
+  return `GRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nROSTER\n${roster}\n\nPropose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or the review requirement.`;
+}
+
+export function coachMock(ctx: CycleContext): ProposalsOut {
+  const weakest = [...ctx.grade.components].sort((a, b) => a.score - b.score)[0];
+  const candidates = ctx.agents.filter((a) => a.id !== "coach" && a.id !== "scout");
+  const target =
+    candidates.find((a) => a.stats.rejected > a.stats.approved) ??
+    (weakest.key === "revenue" || weakest.key === "volume"
+      ? candidates.find((a) => a.id === "bd")
+      : candidates.find((a) => a.id === "narrative"));
+  if (!target) return { proposals: [] };
+  const addition =
+    weakest.key === "price"
+      ? "Lead with the fixed 666,666 $STONKBROKER swap unit and current pool depth so readers understand why liquidity, not hype, sets the path into a broker."
+      : weakest.key === "revenue"
+        ? "Prioritise surfaces that generate ETH fees (Anvil swaps, loans, lockers) and always state the current 24h fee figure with its DefiLlama source."
+        : weakest.key === "volume"
+          ? "Aim each piece at one concrete flow-routing counterparty (aggregator, launchpad user, LP) and name the next step they can take this week."
+          : "Tighten to the formats reviewers approved most recently and drop any section that was rejected twice.";
+  return {
+    proposals: [
+      {
+        agentId: target.id as ProposalsOut["proposals"][number]["agentId"],
+        proposedStrategy: `${target.strategy}\n\nAdded in v${target.strategyVersion + 1}: ${addition}`,
+        rationale: `Deterministic fallback proposal. ${weakest.label} is the weakest grade component (${weakest.score.toFixed(0)}/100); ${target.name} is best placed to move it.`,
+        evidence: [
+          `Grade component ${weakest.key} = ${weakest.score.toFixed(0)}`,
+          `${target.name}: ${target.stats.approved} approved / ${target.stats.rejected} rejected`,
+        ],
+      },
+    ],
+  };
+}
