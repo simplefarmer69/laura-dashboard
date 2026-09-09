@@ -1,7 +1,8 @@
 import { collectMetrics } from "@/lib/grader/sources";
 import { computeGrade } from "@/lib/grader/score";
 import { loadState, newId, pushEvent, saveState } from "@/lib/store";
-import { checkMilestones, missionStatus } from "@/lib/mission";
+import { checkMilestones } from "@/lib/mission";
+import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt } from "@/lib/swarm/context";
 import { AGENT_ORDER, SWARM_CHARTER } from "@/lib/swarm/roster";

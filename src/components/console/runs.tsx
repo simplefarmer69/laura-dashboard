@@ -10,9 +10,9 @@ import type { RunStepStatus } from "@/lib/types";
 function stepTone(s: RunStepStatus): string {
   switch (s) {
     case "ok":
-      return "text-emerald-400";
+      return "text-[var(--sb-green)]";
     case "error":
-      return "text-rose-400";
+      return "text-destructive";
     case "skipped":
       return "text-muted-foreground";
     default: {
@@ -46,7 +46,7 @@ export function RunsPanel({ state }: { state: ConsoleState }) {
                 {r.llmProvider}
               </Badge>
               {r.error && <Badge variant="destructive">failed</Badge>}
-              {!r.finishedAt && <Badge className="bg-emerald-500/15 text-emerald-400">running</Badge>}
+              {!r.finishedAt && <Badge className="bg-primary/15 text-primary">running</Badge>}
               <span className="ml-auto text-xs text-muted-foreground">
                 {when(r.startedAt)}
                 {r.finishedAt ? ` · ${dur(r.finishedAt - r.startedAt)}` : ""}

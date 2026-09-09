@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadState } from "@/lib/store";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
 import { resolveModel } from "@/lib/swarm/llm";
+import { missionStatus } from "@/lib/mission-status";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,8 @@ export async function GET() {
   const model = resolveModel(state.settings.llmModel);
   return NextResponse.json({
     ...state,
-    metricsHistory: state.metricsHistory.slice(-200),
+    metricsHistory: state.metricsHistory.slice(-600),
+    mission: missionStatus(state, state.metricsHistory.at(-1) ?? null),
     runtime: {
       cycleRunning: isCycleRunning(),
       llmProvider: model.provider,

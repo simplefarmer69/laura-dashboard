@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Crown, Radio, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Sparkline } from "@/components/console/sparkline";
 import { ago, gradeTone, pct, usd } from "@/components/console/format";
+import { kindTone } from "@/components/console/activity";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 
 export function Overview({
@@ -30,9 +31,9 @@ export function Overview({
         <CardHeader>
           <CardTitle>No cycle has run yet</CardTitle>
           <CardDescription>
-            Press <span className="font-medium text-foreground">Run cycle</span> to pull live
-            metrics from DexScreener and DefiLlama, grade the day, and let the six agents produce
-            their first drafts and strategy proposals.
+            Press <span className="font-medium text-foreground">Run cycle</span> to pull live metrics from
+            DexScreener, DefiLlama and the Robinhood Chain RPC, grade the day, and let LAURA&apos;s six agents
+            produce their first brief, drafts, lessons and strategy proposals.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -113,7 +114,7 @@ export function Overview({
               <ul className="space-y-1.5 text-sm">
                 {brief.bullets.map((b, i) => (
                   <li key={i} className="flex gap-2">
-                    <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-emerald-400/70" />
+                    <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-primary" />
                     <span className="text-foreground/90">{b}</span>
                   </li>
                 ))}
@@ -125,9 +126,72 @@ export function Overview({
           )}
         </Card>
 
+        <Card className="sb-panel sm:col-span-2">
+          <CardContent className="flex flex-wrap items-center gap-4 py-4">
+            <Crown className="size-4 text-[var(--sb-gold)]" />
+            <div className="min-w-0 flex-1">
+              <p className="sb-ticker text-[11px] text-muted-foreground">Mission · $1B market cap → DAIO mandate</p>
+              <p className="text-sm">
+                <span className="sb-glow-text font-mono text-primary">{usd(state.mission.marketCapUsd)}</span>
+                <span className="text-muted-foreground"> · </span>
+                <span className="font-mono">{Number.isFinite(state.mission.multipleToTarget) ? `${state.mission.multipleToTarget.toFixed(1)}x` : "—"}</span>
+                <span className="text-muted-foreground"> to target · next {state.mission.next?.label.split(" ")[0] ?? "done"}</span>
+              </p>
+            </div>
+            <div className="h-2 w-full bg-muted sm:w-48">
+              <div className="h-full bg-primary" style={{ width: `${(state.mission.progress * 100).toFixed(2)}%` }} />
+            </div>
+            <Button size="sm" variant="outline" onClick={() => onNavigate("growth")}>
+              Growth <ArrowRight className="size-3.5" />
+            </Button>
+          </CardContent>
+        </Card>
+
+        {metrics.onchain && (
+          <Card className="sm:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="sb-ticker text-xs text-muted-foreground">On-chain · Robinhood Chain block {metrics.onchain.blockNumber.toLocaleString()}</CardTitle>
+                <Badge variant="outline" className="font-mono text-[10px]">ETH {usd(metrics.onchain.ethPriceUsd, 0)}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Chain label="Clock In pot" value={`${metrics.onchain.clockInPotEth.toFixed(3)} ETH`} sub={usd(metrics.onchain.clockInPotUsd)} />
+              <Chain label="Brokers in circulation" value={metrics.onchain.brokersInCirculation.toLocaleString()} sub="of 4,444" />
+              <Chain label="Brokers in Anvil vault" value={metrics.onchain.brokersInVault.toLocaleString()} sub="swap 666,666 $STONKBROKER" />
+              <Chain label="Token supply" value={`${(metrics.onchain.tokenTotalSupply / 1e9).toFixed(4)}B`} sub="falls with activation burns" />
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="sm:col-span-2">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Radio className="size-3.5 text-[var(--sb-green)] sb-blink" /> Live actions
+              </CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => onNavigate("activity")}>
+                Full log <ArrowRight className="size-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1.5">
+              {[...state.events].sort((a, b) => b.ts - a.ts).slice(0, 8).map((e) => (
+                <li key={e.id} className="flex items-center gap-2 text-xs">
+                  <Badge className={`${kindTone(e.kind)} h-4 px-1.5 font-mono text-[9px]`}>{e.kind}</Badge>
+                  <span className="min-w-0 flex-1 truncate">{e.title}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{ago(e.ts)}</span>
+                </li>
+              ))}
+              {state.events.length === 0 && <li className="text-xs text-muted-foreground">No actions yet.</li>}
+            </ul>
+          </CardContent>
+        </Card>
+
         <Card className="sm:col-span-2">
           <CardContent className="flex flex-wrap items-center gap-3 py-4">
-            <ShieldCheck className="size-4 text-emerald-400" />
+            <ShieldCheck className="size-4 text-[var(--sb-green)]" />
             <p className="flex-1 text-sm text-muted-foreground">
               <span className="text-foreground">{pending}</span> drafts and{" "}
               <span className="text-foreground">{pendingProposals}</span> strategy proposals are waiting
@@ -144,6 +208,16 @@ export function Overview({
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function Chain({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="border border-border/60 bg-muted/20 p-2.5">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className="font-mono text-base">{value}</p>
+      <p className="text-[11px] text-muted-foreground">{sub}</p>
     </div>
   );
 }
@@ -176,7 +250,7 @@ function Metric({
             values={spark}
             width={90}
             height={24}
-            className={tone === "down" ? "stroke-rose-400" : "stroke-emerald-400"}
+            className={tone === "down" ? "stroke-[var(--sb-neg)]" : "stroke-[var(--sb-green)]"}
           />
         )}
       </CardContent>

@@ -9,7 +9,7 @@ import type {
   ResearchBrief,
   Settings,
 } from "@/lib/types";
-import { missionDigest, type MissionStatus } from "@/lib/mission";
+import { missionDigest, type MissionStatus } from "@/lib/mission-status";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import {
   briefDigest,

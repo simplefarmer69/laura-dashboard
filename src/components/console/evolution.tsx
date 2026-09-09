@@ -93,6 +93,11 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
                 <span className="ml-auto text-muted-foreground">{ago(h.adoptedAt)}</span>
               </div>
               <p className="text-muted-foreground">{h.reason}</p>
+              {h.gradeAtAdoption !== null && h.gradeAtRetirement !== null && (
+                <p className="font-mono text-[10px] text-muted-foreground">
+                  grade {h.gradeAtAdoption.toFixed(1)} → {h.gradeAtRetirement.toFixed(1)} while live
+                </p>
+              )}
             </div>
           ))}
         </CardContent>
@@ -152,7 +157,7 @@ function ProposalCard({
           </pre>
         </div>
         <div className="space-y-1">
-          <p className="text-[11px] font-medium text-emerald-400 uppercase tracking-wide">Proposed (editable)</p>
+          <p className="text-[11px] font-medium text-primary uppercase tracking-wide">Proposed (editable)</p>
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

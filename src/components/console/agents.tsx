@@ -15,11 +15,11 @@ import type { Agent, AgentStatus } from "@/lib/types";
 function statusTone(s: AgentStatus): string {
   switch (s) {
     case "running":
-      return "bg-emerald-500/15 text-emerald-400";
+      return "bg-primary/15 text-primary";
     case "error":
-      return "bg-rose-500/15 text-rose-400";
+      return "bg-destructive/15 text-destructive";
     case "paused":
-      return "bg-amber-500/15 text-amber-400";
+      return "bg-[var(--sb-gold)]/15 text-[var(--sb-gold)]";
     case "idle":
       return "bg-muted text-muted-foreground";
     default: {
@@ -36,7 +36,7 @@ export function AgentsPanel({ state, refresh }: { state: ConsoleState; refresh: 
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Swarm charter (immutable)</CardTitle>
           <CardDescription>
-            Injected into every prompt. The coach can evolve per-agent strategy text but can never touch these rules.
+            Injected into every LAURA prompt. The coach can evolve per-agent strategy text but can never touch these rules.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -104,7 +104,7 @@ function AgentCard({ agent, refresh }: { agent: Agent; refresh: () => Promise<vo
           onChange={(e) => setStrategy(e.target.value)}
           className="min-h-36 text-xs leading-relaxed"
         />
-        {agent.lastError && <p className="text-xs text-rose-400">{agent.lastError}</p>}
+        {agent.lastError && <p className="text-xs text-destructive">{agent.lastError}</p>}
         <div className="mt-auto flex gap-2">
           {agent.status === "paused" ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void save({ status: "idle" })}>

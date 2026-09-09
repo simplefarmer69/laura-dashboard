@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LlmProvider, SwarmState } from "@/lib/types";
+import type { MissionStatus } from "@/lib/mission-status";
 
 export interface ConsoleState extends SwarmState {
+  mission: MissionStatus;
   runtime: { cycleRunning: boolean; llmProvider: LlmProvider; llmModel: string };
 }
 

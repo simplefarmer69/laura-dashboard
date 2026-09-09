@@ -41,14 +41,14 @@ export function gradeTone(letter: string): string {
   switch (letter) {
     case "A+":
     case "A":
-      return "text-emerald-400";
+      return "text-[var(--sb-green)] sb-glow-text";
     case "B":
-      return "text-lime-400";
+      return "text-primary sb-glow-text";
     case "C":
-      return "text-amber-400";
+      return "text-[var(--sb-gold)]";
     case "D":
-      return "text-orange-400";
+      return "text-[#ff6600]";
     default:
-      return "text-rose-400";
+      return "text-destructive";
   }
 }
