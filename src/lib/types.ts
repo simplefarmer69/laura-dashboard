@@ -130,6 +130,8 @@ export interface Draft {
   createdAt: number;
   reviewedAt: number | null;
   reviewerNote: string | null;
+  /** Set when the draft was published through a connected channel (e.g. X). */
+  publishedUrl?: string | null;
 }
 
 export type ProposalStatus = "pending" | "approved" | "rejected";

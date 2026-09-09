@@ -4,6 +4,7 @@ import { isCycleRunning } from "@/lib/swarm/orchestrator";
 import { schedulerRunning } from "@/lib/swarm/scheduler";
 import { resolveModel } from "@/lib/swarm/llm";
 import { missionStatus } from "@/lib/mission-status";
+import { xStatus } from "@/lib/publish/x";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function GET() {
       autopilot: schedulerRunning(),
       llmProvider: model.provider,
       llmModel: model.modelId,
+      x: xStatus(),
     },
   });
 }
