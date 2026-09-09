@@ -1,11 +1,13 @@
-# Stonk Swarm — Operating Plan
+# LAURA — Operating Plan
 
-A human-supervised, self-tuning swarm of agents whose job is to grow StonkBrokers
-(by Clutch Markets) on Robinhood Chain, graded every day on the three numbers the
-protocol lives on: `$STONKBROKER` price, protocol revenue and protocol volume.
+LAURA is a human-supervised, self-improving swarm of agents whose job is to grow
+StonkBrokers (by Clutch Markets) on Robinhood Chain, graded every day on the three
+numbers the protocol lives on: `$STONKBROKER` price, protocol revenue and protocol
+volume. Its mission ends at a $1B market cap, when LAURA takes the operating mandate
+of the StonkBrokers DAIO (see `DAIO.md`).
 
-This document is the plan of record. The repository implements Phase 0 and 1 in
-full; later phases are specified here so they can be built in order.
+This document is the plan of record. The repository implements Phases 0–1 and the
+read half of Phase 3; later phases are specified here so they can be built in order.
 
 ---
 
@@ -20,38 +22,46 @@ full; later phases are specified here so they can be built in order.
 | NFT collection | `0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0` | same |
 | Anvil AMM vault | `0xe302733accf4800146e55fc45b46b4e4ffc032d2` | same |
 | Clock In v2 | `0x1f12fe622c11947f93f53d63f68f7f46b6d081c9` | same |
-| Price / DEX data | DexScreener `token-pairs/v1/robinhood/<token>` — ~30 pairs, liquidity-weighted | api.dexscreener.com |
+| Price / DEX data | DexScreener `token-pairs/v1/robinhood/<token>` — ~30 pairs, liquidity-weighted price, deepest-pool cap | api.dexscreener.com |
 | Protocol fees / revenue / volume / TVL | DefiLlama slug `stonkbrokers` (dimensions `fees`, `dexs`) | api.llama.fi |
+| On-chain reads | Public RPC `eth_call`/`eth_getBalance`: Clock In v2 ETH pot, brokers held by the Anvil vault, token total supply, block number | rpc.mainnet.chain.robinhood.com |
+| ETH/USD | Derived from the deepest ETH-quoted pair (`priceUsd / priceNative`) | DexScreener |
 
-Both data feeds were verified live during the build; the grader runs on them
-today with no keys required.
+All feeds were verified live during the build; the grader runs on them today with
+no keys required. Blockscout's API (holder counts) sits behind a browser challenge
+and is deferred to a keyed indexer in Phase 3.
 
 ---
 
 ## 1. Architecture
 
 ```
-┌──────────────────────────── Operator console (Next.js, :4747) ────────────────────────────┐
-│ Overview · Review queue · Evolution · Agents · Runs · Settings                             │
+┌──────────────────────────── LAURA terminal (Next.js, :4747) ──────────────────────────────┐
+│ Overview · Activity · Growth · Review queue · Evolution · Agents · Runs · Settings        │
 └──────────────┬──────────────────────────────────────────────────────────┬─────────────────┘
                │ /api/*                                                   │ reads
 ┌──────────────▼──────────────┐    ┌──────────────────────┐    ┌──────────▼──────────────────┐
 │ Orchestrator (one cycle)    │    │ Scheduler worker     │    │ State store  data/state.json │
 │ grader → scout → producers  │◀───│ every N h + daily    │    │ agents, drafts, proposals,   │
-│ → coach                     │    │ grade stamp          │    │ runs, grades, metrics        │
+│ → coach (lessons+proposals) │    │ grade stamp          │    │ runs, grades, metrics,       │
+│ every step emits an event   │    │                      │    │ events, lessons, milestones  │
 └──────┬───────────┬──────────┘    └──────────────────────┘    └──────────────────────────────┘
        │           │
 ┌──────▼─────┐ ┌───▼──────────────────────────────┐
 │ Grader     │ │ LLM layer (Vercel AI SDK)        │
 │ DexScreener│ │ Anthropic | OpenAI | deterministic│
 │ DefiLlama  │ │ fallback when no key is set       │
+│ RPC 4663   │ │                                   │
 └────────────┘ └──────────────────────────────────┘
 ```
 
 Key files:
 
 - `src/lib/grader/sources.ts` — live adapters, partial-failure handling, synthetic fallback.
+- `src/lib/grader/onchain.ts` — raw JSON-RPC reads against Robinhood Chain (no key, no extra deps).
 - `src/lib/grader/score.ts` — rubric, letter grades, 7-day baseline lookup.
+- `src/lib/mission-status.ts` / `src/lib/mission.ts` — $1B ladder, milestone stamping, mission digest for prompts.
+- `src/lib/swarm/strategy.ts` — the single path for strategy changes with before/after grade capture.
 - `src/lib/swarm/roster.ts` — the immutable charter and the six agents' default strategies.
 - `src/lib/swarm/tasks.ts` — per-agent schemas, prompts and deterministic fallbacks.
 - `src/lib/swarm/orchestrator.ts` — the cycle, proposal application, run logging.
@@ -106,18 +116,25 @@ failure the deterministic fallback runs so the loop never stalls.
 
 ---
 
-## 4. Self-evolution loop
+## 4. Self-improvement loop
 
-1. Cycle ends → Coach receives: last 7 grades with components, every producer's
-   strategy text, approval/rejection counts, and the last 5 reviewer notes per agent.
-2. Coach emits ≤ 2 proposals: full replacement strategy text + rationale + evidence list.
-3. Proposals land in **Evolution** as pending. One pending proposal per agent max.
-4. Operator adopts (optionally after editing) or rejects. Adoption bumps
-   `strategyVersion`, archives the old text in `history` for rollback, and the
-   coach's own execution score improves via the adoption term.
-5. `autoApplyStrategyProposals` (Settings, default **off**) lets step 4 happen
-   without review. Scope of autonomy is intentionally bounded: proposals can
-   only change *strategy text*, never the charter, never code, never settings.
+1. Cycle ends → Coach receives: mission status, last 7 grades with components, every
+   producer's strategy text, the grade when its current version went live vs now, the
+   grade trajectory of past versions, approval/rejection counts, the last 5 reviewer
+   notes per agent, and the existing swarm memory.
+2. Coach emits ≤ 3 **lessons** (durable, evidence-backed insights) and ≤ 2 **proposals**
+   (full replacement strategy text + rationale + evidence).
+3. Lessons are de-duplicated and stored as **swarm memory** (cap 60); the newest 12 are
+   injected into every producer prompt on the next cycle, so learning compounds even when
+   no strategy changes.
+4. Proposals land in **Evolution** as pending. One pending proposal per agent max.
+5. Operator adopts (optionally after editing) or rejects. Adoption bumps `strategyVersion`,
+   records the grade at adoption, archives the old text with its grade at retirement, and
+   emits a `proposal.adopted` event. The **Growth → Strategy scoreboard** shows the grade
+   delta since each agent's current version went live; the coach sees the same numbers.
+6. `autoApplyStrategyProposals` (Settings, default **off**) lets step 5 happen without
+   review. Autonomy is bounded: proposals can only change *strategy text*, never the
+   charter, code, rubric or settings.
 
 What is deliberately **not** self-modifying: the charter, the grader rubric, the
 schemas, the code. Those change through git, with a human, with tests.
@@ -167,14 +184,18 @@ is in place.
   into the execution component so the coach learns which formats move traffic.
 - Reviewer inbox digest (email/Slack) when a cycle leaves items pending > 4 h.
 
-### Phase 3 — On-chain read layer
-- viem client on Robinhood Chain: Clock In pot balance, activation counts,
-  loan vault utilisation, locker fee accrual, up. gauge weights.
-- These become grader inputs with small weights and give Steward/Ledger
-  exact figures ("pot is 62% to the next Clock In") instead of DefiLlama roll-ups.
+### Phase 3 — On-chain read layer *(read half done)*
+- Done: Clock In v2 pot (ETH and USD), brokers in the Anvil vault vs in circulation,
+  token total supply, block number — via the public RPC every cycle, shown on the
+  Overview and fed to every agent.
+- Next: activation counts (Activation Manager ABI), loan vault utilisation, locker fee
+  accrual, up. gauge weights, holder counts via a keyed indexer (Alchemy/Blockscout).
+- These become grader inputs with small weights and give Steward/Ledger exact figures
+  ("pot is 62% to the next Clock In") instead of DefiLlama roll-ups.
 
 ### Phase 4 — Treasury wallet *(after the 24 h funding window)*
-The wallet is a **budgeted tool the swarm can request**, not a trading bot.
+The wallet is a **budgeted tool the swarm can request**, not a trading bot. Permissions
+widen with the succession ladder in `DAIO.md`.
 
 - Custody: a Safe (multisig) on chain 4663 with the operator as required signer.
   The swarm holds a proposer key only; nothing executes without the human signature.
@@ -203,7 +224,19 @@ The wallet is a **budgeted tool the swarm can request**, not a trading bot.
 
 ---
 
-## 7. Daily operating rhythm
+## 7. Visualising LAURA as it grows
+
+- **Activity** — every action as an event (grader stamps, briefs, drafts, lessons,
+  proposals, operator decisions, milestones, errors), grouped by UTC day, filterable.
+- **Growth** — daily-close charts for market cap, grade, protocol revenue and volume;
+  the $1M→$1B mission ladder with stamped milestones; swarm memory; strategy scoreboard.
+- **Ticker** — the header strip shows price, 24h, cap, revenue, volume, Clock In pot,
+  grade and multiple-to-$1B on every page.
+
+The store keeps up to 4,000 metric snapshots, 1,500 events and 200 runs; charts
+collapse to one point per UTC day so they stay readable for months.
+
+## 8. Daily operating rhythm
 
 | When (UTC) | Who | What |
 |---|---|---|

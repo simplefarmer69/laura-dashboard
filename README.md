@@ -1,19 +1,22 @@
-# Stonk Swarm
+# LAURA
 
-A human-supervised, self-tuning swarm of agents that works to grow
+LAURA is a human-supervised, self-improving swarm of agents that works to grow
 [StonkBrokers](https://www.stonkbrokers.cash) on Robinhood Chain, graded every
-day on live `$STONKBROKER` price, protocol revenue and protocol volume.
+day on live `$STONKBROKER` price, protocol revenue and protocol volume. Its
+mission ends at a $1B market cap, when LAURA takes the operating mandate of the
+StonkBrokers DAIO ([`DAIO.md`](./DAIO.md)).
 
 Six agents (Scout, Quill, Steward, Broker, Ledger, Coach) run in cycles: the
-grader pulls live metrics from DexScreener and DefiLlama, the scout briefs the
-swarm, four producers write drafts (threads, articles, community posts,
-outreach, reports), and the coach proposes revised strategies for whichever
-agents are lagging. Everything lands in an operator console for review; nothing
-is published or adopted without a human decision unless you explicitly turn
-strategy auto-apply on.
+grader pulls live metrics from DexScreener, DefiLlama and the Robinhood Chain
+RPC, the scout briefs the swarm, four producers write drafts (threads, articles,
+community posts, outreach, reports), and the coach distils lessons into swarm
+memory and proposes revised strategies for whichever agents are lagging. Every
+action is logged and visualised in a terminal styled after stonkbrokers.cash.
+Nothing is published or adopted without a human decision unless you explicitly
+turn strategy auto-apply on.
 
-See [`PLAN.md`](./PLAN.md) for the full architecture, grader rubric, guardrails
-and the phased roadmap (including the on-chain treasury phase).
+See [`PLAN.md`](./PLAN.md) for the architecture, grader rubric, self-improvement
+loop, guardrails and the phased roadmap (including the treasury phase).
 
 ## Run it locally
 
@@ -50,13 +53,16 @@ Run the worker next to `npm run build && npm start` under your process manager.
 ## Layout
 
 ```
-src/lib/grader/      DexScreener + DefiLlama adapters, scoring rubric
-src/lib/swarm/       charter & roster, LLM layer, prompts/schemas, orchestrator
+src/lib/grader/      DexScreener + DefiLlama + RPC adapters, scoring rubric
+src/lib/mission*.ts  $1B ladder, milestone stamping, DAIO mandate flag
+src/lib/swarm/       charter & roster, LLM layer, prompts/schemas, orchestrator, strategy versioning
 src/app/api/         state, cycle, grade, drafts, proposals, agents, settings
-src/components/      operator console (Next.js 16, Tailwind 4, shadcn/ui)
+src/components/      LAURA terminal (Next.js 16, Tailwind 4, shadcn/ui)
 scripts/             worker.ts (scheduler), cycle.ts (one-shot)
 data/state.json      runtime state (git-ignored; set SWARM_DATA_DIR to relocate)
 ```
+
+Optional env: `ROBINHOOD_RPC_URL` to point on-chain reads at a dedicated provider.
 
 ## Guardrails
 
