@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stonk Swarm
 
-## Getting Started
+A human-supervised, self-tuning swarm of agents that works to grow
+[StonkBrokers](https://www.stonkbrokers.cash) on Robinhood Chain, graded every
+day on live `$STONKBROKER` price, protocol revenue and protocol volume.
 
-First, run the development server:
+Six agents (Scout, Quill, Steward, Broker, Ledger, Coach) run in cycles: the
+grader pulls live metrics from DexScreener and DefiLlama, the scout briefs the
+swarm, four producers write drafts (threads, articles, community posts,
+outreach, reports), and the coach proposes revised strategies for whichever
+agents are lagging. Everything lands in an operator console for review; nothing
+is published or adopted without a human decision unless you explicitly turn
+strategy auto-apply on.
+
+See [`PLAN.md`](./PLAN.md) for the full architecture, grader rubric, guardrails
+and the phased roadmap (including the on-chain treasury phase).
+
+## Run it locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # console on http://localhost:4747
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Press **Run cycle** in the header. With no API key configured the swarm uses a
+deterministic fallback writer, so the whole loop (live grading, briefs, drafts,
+proposals, review, evolution) works out of the box.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Enable real generation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create `.env.local` with one of:
 
-## Learn More
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+# or
+OPENAI_API_KEY=sk-...
+# optional: force a provider, or pick a model in Settings
+SWARM_LLM_PROVIDER=anthropic
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Run unattended
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run worker       # full cycle every N hours (Settings) + daily grade stamp
+npm run cycle        # one-shot cycle, for cron
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Run the worker next to `npm run build && npm start` under your process manager.
 
-## Deploy on Vercel
+## Layout
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/lib/grader/      DexScreener + DefiLlama adapters, scoring rubric
+src/lib/swarm/       charter & roster, LLM layer, prompts/schemas, orchestrator
+src/app/api/         state, cycle, grade, drafts, proposals, agents, settings
+src/components/      operator console (Next.js 16, Tailwind 4, shadcn/ui)
+scripts/             worker.ts (scheduler), cycle.ts (one-shot)
+data/state.json      runtime state (git-ignored; set SWARM_DATA_DIR to relocate)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Guardrails
+
+- Publishing is always gated behind the review queue.
+- The charter (injected into every prompt) forbids sockpuppets, fake engagement,
+  return promises and any wash-trading or price-targeting activity.
+- The coach may only evolve per-agent strategy text, never the charter, rubric
+  or code. Every superseded strategy is kept for rollback.
