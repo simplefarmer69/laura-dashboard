@@ -19,19 +19,57 @@ import { isViewerMode } from "@/lib/viewer/mode";
 const PUBLISH_INTERVAL_MS = 5 * 60_000;
 const ATTEMPTS = 2;
 
-declare global {
-  var __lauraSnapshotPublisher: { lastAttemptAt: number; warnedUnconfigured: boolean } | undefined;
+interface PublisherState {
+  lastAttemptAt: number;
+  warnedUnconfigured: boolean;
+  /** Last failure signature (e.g. "HTTP 401") — repeats of the same failure
+      stay silent so a misconfigured secret doesn't spam a line every 5 min. */
+  lastFailure: string | null;
+  /** Consecutive failed publish attempts since the last success. */
+  failureCount: number;
 }
 
-function pub() {
+declare global {
+  var __lauraSnapshotPublisher: PublisherState | undefined;
+}
+
+function pub(): PublisherState {
   if (!globalThis.__lauraSnapshotPublisher) {
-    globalThis.__lauraSnapshotPublisher = { lastAttemptAt: 0, warnedUnconfigured: false };
+    globalThis.__lauraSnapshotPublisher = {
+      lastAttemptAt: 0,
+      warnedUnconfigured: false,
+      lastFailure: null,
+      failureCount: 0,
+    };
   }
-  return globalThis.__lauraSnapshotPublisher;
+  const s = globalThis.__lauraSnapshotPublisher;
+  /* Next dev hot-reload keeps the global from an older module version alive;
+     backfill fields that version didn't have. */
+  s.lastFailure ??= null;
+  s.failureCount ??= 0;
+  return s;
 }
 
 function log(msg: string): void {
   console.log(`[laura ${new Date().toISOString()}] ${msg}`);
+}
+
+/** Auth rejections are config problems (secret not set / mismatched on the
+    viewer); an immediate retry with the same credentials cannot succeed. */
+function isAuthRejection(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
+/** One warn line per distinct failure; identical repeats are counted silently.
+    The 5-min cadence keeps attempting, so it self-heals the moment the
+    operator fixes the viewer env — recovery is announced in the success path. */
+function noteFailure(state: PublisherState, failure: string): void {
+  state.failureCount += 1;
+  if (state.lastFailure === failure) return;
+  state.lastFailure = failure;
+  log(
+    `snapshot publish failing: ${failure} — retrying every ${PUBLISH_INTERVAL_MS / 60_000} min (quiet until it changes)`,
+  );
 }
 
 export async function maybePublishSnapshot(options: { force?: boolean } = {}): Promise<void> {
@@ -59,6 +97,7 @@ export async function maybePublishSnapshot(options: { force?: boolean } = {}): P
   }
 
   const endpoint = `${url.replace(/\/+$/, "")}/api/snapshot`;
+  let failure = "unknown";
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
       const res = await fetch(endpoint, {
@@ -71,13 +110,20 @@ export async function maybePublishSnapshot(options: { force?: boolean } = {}): P
         signal: AbortSignal.timeout(20_000),
       });
       if (res.ok) {
+        if (state.lastFailure) {
+          log(`snapshot publishing recovered after ${state.failureCount} failed attempt(s)`);
+          state.lastFailure = null;
+          state.failureCount = 0;
+        }
         log(`snapshot published (${(body.length / 1024).toFixed(0)} KB → ${endpoint})`);
         return;
       }
-      log(`snapshot publish rejected: HTTP ${res.status} (attempt ${attempt}/${ATTEMPTS})`);
+      failure = `HTTP ${res.status}`;
+      if (isAuthRejection(res.status)) break; // config problem — retry can't help
     } catch (err) {
-      log(`snapshot publish failed: ${String(err)} (attempt ${attempt}/${ATTEMPTS})`);
+      failure = String(err);
     }
     if (attempt < ATTEMPTS) await new Promise((r) => setTimeout(r, 2_000));
   }
+  noteFailure(state, failure);
 }
