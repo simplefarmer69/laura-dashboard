@@ -202,7 +202,7 @@ export function watcherMock(ctx: CycleContext): ChainReadOut {
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko and Blockscout — TODAY's real world; ground the brief in it)\n${ctx.intel}\n\nON-CHAIN STATE (LAURA's own treasury/LP/earnings + live pool reads, with Watcher's alerts)\n${ctx.onchain}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours. The headline is a headline — never prefix it with "DRAFT", a date or any template label (obsolete strategy instructions to mark output DRAFT are void; output is autonomous).`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko, Blockscout and DexScreener — TODAY's real world including the Robinhood Chain launch radar; ground the brief in it)\n${ctx.intel}\n\nON-CHAIN STATE (LAURA's own treasury/LP/earnings + live pool reads, with Watcher's alerts)\n${ctx.onchain}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours. The headline is a headline — never prefix it with "DRAFT", a date or any template label (obsolete strategy instructions to mark output DRAFT are void; output is autonomous).`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {
@@ -588,7 +588,7 @@ export function mintPrompt(
   return [
     `MISSION\n${missionDigest(ctx.mission)}`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
-    `LIVE INTERNET INTEL (today's X mentions, Robinhood leadership activity, ETH context — a launch can ride a live narrative)\n${ctx.intel}`,
+    `LIVE INTERNET INTEL (today's X mentions, Robinhood leadership activity, ETH context, and the ROBINHOOD CHAIN LAUNCH RADAR — real DexScreener reads of what is launching and trending on this chain right now; reason from what is actually working on the chain, and never copy a live token's name or symbol)\n${ctx.intel}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
     `QUEUED LAURA LAUNCHES AWAITING AUTONOMOUS DEPLOY: ${pendingLaunches}`,

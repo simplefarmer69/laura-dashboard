@@ -1,4 +1,4 @@
-import type { IntelSnapshot, IntelTweet, Settings, XIntel } from "@/lib/types";
+import type { IntelSnapshot, IntelTweet, LaunchRadar, LaunchRadarToken, Settings, XIntel } from "@/lib/types";
 
 /**
  * LAURA's live-internet intelligence layer: real reads from the open internet
@@ -67,6 +67,7 @@ declare global {
         trackedIds?: Cache<Record<string, string | null>>;
         eth?: Cache<{ usd: number; change24hPct: number }>;
         blockscout?: Cache<{ holders: number | null; transfers: number | null }>;
+        radar?: Cache<LaunchRadar>;
       }
     | undefined;
 }
@@ -84,6 +85,7 @@ const CATALYST_TTL_MS = 30 * 60_000;
 const TRACKED_IDS_TTL_MS = 60 * 60_000;
 const ETH_TTL_MS = 10 * 60_000;
 const BLOCKSCOUT_TTL_MS = 30 * 60_000;
+const RADAR_TTL_MS = 15 * 60_000;
 
 async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
   const res = await fetch(url, {
@@ -267,6 +269,101 @@ async function fetchBlockscout(settings: Settings): Promise<{ holders: number | 
   return value;
 }
 
+/* --------------------- DexScreener launch radar (keyless) --------------------- */
+
+/** The DexScreener pair fields the radar reads (subset of the full response). */
+interface DexPair {
+  chainId?: string;
+  dexId?: string;
+  baseToken: { address: string; name: string; symbol: string };
+  pairCreatedAt?: number;
+  volume?: { h24?: number };
+  liquidity?: { usd?: number };
+  priceChange?: { h24?: number };
+  marketCap?: number;
+}
+
+interface DexTokenRef {
+  chainId?: string;
+  tokenAddress?: string;
+}
+
+function toRadarToken(p: DexPair, boosted: Set<string>): LaunchRadarToken {
+  return {
+    address: p.baseToken.address,
+    name: p.baseToken.name,
+    symbol: p.baseToken.symbol,
+    dexId: p.dexId ?? "?",
+    pairCreatedAt: p.pairCreatedAt ?? null,
+    volume24hUsd: p.volume?.h24 ?? 0,
+    liquidityUsd: p.liquidity?.usd ?? null,
+    priceChange24hPct: p.priceChange?.h24 ?? null,
+    marketCapUsd: p.marketCap ?? null,
+    boosted: boosted.has(p.baseToken.address.toLowerCase()),
+  };
+}
+
+/**
+ * New/trending token launches on Robinhood Chain (chain slug "robinhood",
+ * verified via /latest/dex/search 2026-09-10) from DexScreener's keyless API.
+ * Discovery: the latest token-profiles and token-boosts feeds filtered to the
+ * chain slug (tokens paying for a profile/boost are the chain's active
+ * launches), then ONE batch stats call for pair age, 24h volume, liquidity,
+ * price change and mcap — the mission token rides along so $STONKBROKER's own
+ * pair stats are always present. READ-ONLY market intel: feeds prompts only,
+ * never any treasury or launch execution path.
+ *
+ * Exported for direct smoke-testing; cycles reach it through collectIntel.
+ */
+export async function fetchLaunchRadar(settings: Settings): Promise<LaunchRadar> {
+  const c = caches();
+  if (c.radar && Date.now() - c.radar.at < RADAR_TTL_MS) return c.radar.value;
+  const [profiles, boosts] = await Promise.all([
+    getJson<DexTokenRef[]>("https://api.dexscreener.com/token-profiles/latest/v1"),
+    getJson<DexTokenRef[]>("https://api.dexscreener.com/token-boosts/latest/v1"),
+  ]);
+  const missionAddr = settings.tokenAddress.toLowerCase();
+  const boosted = new Set(
+    boosts
+      .filter((t) => t.chainId === settings.chainSlug && t.tokenAddress)
+      .map((t) => (t.tokenAddress as string).toLowerCase()),
+  );
+  const addresses: string[] = [];
+  for (const t of [...profiles, ...boosts]) {
+    if (t.chainId !== settings.chainSlug || !t.tokenAddress) continue;
+    const a = t.tokenAddress.toLowerCase();
+    if (a !== missionAddr && !addresses.includes(a)) addresses.push(a);
+  }
+  /* The batch endpoint takes up to 30 addresses; one slot is reserved for the
+     mission token so its own pair stats always come back. */
+  const batch = [...addresses.slice(0, 29), missionAddr];
+  const pairs = await getJson<DexPair[]>(
+    `https://api.dexscreener.com/tokens/v1/${settings.chainSlug}/${batch.join(",")}`,
+  );
+  /* Keep each token's deepest pair only (a token can have several pools). */
+  const requested = new Set(batch);
+  const best = new Map<string, DexPair>();
+  for (const p of pairs) {
+    const a = p.baseToken.address.toLowerCase();
+    if (!requested.has(a)) continue; // token sits on the quote side here — wrong identity
+    const prior = best.get(a);
+    if (!prior || (p.liquidity?.usd ?? 0) > (prior.liquidity?.usd ?? 0)) best.set(a, p);
+  }
+  const missionPair = best.get(missionAddr);
+  const tokens = [...best.entries()]
+    .filter(([a]) => a !== missionAddr)
+    .map(([, p]) => toRadarToken(p, boosted))
+    .sort((a, b) => b.volume24hUsd - a.volume24hUsd)
+    .slice(0, 8);
+  const value: LaunchRadar = {
+    fetchedAt: Date.now(),
+    tokens,
+    mission: missionPair ? toRadarToken(missionPair, boosted) : null,
+  };
+  c.radar = { at: Date.now(), value };
+  return value;
+}
+
 /**
  * Gathers the cycle's live-internet snapshot. Never throws: every source is
  * settled independently; failures become warnings and null fields, with the
@@ -277,13 +374,14 @@ export async function collectIntel(
   settings: Settings,
   prev: IntelSnapshot | null,
 ): Promise<IntelSnapshot> {
-  const [search, leaders, tracked, catalysts, eth, chain] = await Promise.allSettled([
+  const [search, leaders, tracked, catalysts, eth, chain, radar] = await Promise.allSettled([
     fetchXMentions(),
     fetchXLeaders(),
     fetchXTracked(),
     fetchXCatalysts(),
     fetchEth(),
     fetchBlockscout(settings),
+    fetchLaunchRadar(settings),
   ]);
   const sources: string[] = [];
   const warnings: string[] = [];
@@ -357,6 +455,14 @@ export async function collectIntel(
     warnings.push(`Blockscout: ${String(chain.reason)} (holder count carried forward)`);
   }
 
+  let launchRadar: LaunchRadar | null = null;
+  if (radar.status === "fulfilled") {
+    sources.push("dexscreener-radar");
+    launchRadar = radar.value;
+  } else {
+    warnings.push(`DexScreener launch radar: ${String(radar.reason)}`);
+  }
+
   return {
     ts: Date.now(),
     x,
@@ -364,6 +470,7 @@ export async function collectIntel(
     ethUsd24hChangePct: ethChange,
     holderCount: holders,
     tokenTransferCount: transfers,
+    launchRadar,
     sources,
     warnings,
   };
@@ -376,10 +483,51 @@ function ago(ts: string): string {
   return h < 1 ? `${Math.max(1, Math.round(ms / 60_000))}m ago` : h < 48 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`;
 }
 
+function ageOfMs(ts: number | null): string {
+  if (!ts) return "age n/a";
+  const h = (Date.now() - ts) / 3_600_000;
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))}m old`;
+  return h < 48 ? `${Math.round(h)}h old` : `${Math.round(h / 24)}d old`;
+}
+
+function compactUsd(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return "n/a";
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
+  return `$${n.toFixed(0)}`;
+}
+
+function radarPct(pct: number | null): string {
+  if (pct === null) return "n/a";
+  return `${pct >= 0 ? "+" : ""}${Math.abs(pct) >= 100 ? pct.toFixed(0) : pct.toFixed(1)}%`;
+}
+
+/** Renders the launch-radar section of the digest; "" when no radar data exists. */
+export function launchRadarDigest(radar: LaunchRadar | null | undefined): string {
+  if (!radar || (radar.tokens.length === 0 && !radar.mission)) return "";
+  const lines = [
+    "ROBINHOOD CHAIN LAUNCH RADAR (DexScreener, live: newly profiled/boosted tokens on the chain — what launch concepts are actually working right now):",
+  ];
+  for (const t of radar.tokens.slice(0, 6)) {
+    lines.push(
+      `- ${t.symbol} "${t.name}" [${t.dexId}]: ${ageOfMs(t.pairCreatedAt)}, vol24 ${compactUsd(t.volume24hUsd)}, liq ${compactUsd(t.liquidityUsd)}, ${radarPct(t.priceChange24hPct)} 24h, mcap ${compactUsd(t.marketCapUsd)}${t.boosted ? ", boosted" : ""}`,
+    );
+  }
+  if (radar.mission) {
+    const m = radar.mission;
+    lines.push(
+      `- $STONKBROKER own pair [${m.dexId}]: vol24 ${compactUsd(m.volume24hUsd)}, liq ${compactUsd(m.liquidityUsd)}, ${radarPct(m.priceChange24hPct)} 24h, mcap ${compactUsd(m.marketCapUsd)}.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 /**
- * Compact (~1500 chars) prompt injection: what the live internet says TODAY.
- * History gives the mention/engagement trend so influence reads as a delta,
- * not a lone number.
+ * Compact prompt injection: what the live internet says TODAY. The X/macro/
+ * holder section keeps its ~1500-char budget; the launch-radar section is
+ * appended after that cap with its own ~900-char budget so a verbose X day
+ * can never crowd it out. History gives the mention/engagement trend so
+ * influence reads as a delta, not a lone number.
  */
 export function intelDigest(current: IntelSnapshot | null, history: IntelSnapshot[]): string {
   if (!current) return "Live internet intel unavailable this cycle (all fetchers failed).";
@@ -436,5 +584,7 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
     lines.push("Holder count: Blockscout unreachable from this host (Cloudflare challenge); trend unavailable.");
   }
   if (current.warnings.length > 0) lines.push(`Intel warnings: ${current.warnings.join(" · ")}`);
-  return lines.join("\n").slice(0, 1500);
+  const main = lines.join("\n").slice(0, 1500);
+  const radar = launchRadarDigest(current.launchRadar).slice(0, 900);
+  return radar ? `${main}\n${radar}` : main;
 }

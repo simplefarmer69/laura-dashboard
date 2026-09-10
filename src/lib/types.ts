@@ -84,9 +84,44 @@ export interface IntelSnapshot {
   holderCount: number | null;
   /** Lifetime $STONKBROKER transfer count from Blockscout; null when unreachable. */
   tokenTransferCount: number | null;
+  /**
+   * DexScreener read of new/trending Robinhood Chain launches. Optional:
+   * snapshots recorded before the radar existed lack the field; null when the
+   * fetch failed this cycle.
+   */
+  launchRadar?: LaunchRadar | null;
   /** Endpoints that returned real data this cycle. */
   sources: string[];
   warnings: string[];
+}
+
+/** One token on the Robinhood Chain launch radar (its deepest DexScreener pair). */
+export interface LaunchRadarToken {
+  address: string;
+  name: string;
+  symbol: string;
+  dexId: string;
+  /** Pair creation time (ms since epoch); null when DexScreener omits it. */
+  pairCreatedAt: number | null;
+  volume24hUsd: number;
+  liquidityUsd: number | null;
+  priceChange24hPct: number | null;
+  marketCapUsd: number | null;
+  /** Token appears in DexScreener's paid boosts feed (actively promoted). */
+  boosted: boolean;
+}
+
+/**
+ * READ-ONLY market intel from DexScreener: what is launching/trending on
+ * Robinhood Chain right now. Feeds prompts only — never any treasury or
+ * launch execution path.
+ */
+export interface LaunchRadar {
+  fetchedAt: number;
+  /** New/active non-mission tokens, deepest pair each, sorted by 24h volume. */
+  tokens: LaunchRadarToken[];
+  /** $STONKBROKER's own deepest pair stats when DexScreener lists it. */
+  mission: LaunchRadarToken | null;
 }
 
 export interface GradeComponent {
