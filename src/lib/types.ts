@@ -254,6 +254,8 @@ export type SwarmEventKind =
   | "earnings.accrued"
   | "earnings.claimed"
   | "tuner.adjusted"
+  | "skill.updated"
+  | "swarm.health"
   | "error";
 
 export interface SwarmEvent {

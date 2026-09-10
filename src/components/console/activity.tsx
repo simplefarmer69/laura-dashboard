@@ -25,6 +25,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "launch.proposed":
     case "cycle.started":
     case "cycle.finished":
+    case "swarm.health":
     case "error":
       return "agents";
     case "proposal.created":
@@ -35,6 +36,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "critic.vetoed":
     case "strategy.edited":
     case "tuner.adjusted":
+    case "skill.updated":
       return "evolution";
     case "grade.stamped":
     case "milestone.reached":
@@ -74,6 +76,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "proposal.adopted":
     case "strategy.edited":
     case "tuner.adjusted":
+    case "skill.updated":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.approved":
     case "draft.published":
@@ -88,6 +91,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "launch.failed":
     case "novelty.rejected":
     case "critic.vetoed":
+    case "swarm.health":
     case "error":
       return "bg-destructive/15 text-destructive";
     case "draft.created":

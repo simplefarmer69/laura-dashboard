@@ -692,6 +692,20 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       detail: `${((run.finishedAt - run.startedAt) / 1000).toFixed(1)}s${run.error ? ` · ${run.error}` : ""}`,
       refId: run.id,
     });
+    /* Watchdog: two consecutive failed cycles is a systemic problem, not a
+       blip. Derived from recorded runs (survives restarts) and covers every
+       trigger — scheduler, event and manual. */
+    const finished = state.runs.filter((r) => r.finishedAt !== null);
+    const streak = finished.length - 1 - finished.findLastIndex((r) => !r.error);
+    if (run.error && streak >= 2) {
+      pushEvent(state, {
+        kind: "swarm.health",
+        agentId: "system",
+        title: `Swarm health: ${streak} consecutive cycle failures`,
+        detail: `Latest: ${run.error}. Check LLM provider, upstream APIs and dev-server logs.`,
+        refId: run.id,
+      });
+    }
     await saveState(state);
   }
   return run;
