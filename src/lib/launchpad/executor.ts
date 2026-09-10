@@ -9,6 +9,7 @@ import {
   walletStatus,
 } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
+import { laneClosedReason } from "@/lib/launchpad/lanes";
 import {
   attachTokenLogo,
   attachTokenProfile,
@@ -44,6 +45,8 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
   if (!launch) return { ok: false, error: "Launch not found", httpStatus: 404 };
   if (launch.status !== "approved")
     return { ok: false, error: "Only approved launches can deploy", httpStatus: 409 };
+  const laneClosed = laneClosedReason(launch.lane);
+  if (laneClosed) return { ok: false, error: laneClosed, httpStatus: 409 };
 
   const wallet = await walletStatus();
   if (!wallet.configured)
@@ -282,8 +285,15 @@ export async function runLaunchExecutor(): Promise<void> {
         !l.verifiedAt &&
         (es.nextAttemptAt[`verify:${l.id}`] ?? 0) <= now,
     );
+    /* Weekend-closed stock lanes stay queued (not failed) and deploy on the
+       first tick after the lane reopens Monday 00:15 UTC. */
     const queue = state.launches
-      .filter((l) => l.status === "approved" && (es.nextAttemptAt[l.id] ?? 0) <= now)
+      .filter(
+        (l) =>
+          l.status === "approved" &&
+          (es.nextAttemptAt[l.id] ?? 0) <= now &&
+          laneClosedReason(l.lane) === null,
+      )
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.createdAt - b.createdAt);
     if (unarmed.length === 0 && unverified.length === 0 && queue.length === 0) return;
 

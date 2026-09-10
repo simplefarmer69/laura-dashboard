@@ -1,5 +1,6 @@
 import { askLaura } from "@/lib/chat/laura";
 import { setBotStatus } from "@/lib/chat/status";
+import { recordChatter } from "@/lib/chat/chatter";
 
 /**
  * Telegram connector via long polling (getUpdates) — no public URL needed, so
@@ -56,6 +57,15 @@ export function startTelegram(token: string): void {
           if (!msg || !text || msg.from?.is_bot) continue;
 
           const isPrivate = msg.chat.type === "private";
+          /* Group chatter (never DMs) feeds the swarm's community context. */
+          if (!isPrivate) {
+            recordChatter({
+              ts: Date.now(),
+              channel: `tg:${msg.chat.id}`,
+              user: msg.from?.username ?? msg.from?.first_name ?? "anon",
+              text,
+            });
+          }
           const mentioned = text.toLowerCase().includes(`@${me.username.toLowerCase()}`);
           const isCommand = text.startsWith("/");
           const isReplyToMe = msg.reply_to_message?.from?.id === me.id;

@@ -1,3 +1,5 @@
+import type { PadLane } from "@/lib/launchpad/contracts";
+
 export type MetricSource = "live" | "partial" | "mock";
 
 export interface MetricsSnapshot {
@@ -160,7 +162,10 @@ export type AgentId =
   | "vault"
   | "critic"
   | "mint"
-  | "coach";
+  | "coach"
+  | "smartlp"
+  | "nftintel"
+  | "tokenintel";
 
 export type AgentStatus = "idle" | "running" | "error" | "paused";
 
@@ -409,8 +414,8 @@ export interface LaunchProposal {
   id: string;
   cycleId: string;
   createdAt: number;
-  /** Quote lane pad the launch deploys on */
-  lane: "weth" | "stonk";
+  /** Quote lane pad the launch deploys on (see launchpad/lanes.ts) */
+  lane: PadLane;
   name: string;
   symbol: string;
   /** Whole tokens; converted to wei at deploy */
@@ -464,7 +469,7 @@ export interface LaunchEarnings {
   /** On-chain launch id (per pad) */
   launchId: string;
   symbol: string;
-  lane: "weth" | "stonk";
+  lane: PadLane;
   /**
    * Lifetime creator-fee income from this launch's curve trades, in the
    * lane's quote token (WETH-lane units ≈ ETH). Push-paid to the wallet on

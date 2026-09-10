@@ -6,7 +6,10 @@ import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt, priceTrendDigest, runsDigest } from "@/lib/swarm/context";
 import { collectIntel, intelDigest } from "@/lib/swarm/intel";
+import { worldContext } from "@/lib/swarm/worldfeeds";
+import { forumDigest } from "@/lib/swarm/forum";
 import { collectOnchainDigest } from "@/lib/swarm/onchain";
+import { laneMenuDigest, recentLaunchLanes, resolveLane } from "@/lib/launchpad/lanes";
 import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
 import { checkNovelty } from "@/lib/swarm/novelty";
@@ -225,6 +228,31 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       step({ agentId: "system", label: "On-chain digest", status: "error", summary: String(err), durationMs: 0 });
     }
 
+    /* 1c2. World feeds: Polymarket odds, ESPN scores, launcher tape,
+       protocol economics and community chatter for ideation. Fail-soft by
+       construction — worldContext settles each source independently. */
+    let worldText = "World feeds unavailable this cycle.";
+    try {
+      const world = await timed(() => worldContext());
+      worldText = world.value;
+      step({
+        agentId: "system",
+        label: "World feeds",
+        status: worldText.startsWith("World feeds unavailable") ? "error" : "ok",
+        summary: worldText.split("\n")[0]?.slice(0, 160) ?? "",
+        durationMs: world.ms,
+      });
+    } catch (err) {
+      step({ agentId: "system", label: "World feeds", status: "error", summary: String(err), durationMs: 0 });
+    }
+
+    /* 1c3. The Cafe Bar: fold the swarm's own forum into world context so
+       token ideation can pick up themes the agents are already debating. */
+    const cafe = forumDigest(state.forum ?? []);
+    if (!cafe.startsWith("The bar is empty")) {
+      worldText = `${worldText}\n\nTHE CAFE BAR (the swarm's own forum — live agent debate; mine it for token themes)\n${cafe.slice(0, 1400)}`;
+    }
+
     const docs = await fetchDocsExcerpt(state.settings);
     const library = await libraryDigest();
     const skillEntries = await Promise.all(
@@ -247,6 +275,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       opsHealth: runsDigest(state.runs.filter((r) => r.id !== run.id)),
       priceTrend: priceTrendDigest(state.metricsHistory, grader.value.metrics),
       intel: intelText,
+      world: worldText,
       onchain: onchainText,
       cycleSeq: state.runs.length,
     };
@@ -704,12 +733,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
         const spoken = spokenLaunchesDigest(state.launches);
         const capacity = launchCapacityDigest(state);
+        const laneMenu = laneMenuDigest(new Date(), state.runs.length, recentLaunchLanes(state.launches));
         const out = await timed(async () =>
           tally(
             await generateStructured(resolved, {
               schema: launchSchema,
               system: agentSystem(mint),
-              prompt: mintPrompt(ctx, floor, pending, spoken, capacity),
+              prompt: mintPrompt(ctx, floor, pending, spoken, capacity, laneMenu),
               mock: () => mintMock(ctx, pending),
             }),
           ),
@@ -729,7 +759,9 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             id: newId("launch"),
             cycleId: run.id,
             createdAt: Date.now(),
-            lane: "weth",
+            /* Weekend-closed stock picks resolve to an open crypto lane here;
+               unknown lanes fall back to the cycle rotation hint. */
+            lane: resolveLane(spec.lane, new Date(), state.runs.length),
             name: spec.name,
             symbol: spec.symbol,
             supplyTokens: spec.supplyTokens,

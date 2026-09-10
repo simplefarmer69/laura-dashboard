@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   formatEther,
+  formatUnits,
   http,
   parseAbiItem,
 } from "viem";
@@ -45,11 +46,24 @@ const publicClient = createPublicClient({
   transport: http(undefined, { batch: true, retryCount: 4, retryDelay: 800 }),
 });
 
-/** Quote token per lane (pad.quote(), verified on-chain). Both are 18 decimals. */
-export const QUOTE_TOKENS: Record<PadLane, { address: `0x${string}`; symbol: string }> = {
-  weth: { address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "WETH" },
-  stonk: { address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", symbol: "STONK" },
+/** Quote token per lane (pad.quote(), verified on-chain 2026-09-10).
+ * NOTE: USDG is 6 decimals — always format quote amounts with formatQuote,
+ * never a bare formatEther. */
+export const QUOTE_TOKENS: Record<PadLane, { address: `0x${string}`; symbol: string; decimals: number }> = {
+  weth: { address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "WETH", decimals: 18 },
+  stonk: { address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", symbol: "STONK", decimals: 18 },
+  usdg: { address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", decimals: 6 },
+  gme: { address: "0x1b0E319c6A659F002271B69dB8A7df2F911c153E", symbol: "GME", decimals: 18 },
+  nvda: { address: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", symbol: "NVDA", decimals: 18 },
+  aapl: { address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", symbol: "AAPL", decimals: 18 },
+  spcx: { address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa", symbol: "SPCX", decimals: 18 },
+  uso: { address: "0xa30FA36Db767ad9eD3f7a60fC79526fB4d56D344", symbol: "USO", decimals: 18 },
 };
+
+/** Format a quote-token wei amount using the lane's real decimals. */
+function formatQuote(lane: PadLane, wei: bigint): number {
+  return Number(formatUnits(wei, QUOTE_TOKENS[lane].decimals));
+}
 
 export const EARNINGS_POLICY = {
   /** Scheduler refresh cadence for the on-chain snapshot */
@@ -174,7 +188,7 @@ export async function refreshEarnings(): Promise<TreasurySnapshot | null> {
       let tradeCount = prev?.tradeCount ?? 0;
       if (fromBlock <= latestBlock) {
         const { taxWei, trades } = await sumTradeTax(pad, id, fromBlock, latestBlock);
-        earnedQuote += Number(formatEther((taxWei * BigInt(core.creatorFeeBpsSnap)) / 10_000n));
+        earnedQuote += formatQuote(launch.lane, (taxWei * BigInt(core.creatorFeeBpsSnap)) / 10_000n);
         tradeCount += trades;
       }
 
@@ -184,7 +198,7 @@ export async function refreshEarnings(): Promise<TreasurySnapshot | null> {
         symbol: launch.symbol,
         lane: launch.lane,
         earnedQuote,
-        claimableQuote: Number(formatEther(owedWei)),
+        claimableQuote: formatQuote(launch.lane, owedWei),
         tradeCount,
         graduated: core.graduated,
         bonded: core.bonded,
@@ -253,7 +267,7 @@ export async function claimEarnings(proposalId: string): Promise<ClaimResult> {
     functionName: "creatorQuoteOwed",
     args: [id],
   })) as bigint;
-  const claimableQuote = Number(formatEther(owedWei));
+  const claimableQuote = formatQuote(launch.lane, owedWei);
   if (claimableQuote < EARNINGS_POLICY.claimMinQuote) {
     return {
       ok: true,

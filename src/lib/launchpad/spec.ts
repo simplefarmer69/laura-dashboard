@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { LaunchProposal } from "@/lib/types";
+import { PAD_LANE_KEYS } from "@/lib/launchpad/contracts";
 
 /**
  * Single source of truth for Safe Launch V2 pad bounds and launch-queue
@@ -8,6 +9,11 @@ import type { LaunchProposal } from "@/lib/types";
  * These mirror the pad's on-chain bounds; deployLaunch re-validates live.
  */
 export const launchSpecShape = {
+  lane: z
+    .enum(PAD_LANE_KEYS)
+    .describe(
+      "Quote lane pad the launch deploys on. Pick from the LANE MENU in the prompt; stock lanes marked CLOSED must not be picked.",
+    ),
   name: z.string().min(3).max(48),
   symbol: z
     .string()

@@ -17,6 +17,12 @@ import {
   PolymarketPanel,
   useFeeds,
 } from "@/components/console/feeds";
+import {
+  NftTrendsPanel,
+  SmartLpStudySection,
+  TokenTapePanel,
+  useIntelFeeds,
+} from "@/components/console/laura-feeds";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 
 export function Overview({
@@ -34,6 +40,7 @@ export function Overview({
   const priceSeries = state.metricsHistory.map((m) => m.priceUsd);
   const gradeSeries = state.grades.map((g) => g.score);
   const feeds = useFeeds();
+  const intel = useIntelFeeds();
 
   if (!grade || !metrics) {
     return (
@@ -232,6 +239,15 @@ export function Overview({
         <NftBuysPanel data={feeds.nftBuys} />
         <PolymarketPanel data={feeds.polymarket} />
         <EspnPanel data={feeds.espn} />
+      </div>
+
+      <div className="lg:col-span-3">
+        <SmartLpStudySection data={intel.smartlp} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3">
+        <TokenTapePanel data={intel.tokens} />
+        <NftTrendsPanel data={intel.nftTrends} buys={feeds.nftBuys} />
       </div>
     </div>
   );
