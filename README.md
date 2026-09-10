@@ -140,6 +140,23 @@ backoff after a failed deploy, spec re-validated against live pad bounds at
 deploy time. Turning `autoExecuteLaunches` off restores per-launch operator
 approval.
 
+### Library, skills and notebook (how LAURA remembers)
+
+Three layers of durable context feed every agent prompt and the chat persona:
+
+- **`library/*.md`** — build knowledge curated like code: the operator profile,
+  project facts, verified integration wire formats, hard-won learnings, and the
+  execution playbook. Edit these files to reshape how the swarm operates; they load
+  fresh within a minute (no restart).
+- **`library/skills/*.md`** — per-role operating procedures in the style of Cursor
+  agent skills: YAML frontmatter (`name`, `description`, `agents`) plus a compact
+  procedure grounded in an observed failure or win. Each agent receives the full text
+  of its own skills every cycle and an index of everyone else's.
+- **`data/notebook.json`** — LAURA's self-writable storage. The coach records up to
+  two notebook entries per cycle (durable reference knowledge, distinct from tactical
+  lessons); writing an existing topic replaces it, so facts stay current. Entries
+  surface as `note.recorded` events and inside the library digest.
+
 ## Layout
 
 ```

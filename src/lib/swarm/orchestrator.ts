@@ -27,6 +27,8 @@ import {
 import { launcherGrid } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest } from "@/lib/swarm/library";
+import { recordNotes } from "@/lib/swarm/notebook";
+import { skillsForAgent } from "@/lib/swarm/skills";
 import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { utcDate } from "@/lib/grader/score";
 import type {
@@ -141,6 +143,10 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
 
     const docs = await fetchDocsExcerpt(state.settings);
     const library = await libraryDigest();
+    const skillEntries = await Promise.all(
+      state.agents.map(async (a) => [a.id, await skillsForAgent(a.id)] as const),
+    );
+    const skills = Object.fromEntries(skillEntries);
     const ctx: CycleContext = {
       settings: state.settings,
       metrics: grader.value.metrics,
@@ -153,6 +159,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       lessons: state.lessons,
       mission: missionStatus(state, grader.value.metrics),
       library,
+      skills,
     };
 
     /* 2. Scout */
@@ -418,6 +425,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         const lesson = { id: newId("lesson"), ts: Date.now(), cycleId: run.id, text: l.text, evidence: l.evidence };
         state.lessons.push(lesson);
         pushEvent(state, { kind: "lesson.learned", agentId: "coach", title: l.text, detail: l.evidence, refId: lesson.id });
+      }
+      for (const rec of await recordNotes(run.id, out.value.value.notebook ?? [])) {
+        pushEvent(state, {
+          kind: "note.recorded",
+          agentId: "coach",
+          title: `Notebook ${rec.replaced ? "updated" : "entry"}: ${rec.entry.topic}`,
+          detail: rec.entry.text,
+          refId: rec.entry.id,
+        });
       }
       const proposalBudget = coachProposalBudget(state);
       for (const p of out.value.value.proposals.slice(0, proposalBudget)) {

@@ -1,5 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { notebookDigest } from "@/lib/swarm/notebook";
+import { skillsIndex } from "@/lib/swarm/skills";
 
 /**
  * LAURA's library: durable context distilled from the build — who the operator
@@ -28,7 +30,11 @@ export async function libraryText(): Promise<string> {
 }
 
 export async function libraryDigest(maxChars = 14_000): Promise<string> {
-  const text = await libraryText();
-  if (!text) return "Library empty.";
+  const [docs, notebook, skills] = await Promise.all([libraryText(), notebookDigest(), skillsIndex()]);
+  const text = [
+    docs || "Library docs empty.",
+    `## Skill index (full skill text is injected per role)\n${skills}`,
+    `## Self-authored notebook (written by the swarm itself; newest last)\n${notebook}`,
+  ].join("\n\n---\n\n");
   return text.length <= maxChars ? text : `${text.slice(0, maxChars)}\n[...library truncated]`;
 }

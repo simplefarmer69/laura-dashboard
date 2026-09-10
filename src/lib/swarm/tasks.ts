@@ -46,6 +46,15 @@ export const proposalsSchema = z.object({
       }),
     )
     .max(3),
+  /** Durable reference knowledge for the notebook; same topic replaces the old entry. */
+  notebook: z
+    .array(
+      z.object({
+        topic: z.string().min(3).max(80),
+        text: z.string().min(20).max(700),
+      }),
+    )
+    .max(2),
   proposals: z
     .array(
       z.object({
@@ -75,6 +84,8 @@ export interface CycleContext {
   mission: MissionStatus;
   /** Durable build knowledge from /library (operator, integrations, learnings, playbook) */
   library: string;
+  /** Per-agent operating procedures from /library/skills, keyed by agent id */
+  skills: Record<string, string>;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -90,7 +101,7 @@ function systemFor(agent: Agent): string {
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {
@@ -134,6 +145,7 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `MISSION\n${missionDigest(ctx.mission)}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `SWARM MEMORY (lessons distilled by the coach; apply them)\n${lessonsDigest(ctx.lessons)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills[agent.id] ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it)\n${ctx.library}`,
     `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
@@ -265,6 +277,7 @@ export function mintPrompt(ctx: CycleContext, floor: string, pendingLaunches: nu
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
     `PENDING LAURA LAUNCHES AWAITING REVIEW OR DEPLOY: ${pendingLaunches}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.mint ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it — the launch playbook and verified wire formats live here)\n${ctx.library}`,
     `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive. Your launches are LAURA speaking in public: humans watch every new token in the community Telegram, so make the name + symbol + concept read as a message worth clicking. Choose artMotif (one word from: bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot) and artPalette to match the concept — the token logo is rendered from them and shown next to your token on the launcher. If 2+ LAURA launches are already pending, skip.`,
   ].join("\n\n");
@@ -322,7 +335,7 @@ export function coachPrompt(ctx: CycleContext): string {
       return `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected. ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Then propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or the review requirement.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or the review requirement.`;
 }
 
 export function coachMock(ctx: CycleContext): ProposalsOut {
@@ -346,7 +359,7 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
       evidence: `price component ${weakest.score.toFixed(0)}/100 today`,
     });
   }
-  if (!target) return { lessons, proposals: [] };
+  if (!target) return { lessons, notebook: [], proposals: [] };
   const addition =
     weakest.key === "price"
       ? "Lead with the fixed 666,666 $STONKBROKER swap unit and current pool depth so readers understand why liquidity, not hype, sets the path into a broker."
@@ -357,6 +370,7 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
           : "Tighten to the formats reviewers approved most recently and drop any section that was rejected twice.";
   return {
     lessons,
+    notebook: [],
     proposals: [
       {
         agentId: target.id as ProposalsOut["proposals"][number]["agentId"],

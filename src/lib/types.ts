@@ -211,6 +211,7 @@ export type SwarmEventKind =
   | "proposal.rejected"
   | "strategy.edited"
   | "lesson.learned"
+  | "note.recorded"
   | "milestone.reached"
   | "agent.paused"
   | "agent.resumed"
