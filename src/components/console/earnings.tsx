@@ -23,7 +23,7 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
-            <Coins className="size-4 text-[var(--sb-gold)]" /> LAURA economics — creator earnings
+            <Coins className="size-4 text-[var(--sb-gold)]" /> LAURA economics: creator earnings
           </span>
           {autoClaim ? (
             <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">AUTO-CLAIM ON</Badge>
@@ -72,7 +72,7 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
             )}
             <p className="text-[11px] text-muted-foreground">
               Earnings compound the treasury: creator fees fund future launches inside the inviolable caps
-              (max 3 deploys/24h, max 0.02 ETH per deploy). Claimable is the flushCreatorQuote fallback —
+              (max 3 deploys/24h, max 0.02 ETH per deploy). Claimable is the flushCreatorQuote fallback,
               normally zero because fees are pushed per trade.
             </p>
             <TreasuryOps state={state} />
@@ -98,7 +98,7 @@ function TreasuryOps({ state }: { state: ConsoleState }) {
   return (
     <div className="space-y-2 border-t border-border/60 pt-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">Treasury ops — $STONKBROKER accumulation</span>
+        <span className="text-xs font-medium">Treasury ops: $STONKBROKER accumulation</span>
         {on ? (
           <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">AUTO-BUY ON</Badge>
         ) : (
@@ -143,7 +143,7 @@ function SmartLp({ state }: { state: ConsoleState }) {
   return (
     <div className="space-y-2 border-t border-border/60 pt-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">Smart LP — Stonk Exchange (vDEX)</span>
+        <span className="text-xs font-medium">Smart LP: Stonk Exchange (vDEX)</span>
         <span className="font-mono text-[11px] text-muted-foreground">
           {deployed.toFixed(4)}/{TREASURY_CAPS.maxLpEthEquivTotal} ETH-equiv deployed
         </span>

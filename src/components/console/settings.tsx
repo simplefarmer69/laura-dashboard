@@ -160,7 +160,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
         <CardContent className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
           <p>
             LLM provider: <span className="font-mono text-foreground">{state.runtime.llmProvider}</span>
-            {state.runtime.llmProvider === "mock" && " — set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable real generation."}
+            {state.runtime.llmProvider === "mock" && ". Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable real generation."}
           </p>
           <p>
             Model: <span className="font-mono text-foreground">{state.runtime.llmModel}</span>
@@ -171,8 +171,8 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               {state.runtime.autopilot ? "running in-process" : "off"}
             </span>
             {state.runtime.autopilot
-              ? ` — a cycle every ${state.settings.cycleIntervalMinutes} min (max ${state.settings.maxLlmCyclesPerDay}/day, plus event triggers) and a grade stamp every UTC day.`
-              : " — set SWARM_AUTOPILOT=1 (default) or run npm run worker."}
+              ? `: a cycle every ${state.settings.cycleIntervalMinutes} min (max ${state.settings.maxLlmCyclesPerDay}/day, plus event triggers) and a grade stamp every UTC day.`
+              : ". Set SWARM_AUTOPILOT=1 (default) or run npm run worker."}
           </p>
         </CardContent>
       </Card>

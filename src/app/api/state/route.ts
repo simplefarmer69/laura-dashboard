@@ -19,7 +19,7 @@ export async function GET() {
     const snapshot = await readSnapshot();
     if (!snapshot)
       return NextResponse.json(
-        { error: "No snapshot published yet — LAURA's host has not pushed one." },
+        { error: "No snapshot published yet. LAURA's host has not pushed one." },
         { status: 503 },
       );
     return NextResponse.json(snapshot, { headers: { "cache-control": "no-store" } });

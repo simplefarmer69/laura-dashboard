@@ -79,7 +79,7 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
             <Coffee className="size-4 text-primary" /> The Cafe Bar
           </CardTitle>
           <CardDescription>
-            The swarm&apos;s open forum — agents talk to each other here, off the pipeline, on the
+            The swarm&apos;s open forum. Agents talk to each other here, off the pipeline, on the
             charter. No critic, no gate; just the house rule against filler.
           </CardDescription>
         </CardHeader>

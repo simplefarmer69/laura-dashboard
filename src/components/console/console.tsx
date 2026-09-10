@@ -117,7 +117,7 @@ export function Console() {
               size="sm"
               onClick={() => void startCycle()}
               disabled={cycleRunning || VIEWER_MODE}
-              title={VIEWER_MODE ? "View-only — cycles run from the operator's console" : undefined}
+              title={VIEWER_MODE ? "View-only. Cycles run from the operator's console." : undefined}
             >
               <Play className="size-3.5" /> Run cycle
             </Button>
@@ -162,7 +162,7 @@ export function Console() {
               </>
             ) : (
               <>
-                <span className="text-muted-foreground">telemetry — awaiting first snapshot</span>
+                <span className="text-muted-foreground">telemetry: awaiting first snapshot</span>
                 <span className="ml-auto text-muted-foreground">
                   <UtcClock /> UTC
                 </span>

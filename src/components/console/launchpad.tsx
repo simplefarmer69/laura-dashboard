@@ -79,14 +79,14 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
           <CardContent className="space-y-1 text-sm">
             {!info ? (
               <p className="sb-ticker text-[11px] text-muted-foreground">
-                {infoLoading ? "reading wallet…" : "wallet state unreachable — retrying"}
+                {infoLoading ? "reading wallet…" : "wallet state unreachable, retrying"}
               </p>
             ) : !info.wallet.configured ? (
               <>
                 <Badge variant="outline" className="text-[var(--sb-gold)]">awaiting wallet</Badge>
                 <p className="text-xs text-muted-foreground">
                   Set <code className="font-mono">SWARM_WALLET_PRIVATE_KEY</code> once the funding wallet arrives.
-                  Specs queue up meanwhile — nothing deploys without it.
+                  Specs queue up meanwhile; nothing deploys without it.
                 </p>
               </>
             ) : (
@@ -99,7 +99,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
                   </span>
                 </p>
                 {!info.wallet.funded && (
-                  <p className="text-xs text-[var(--sb-gold)]">Not funded yet — deploys stay locked.</p>
+                  <p className="text-xs text-[var(--sb-gold)]">Not funded yet; deploys stay locked.</p>
                 )}
               </>
             )}
@@ -136,7 +136,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
             ) : infoLoading ? (
               <p className="sb-ticker text-[11px] text-muted-foreground">reading pad state…</p>
             ) : (
-              <p className="text-muted-foreground">Pad state unavailable — RPC not answering.</p>
+              <p className="text-muted-foreground">Pad state unavailable, RPC not answering.</p>
             )}
           </CardContent>
         </Card>
@@ -188,7 +188,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Launcher floor (live, newest first)</CardTitle>
-            <CardDescription>Public Stonk Launcher grid — the competition and context Mint sees each cycle.</CardDescription>
+            <CardDescription>Public Stonk Launcher grid: the competition and context Mint sees each cycle.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">

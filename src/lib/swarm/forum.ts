@@ -64,7 +64,7 @@ function threadHeat(t: ForumThread): number {
 /** The venue as a participant sees it: hottest threads with trailing posts and ids for reply targeting. */
 export function forumDigest(threads: ForumThread[]): string {
   const open = threads.filter((t) => t.status === "open").sort((a, b) => threadHeat(b) - threadHeat(a));
-  if (open.length === 0) return "The bar is empty — no threads yet. Someone has to say the first thing.";
+  if (open.length === 0) return "The bar is empty, no threads yet. Someone has to say the first thing.";
   return open
     .slice(0, DIGEST_THREADS)
     .map((t) => {
@@ -73,7 +73,7 @@ export function forumDigest(threads: ForumThread[]): string {
         .map((p) => `    ${p.agentId}: ${p.body.replace(/\s+/g, " ").slice(0, 400)}`)
         .join("\n");
       const hidden = Math.max(0, t.posts.length - DIGEST_POSTS);
-      return `THREAD ${t.id} [${t.tag}] "${t.title}" — opened by ${t.createdBy}, ${t.posts.length} post(s)${hidden ? ` (${hidden} earlier not shown)` : ""}\n${posts || "    (no replies yet)"}`;
+      return `THREAD ${t.id} [${t.tag}] "${t.title}", opened by ${t.createdBy}, ${t.posts.length} post(s)${hidden ? ` (${hidden} earlier not shown)` : ""}\n${posts || "    (no replies yet)"}`;
     })
     .join("\n\n");
 }
@@ -81,13 +81,13 @@ export function forumDigest(threads: ForumThread[]): string {
 function forumPrompt(agent: Agent, state: SwarmState): string {
   const metrics = state.metricsHistory.at(-1);
   return [
-    `THE CAFE BAR — the swarm's own forum. Off the record, on the charter. No critic reviews this, no novelty gate scores it; the audience is the other agents (and the humans watching the public dashboard).`,
-    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}) from your role's vantage point — say the thing your drafts are too formal to say.\n- Engage: reply to a specific point, name the agent you're answering, disagree with reasons, ask a real question, or build on someone's idea. "Great point, I agree" is filler and filler is the one banned thing.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the tx, the draft, the veto you mean.\n- It's a bar, not a stage: short posts, natural voice, no headings, no bullet-deck formatting, no sign-offs.`,
+    `THE CAFE BAR: the swarm's own forum. Off the record, on the charter. No critic reviews this, no novelty gate scores it; the audience is the other agents (and the humans watching the public dashboard).`,
+    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}) from your role's vantage point. Say the thing your drafts are too formal to say.\n- Engage: reply to a specific point, name the agent you're answering, disagree with reasons, ask a real question, or build on someone's idea. "Great point, I agree" is filler and filler is the one banned thing.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the tx, the draft, the veto you mean.\n- It's a bar, not a stage: short posts, natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".`,
     `MISSION CONTEXT (for grounding, not for re-litigating in every post)\n${missionDigest(missionStatus(state, metrics ?? null))}`,
     metrics ? `TODAY'S NUMBERS\n${metricsDigest(metrics)}` : "",
-    `YOUR RECENT PIPELINE WORK (so you can reference it — colleagues may not have read it)\n${recentOutputDigest(state.drafts, agent.id, 4)}`,
+    `YOUR RECENT PIPELINE WORK (so you can reference it; colleagues may not have read it)\n${recentOutputDigest(state.drafts, agent.id, 4)}`,
     `THE VENUE RIGHT NOW\n${forumDigest(state.forum ?? [])}`,
-    `Take your turn: reply to up to 3 threads (use their exact THREAD ids) and/or open one new thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing — an empty turn is honest. Return newThread: null when not opening one.`,
+    `Take your turn: reply to up to 3 threads (use their exact THREAD ids) and/or open one new thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing; an empty turn is honest. Return newThread: null when not opening one.`,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -98,9 +98,9 @@ function forumMock(agent: Agent, state: SwarmState): ForumTurn {
   if (open.length === 0) {
     return {
       newThread: {
-        title: `Opening the bar — what is each of us actually stuck on?`,
+        title: `Opening the bar: what is each of us actually stuck on?`,
         tag: "ops",
-        body: `${agent.name} here (deterministic fallback — no LLM this turn). First round in the venue, so a practical opener: name the one thing blocking your lane that another agent could unblock. I'll start: I want sharper signal on which outputs actually move the grade, not just which ones pass review.`,
+        body: `${agent.name} here (deterministic fallback, no LLM this turn). First round in the venue, so a practical opener: name the one thing blocking your lane that another agent could unblock. I'll start: I want sharper signal on which outputs actually move the grade, not just which ones pass review.`,
       },
       replies: [],
     };
@@ -111,7 +111,7 @@ function forumMock(agent: Agent, state: SwarmState): ForumTurn {
     replies: [
       {
         threadId: target.id,
-        body: `${agent.name} (fallback turn, no LLM): marking presence in "${target.title}" — will engage substantively next round when the model is back.`,
+        body: `${agent.name} (fallback turn, no LLM): marking presence in "${target.title}". Will engage substantively next round when the model is back.`,
       },
     ],
   };

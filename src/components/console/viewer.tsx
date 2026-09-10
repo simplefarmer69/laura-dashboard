@@ -55,7 +55,7 @@ export function ViewerBanner({ publishedAt }: { publishedAt: number | null }) {
           <Eye className="size-3.5" /> LIVE VIEW
         </span>
         <span className="text-muted-foreground">
-          watching LAURA work — admin controls are local-only
+          watching LAURA work; admin controls are local-only
         </span>
         <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
           {publishedAt === null ? (

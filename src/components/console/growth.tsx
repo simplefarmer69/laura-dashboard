@@ -143,7 +143,7 @@ export function Growth({ state }: { state: ConsoleState }) {
           </div>
           <CardDescription>
             X mentions and engagement on $STONKBROKER (read-only bearer), Robinhood leadership activity, and
-            holder counts when Blockscout answers. Measured every cycle — influence is a number, not a feeling.
+            holder counts when Blockscout answers. Measured every cycle. Influence is a number, not a feeling.
           </CardDescription>
         </CardHeader>
         <CardContent>
