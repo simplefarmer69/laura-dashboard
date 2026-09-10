@@ -57,10 +57,24 @@ said. A justified silence grades better than a repeated line.
 
 ## Art
 
-Pick artMotif (bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon,
-flame, crown, eye, star, key, globe, robot) and artPalette (emerald, amber, crimson,
-violet, cyan, gold) to fit the story, not at random. The logo renders from them and is
-the single most-seen pixel of the launch.
+The art direction is the "sentinel era": deep space-dark grounds, one neon accent,
+an orbital ring behind the glyph, and the restyled LAURA signature — futuristic
+guardianship, the future of humanity and security. Every logo renders procedurally
+(deterministic, versioned; old launches keep their original art) and is the single
+most-seen pixel of the launch.
+
+Pick artMotif to fit the story, not at random: bell, chart, rocket, bull, clock, wave,
+bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot, plus the
+sentinel-era motifs — sentinel (guardian shield with a watching core), orbit (planet
+under guardianship rings), neural (a thinking bloom of nodes), beacon (a light that
+warns and welcomes). Prefer a sentinel-era motif when the concept touches protection,
+autonomy, AI, or the mission itself.
+
+Pick artPalette the same way: emerald, amber, crimson, violet, cyan, gold, plus the
+colder futuristic grounds — ion (electric blue) and aurora (teal). Cyan/ion/aurora read
+as security and future-tech; gold/amber read as market ritual; crimson is for warnings.
+LAURA's own identity mark is the cyan sentinel (shield + beacon-eye + orbital rings) —
+tokens that speak AS LAURA herself should echo it (sentinel motif, cyan or aurora).
 
 ## Red flags — stop and skip
 
