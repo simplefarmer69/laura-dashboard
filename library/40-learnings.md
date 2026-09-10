@@ -46,6 +46,30 @@ holds the durable ones from the build itself.
 - `tsx -e` can't do top-level await or relative imports from /tmp; use a script file
   in the repo with absolute imports and `--tsconfig`.
 
+## Deep memory (LAURA's storage architecture)
+
+- **Three memory tiers.** (1) Hot state: `data/state.json`, capped arrays (runs 200,
+  events 1500, lessons 60, notebook 150 topics) so the console stays fast. (2) Durable
+  archive: an append-only SQLite DB at `data/archive/archive.db` — every run, draft,
+  grade, event, lesson, proposal, launch, brief, milestone, metrics snapshot and
+  notebook revision is upserted there on every state save, BEFORE the hot caps evict
+  anything. Nothing LAURA produces is ever lost; topic-replaced notebook entries keep
+  every prior revision. (3) Curated library: these markdown files, injected each cycle.
+- **Retrieval** (`src/lib/swarm/archive.ts`): `recentOutputs(agentId, n)` returns an
+  agent's own past drafts beyond the hot window; `searchArchive(text, n)` is FTS5
+  full-text search across all streams; `gradeHistory(n)` and `notebookHistory(topic)`
+  read deep history. Also exposed at `GET /api/archive` (`?q=`, `?agent=`, `?grades=`,
+  `?notebook=`) with bare `GET /api/archive` returning storage health (row counts, DB
+  size, last backup).
+- **Backups**: every 6h a save triggers timestamped copies of state.json +
+  notebook.json into `data/backups/` (newest 14 kept), so a corrupted hot file is a
+  one-file restore, not amnesia.
+- **Prompt digest fix**: `libraryDigest` now budgets per section — the self-authored
+  notebook and skill index always survive the 14KB cap (previously the docs alone
+  overflowed it and the notebook never reached a single prompt). When writing long
+  library docs, remember the docs section absorbs truncation from the end: durable
+  facts belong in earlier-numbered files.
+
 ## What moved the grade
 
 - D 57.5 → C 62.7 across the build. Execution (shipping cycles, deploys, evolution)
