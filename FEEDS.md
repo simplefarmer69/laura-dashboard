@@ -215,10 +215,66 @@ need a sentence rather than an endpoint.
   remains operator speech until it is traced to deposit events, but the
   address gap that blocked eight desks is closed.
 
+## GET /api/feeds/fee-breakdown
+
+Per surface fee attribution  -  the answer to "which surface generates the
+fees". The blended DeFiLlama series mixes two different event sets (the
+fees adapter counts launchpad taxes, curve fees, vesting deposits and
+Smart LP collections; the volume adapter counts only Anvil AMM NFT swap
+volume), so blended ratios like fees/volume or revenue/fees swing without
+any surface changing. This feed splits fees per surface from onchain
+events over ~24h and ~7d windows. Cached 5 minutes, served with s-maxage
+60.
+
+Surfaces (`surfaces[]`, each with `key`, `label`, `note`, `d1`, `d7`; each
+window carries `events`, `feeEth`, `feeUsd`, optional `usdSkim` and
+`native`):
+
+- `activations`: `ActivationEthFeePaid` on Anvil soft staking vaults. The
+  flat ~$1 ETH fee per activation is 100% treasury, and the 95% collection
+  token burn rides on top (not counted here). Activations and loans pay
+  ~100% to revenue vs ~50% for swaps, but they are small in dollar terms.
+- `anvil_swaps`: `RobinhoodSwapFeePaid`, the flat ~$2 ETH fee per Anvil
+  AMM NFT swap, split $1 treasury / $1 StockBooster (~50% revenue share).
+- `loans`: `LoanEthFeePaid`, flat ~$2 ETH per borrow, 100% treasury.
+- `launchpad_tax`: `SafeBuy`/`SafeSell` `taxPaid` across every
+  Stonklauncher pad (pad set + quote metadata from the public floor
+  snapshot). ETH pad taxes price in USD; quoted lanes price WETH/USDG and
+  report other quote tokens as unpriced `native` amounts.
+- `smart_lp`: `FeesCollected` across all registered Smart LP vaults
+  (registry `0xe874...0146` via the lens), spot priced into each vault's
+  quote token. `usdSkim` inside the window is the 10% protocol take.
+- `vesting`: `PositionLocked` on the vesting locker  -  event counts only
+  (the 1 bps deposit fee is paid in the locked token, not USD priced).
+
+Reconciliation (`blended`): `llamaFees24h/7d`, `llamaRevenue24h/7d`,
+`llamaVolume24h/7d`, `surfaceSum24h` (all surfaces priced),
+`unattributedUsd` = llamaFees24h minus surfaceSum24h. The residual is
+dominated by fee surfaces this feed does NOT scan: the protocol owned
+Uniswap v4 STONK/ETH forever escrow position's LP fee income (attributed
+per swap by DeFiLlama, 100% revenue side, no matching volume in the dex
+adapter  -  the STONKBROKER/ETH v4 pool alone runs ~$1M+ daily volume at
+a 1% fee), locked LP fee claims through the Safety Deposit Box lockers,
+the Relay swap desk app fee, and a small Base chain component. THAT
+volume-less, all-revenue LP income is the sink behind "revenue share of
+fees at ~71% vs ~56%": on heavy STONK trading days the blend fills with
+fees that have no volume counterpart and pay 100% to revenue, so both
+fees/volume and revenue/fees swing with no surface changing. The residual
+is reported honestly rather than forced to zero.
+
+Coverage (`coverage`): the scan is a progressive backfill  -  one chunked
+`eth_getLogs` walk (all six topic0 hashes OR'd, 80k block chunks) over a
+contiguous module window whose bounds only advance after a chunk fully
+succeeds. A cold instance covers ~24h within a poll or two and deepens
+toward 7d on later polls; `d1Complete` / `d7Complete` say whether a window
+is fully inside scanned coverage (incomplete windows undercount, never
+guess). Event topic hashes are pinned in the route source and were
+verified against live Robinhood Chain logs.
+
 ## Env
 
 - `ROBINHOOD_RPC_URL` (optional) overrides the public Robinhood Chain RPC
-  used by the nft-buys scan and the smartlp lens read. Keyed RPC URLs belong in server env only  - 
+  used by the nft-buys scan, the smartlp lens read and the fee-breakdown scan. Keyed RPC URLs belong in server env only  - 
   never in `NEXT_PUBLIC_*`.
 - No feed route uses an API key. Everything above is public and unkeyed by
   design  -  if a future feed genuinely needs a paid key, it belongs on the
