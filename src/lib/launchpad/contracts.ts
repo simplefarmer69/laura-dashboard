@@ -2,9 +2,20 @@
  * Stonk Launcher / Smart Launch V2 integration surface.
  * Addresses and ABI from stonkbrokers.cash/docs ("Trading App Integration");
  * ABI vendored at ./StonkSafeLaunchpadV2.abi.json (official download).
+ *
+ * Lane naming, verified against the live stonkbrokers.cash client bundle
+ * (2026-09-10): the site keys these pads "weth2" / "stonk2". They are the
+ * Stonklauncher UI's ACTIVE lanes — the /launcher page's lane menu defaults
+ * to the weth2 pad (`XJ.find(e => e.key === "weth2")` in the bundle), and
+ * organic launches land there. Newer-generation "22" pads exist
+ * (weth22 0x5BCEefBa6fDf437A7388aDC5c9056c827baca3B3) but the UI menu hides
+ * them, and the bundle's legacy native pad
+ * (0xEcA5726dae1e53365c37fFc02369d947A91d71f9) has creation disabled
+ * (launchFeeWei = 1e24 wei sentinel). Do not "upgrade" lanes without
+ * re-verifying which pad the UI's lane menu actually selects.
  */
 export const LAUNCHPAD = {
-  /** StonkSafeLaunchpadV2 pad singletons, keyed by quote lane */
+  /** StonkSafeLaunchpadV2 pad singletons, keyed by quote lane (site keys: weth2 / stonk2) */
   pads: {
     weth: "0xFCd61B25BbF3AbD6cf0070D6328E351cc30EEC9f",
     stonk: "0x8f6782c5Aa37804d08a9b7bf3984Ff3245Fd6cD4",
@@ -16,6 +27,14 @@ export const LAUNCHPAD = {
   chainId: 4663,
   explorer: "https://robinhoodchain.blockscout.com",
   gridApi: "https://www.stonkbrokers.cash/api/launcher/tokens",
+  /**
+   * THE surface the /launcher (Stonklauncher) UI renders its boards from —
+   * the client bundle fetches this and filters client-side. A launch is only
+   * user-visible once its row here reports phase "live" (created-but-unarmed
+   * launches sit as "waiting" and are effectively invisible). Verify against
+   * this endpoint, not just tx receipts.
+   */
+  floorApi: "https://www.stonkbrokers.cash/api/safe-launch/floor",
 } as const;
 
 export type PadLane = keyof typeof LAUNCHPAD.pads;

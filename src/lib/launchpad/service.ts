@@ -267,6 +267,85 @@ export interface GridToken {
   createdAt: string;
 }
 
+export interface LaunchVisibility {
+  /** True when the token renders on the Stonklauncher UI as a live launch */
+  visible: boolean;
+  /** Floor phase ("waiting" | "live" | "bonded" | ...) or null when the row is missing */
+  phase: string | null;
+  /** Site-global floor id (lane idOffset + launchId), e.g. 18000276 for weth2 #276 */
+  floorId: number | null;
+  /** UI route for the token's trade page, e.g. /safe-launch/token/weth2-laura-276 */
+  safeHref: string | null;
+  imageAttached: boolean;
+  detail: string;
+}
+
+interface FloorRow {
+  id: number;
+  name?: string;
+  symbol?: string;
+  phase?: string;
+  loadedPct?: number;
+  live?: { token?: string };
+  profile?: { logo?: string };
+  lane?: { key?: string };
+}
+
+/**
+ * Confirms a deployed launch is actually user-visible on the Stonklauncher UI.
+ * Reads the exact surface the /launcher page renders from (the floor rows) plus
+ * the public grid (which carries the UI route + logo state). "Deployed" is not
+ * "live": a created-but-unarmed launch sits in the floor's Waiting pile and the
+ * operator will rightly say they don't see it. Only phase "live"/"bonded"/
+ * "graduated" counts as visible.
+ */
+export async function verifyLaunchVisible(tokenAddress: string): Promise<LaunchVisibility> {
+  const token = tokenAddress.toLowerCase();
+
+  const floorRes = await fetch(LAUNCHPAD.floorApi, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!floorRes.ok) throw new Error(`floor HTTP ${floorRes.status}`);
+  const floor = (await floorRes.json()) as { ok?: boolean; rows?: FloorRow[] };
+  const row = (floor.rows ?? []).find((r) => r.live?.token?.toLowerCase() === token) ?? null;
+
+  let safeHref: string | null = null;
+  let gridImage = false;
+  try {
+    const gridRes = await fetch(`${LAUNCHPAD.gridApi}?sort=new`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (gridRes.ok) {
+      const grid = (await gridRes.json()) as {
+        tokens?: { token: string; safeHref?: string; imageHash?: string }[];
+      };
+      const entry = (grid.tokens ?? []).find((t) => t.token.toLowerCase() === token);
+      safeHref = entry?.safeHref ?? null;
+      gridImage = Boolean(entry?.imageHash);
+    }
+  } catch {
+    /* grid is corroborating evidence only; the floor row decides visibility */
+  }
+
+  const phase = row?.phase ?? null;
+  const visible = phase === "live" || phase === "bonded" || phase === "graduated";
+  const detail = row
+    ? `floor id ${row.id} · phase ${phase} · loaded ${row.loadedPct ?? "?"}%${safeHref ? ` · ${safeHref}` : ""}`
+    : "token not present in the floor rows the launcher UI renders";
+  return {
+    visible,
+    phase,
+    floorId: row?.id ?? null,
+    safeHref,
+    imageAttached: Boolean(row?.profile?.logo) || gridImage,
+    detail,
+  };
+}
+
 /** Live launcher grid from the official public API (for context in the console). */
 export async function launcherGrid(sort = "new", limit = 12): Promise<GridToken[]> {
   const res = await fetch(`${LAUNCHPAD.gridApi}?sort=${sort}`, {

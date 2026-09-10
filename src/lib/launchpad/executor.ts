@@ -1,6 +1,13 @@
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
 import type { LaunchProposal } from "@/lib/types";
-import { LAUNCH_CAPS, armLaunch, deployLaunch, getAccount, walletStatus } from "@/lib/launchpad/service";
+import {
+  LAUNCH_CAPS,
+  armLaunch,
+  deployLaunch,
+  getAccount,
+  verifyLaunchVisible,
+  walletStatus,
+} from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import {
   attachTokenLogo,
@@ -108,6 +115,23 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       }
     }
 
+    /* Verify the USER-VISIBLE end state: the token must render on the surface
+       the Stonklauncher UI reads (floor phase "live"), not just return a good
+       receipt. Operator caught launches #276/#277 "deployed" but invisible —
+       they sat unarmed in the Waiting pile for 30 minutes. Non-fatal here:
+       the executor's verify pass re-checks unverified launches each tick. */
+    let verifiedAt: number | null = null;
+    let verifyDetail = "";
+    if (armedAt && result.tokenAddress) {
+      try {
+        const vis = await verifyLaunchVisible(result.tokenAddress);
+        verifyDetail = vis.detail;
+        if (vis.visible) verifiedAt = Date.now();
+      } catch (err) {
+        verifyDetail = `verify failed: ${String(err)}`;
+      }
+    }
+
     const updated = await updateState((s) => {
       const l = s.launches.find((x) => x.id === id);
       if (!l) return null;
@@ -119,6 +143,7 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       l.armedAt = armedAt;
       l.armTxHash = armTxHash;
       l.imageHash = imageHash;
+      l.verifiedAt = verifiedAt;
       const notes = [armNote, brandingNote ? brandingNote.slice(3) : ""].filter(Boolean);
       l.error = notes.length ? notes.join(" · ") : null;
       const agent = s.agents.find((a) => a.id === "mint");
@@ -130,6 +155,15 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
         detail: `token ${result.tokenAddress ?? "?"} · launch #${result.launchId ?? "?"} · tx ${result.txHash}${armedAt ? " · armed (sale clock running)" : " · ARM PENDING"}${imageHash ? " · logo attached" : brandingNote}`,
         refId: l.id,
       });
+      if (verifiedAt) {
+        pushEvent(s, {
+          kind: "launch.verified",
+          agentId: "system",
+          title: `Verified ${l.name} ($${l.symbol}) visible on the Stonklauncher UI`,
+          detail: verifyDetail,
+          refId: l.id,
+        });
+      }
       return l;
     });
     if (!updated) return { ok: false, error: "Launch vanished during deploy", httpStatus: 500 };
@@ -166,6 +200,8 @@ function execState() {
 }
 
 const RETRY_BACKOFF_MS = 15 * 60_000;
+/** Floor indexing usually lands within a minute of arm; re-check gently. */
+const VERIFY_BACKOFF_MS = 5 * 60_000;
 
 /** Arms one deployed-but-unarmed launch: loads supply, starts the clock, records it. */
 async function repairUnarmedLaunch(launch: LaunchProposal): Promise<void> {
@@ -190,11 +226,36 @@ async function repairUnarmedLaunch(launch: LaunchProposal): Promise<void> {
   log(`repair: armed ${launch.symbol}${arm.alreadyArmed ? " (was already armed on pad)" : ""}`);
 }
 
+/** Confirms an armed launch renders on the Stonklauncher UI and records the proof. */
+async function verifyDeployedLaunch(launch: LaunchProposal): Promise<boolean> {
+  if (!launch.tokenAddress) return false;
+  const vis = await verifyLaunchVisible(launch.tokenAddress);
+  if (!vis.visible) {
+    log(`verify: ${launch.symbol} not user-visible yet (${vis.detail})`);
+    return false;
+  }
+  await updateState((s) => {
+    const l = s.launches.find((x) => x.id === launch.id);
+    if (!l || l.verifiedAt) return;
+    l.verifiedAt = Date.now();
+    pushEvent(s, {
+      kind: "launch.verified",
+      agentId: "system",
+      title: `Verified ${l.name} ($${l.symbol}) visible on the Stonklauncher UI`,
+      detail: vis.detail,
+      refId: l.id,
+    });
+  });
+  log(`verify: ${launch.symbol} confirmed on the launcher UI (${vis.detail})`);
+  return true;
+}
+
 /**
  * Runs the launch queue when full autonomy is on. Called by the scheduler
  * every tick. Order of work: (1) repair pass — arm any deployed launch whose
- * supply never loaded, (2) deploy at most one approved spec, so a bad spec
- * can never drain the wallet in a burst. Failures back off 15 minutes.
+ * supply never loaded, (2) verify pass — confirm armed launches actually
+ * render on the Stonklauncher UI, (3) deploy at most one approved spec, so a
+ * bad spec can never drain the wallet in a burst. Failures back off 15 minutes.
  */
 export async function runLaunchExecutor(): Promise<void> {
   const es = execState();
@@ -213,9 +274,29 @@ export async function runLaunchExecutor(): Promise<void> {
         !l.armedAt &&
         (es.nextAttemptAt[`arm:${l.id}`] ?? 0) <= now,
     );
+    const unverified = state.launches.filter(
+      (l) =>
+        l.status === "deployed" &&
+        l.tokenAddress &&
+        l.armedAt &&
+        !l.verifiedAt &&
+        (es.nextAttemptAt[`verify:${l.id}`] ?? 0) <= now,
+    );
     const queue = state.launches
       .filter((l) => l.status === "approved" && (es.nextAttemptAt[l.id] ?? 0) <= now)
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.createdAt - b.createdAt);
+    if (unarmed.length === 0 && unverified.length === 0 && queue.length === 0) return;
+
+    for (const launch of unverified) {
+      try {
+        const ok = await verifyDeployedLaunch(launch);
+        if (ok) delete es.nextAttemptAt[`verify:${launch.id}`];
+        else es.nextAttemptAt[`verify:${launch.id}`] = now + VERIFY_BACKOFF_MS;
+      } catch (err) {
+        es.nextAttemptAt[`verify:${launch.id}`] = now + VERIFY_BACKOFF_MS;
+        log(`verify: check of ${launch.symbol} failed (${String(err)}); retrying in 5m`);
+      }
+    }
     if (unarmed.length === 0 && queue.length === 0) return;
 
     const wallet = await walletStatus();
