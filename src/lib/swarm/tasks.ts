@@ -91,6 +91,8 @@ export interface CycleContext {
   skills: Record<string, string>;
   /** Recent cycle health (durations, LLM fallbacks/repairs, step errors) for the coach */
   opsHealth: string;
+  /** $STONKBROKER price/liquidity trend computed from stored snapshots (reads only) */
+  priceTrend: string;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -107,7 +109,7 @@ export function agentSystem(agent: Agent): string {
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {

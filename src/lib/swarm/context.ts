@@ -25,6 +25,46 @@ export function metricsDigest(m: MetricsSnapshot): string {
   ].join("\n");
 }
 
+/**
+ * $STONKBROKER price/liquidity trend computed from stored metric snapshots.
+ * Reads only — no trading. The grader's 7d price baseline needs ~5.5 days of
+ * history; until it lands this digest is the only longitudinal price view the
+ * agents get, so strategy work on the weakest lever isn't flying blind on a
+ * single 24h number.
+ */
+export function priceTrendDigest(history: MetricsSnapshot[], current: MetricsSnapshot): string {
+  const HOUR = 3_600_000;
+  const past = history.filter((s) => s.ts < current.ts && s.priceUsd > 0);
+  if (past.length === 0) return "Price trend: no stored history yet (first snapshots landing this cycle).";
+  const nearest = (hoursAgo: number): MetricsSnapshot | null => {
+    const target = current.ts - hoursAgo * HOUR;
+    let best: MetricsSnapshot | null = null;
+    for (const s of past) {
+      if (!best || Math.abs(s.ts - target) < Math.abs(best.ts - target)) best = s;
+    }
+    /* Only report a window when a snapshot lands within half of it. */
+    return best && Math.abs(best.ts - target) <= 0.5 * hoursAgo * HOUR ? best : null;
+  };
+  const windows: string[] = [];
+  for (const h of [6, 24, 72, 168]) {
+    const s = nearest(h);
+    if (!s) continue;
+    const dPrice = ((current.priceUsd - s.priceUsd) / s.priceUsd) * 100;
+    const dLiq =
+      s.liquidityUsd > 0 ? ((current.liquidityUsd - s.liquidityUsd) / s.liquidityUsd) * 100 : null;
+    const label = h >= 24 ? `${h / 24}d` : `${h}h`;
+    windows.push(`${label}: price ${pct(dPrice)}${dLiq !== null ? `, liquidity ${pct(dLiq)}` : ""}`);
+  }
+  const oldest = past.reduce((min, s) => Math.min(min, s.ts), current.ts);
+  const depthH = (current.ts - oldest) / HOUR;
+  const depth = depthH >= 48 ? `${(depthH / 24).toFixed(1)}d` : `${depthH.toFixed(0)}h`;
+  const baselineNote =
+    depthH < 5.5 * 24
+      ? ` The grader's 7d price baseline needs ~5.5d of history (${Math.max(0, 5.5 * 24 - depthH).toFixed(0)}h to go); until then the price score reflects the 24h move only.`
+      : "";
+  return `Price trend from stored snapshots (history depth ${depth}): ${windows.length ? windows.join("; ") : "windows still filling"}.${baselineNote}`;
+}
+
 export function gradeDigest(grades: DailyGrade[]): string {
   const recent = grades.slice(-7);
   if (recent.length === 0) return "No grades recorded yet.";

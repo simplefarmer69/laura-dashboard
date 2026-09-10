@@ -4,7 +4,7 @@ import { loadState, newId, pushEvent, saveState } from "@/lib/store";
 import { checkMilestones } from "@/lib/mission";
 import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
-import { fetchDocsExcerpt, runsDigest } from "@/lib/swarm/context";
+import { fetchDocsExcerpt, priceTrendDigest, runsDigest } from "@/lib/swarm/context";
 import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
 import { checkNovelty } from "@/lib/swarm/novelty";
@@ -180,6 +180,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       library,
       skills,
       opsHealth: runsDigest(state.runs.filter((r) => r.id !== run.id)),
+      priceTrend: priceTrendDigest(state.metricsHistory, grader.value.metrics),
     };
 
     /* 2. Scout */
