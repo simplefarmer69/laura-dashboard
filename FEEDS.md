@@ -79,8 +79,69 @@ scoreboard API, merged and sorted live first.
   `detail` (human status), `start`, `home { abbr, score }`,
   `away { abbr, score }`. One dark league never blanks the others. Cached 60s.
 
+## GET /api/feeds/smartlp
+
+The Smart LP balanced band study  -  the Bands agent's dataset. One
+`SmartLpLens.viewAll(registry)` eth_call on Robinhood Chain returns every
+registered vault (177 as of writing); the route merges the public keeper
+activity ledger (`stonkbrokers.io/api/locker/smartlp-activity`) and an
+unkeyed ETH/USD mark (coins.llama.fi) to price WETH quoted vaults. Cached
+120s module side; a failed reload serves the last good snapshot.
+
+- `mechanics`: `bandTicks` (1200), `recenterTriggerTicks` (240),
+  `recenterCooldownHours` (6), `perfFeeBps`, `withdrawFeeBps`.
+- `fleet`: `vaults`, `bbVaults`, `tvlUsd` (USDG direct + WETH x ETH mark),
+  `compounds`, `collects`, `recenters` (lifetime, fleet wide), `activityAt`.
+- `bb[]`: top 12 balanced band vaults by TVL  -  `vault`, `base`, `quote`,
+  `feePct`, `tvlUsd`, `bandPct` (where spot sits in the band, 0..100),
+  `halfWidthPct`, `edgeTicks` (distance to the nearest band edge),
+  `nearEdge` (true inside the 240 tick recenter trigger), `compounds`,
+  `recenters`, `lastActivityTs`, `lastRecenterAt`, `paused`.
+- `ethUsd`: the mark used for WETH quoted TVL, or null.
+
+Notes: contract addresses  -  registry
+`0xE8749183Fbf6A657EB58B3a4D3E4B9Cc09560146`, lens
+`0x754Bf8479630bbC22aA7b5E9742156ce89dD3D4d`. The lens call is the only RPC
+read, so the route stays one call per refresh regardless of fleet size.
+
+## GET /api/feeds/nft-trends
+
+NFT collection trends on both chains  -  the Curator agent's dataset.
+Robinhood Chain reads ride the Blockscout proxy
+(`bs-proxy-production.up.railway.app`  -  the direct explorer 403s
+datacenter traffic); the Ethereum lane reads `eth.blockscout.com` unkeyed.
+Cached 5 minutes; all sources empty at once throws so the last good
+snapshot keeps serving.
+
+- `robinhood.broker`: StonkBrokers collection counters  -  `holders`,
+  `transfers`, `supply`.
+- `robinhood.collections[]`: top real ERC-721 collections by holders
+  (Uniswap/Slipstream position NFTs and fee beneficiary tokens are
+  filtered out)  -  `address`, `name`, `symbol`, `holders`, `supply`.
+- `ethereum.collections[]`: a pinned blue chip set (BAYC, Pudgy Penguins,
+  Azuki, Milady, Doodles, Moonbirds) with the same shape. A lane that
+  fails to resolve returns empty rather than fake numbers.
+
+## GET /api/feeds/tokens
+
+The token tape  -  the Ticker agent's dataset. DexScreener marks for
+$STONKBROKER plus the largest bonded Stonklauncher tokens (tracked set from
+the public floor snapshot at `stonkbrokers.io/api/safe-launch/floor`).
+Cached 120s.
+
+- `rows[]`: `address`, `symbol`, `name`, `priceUsd`, `change24hPct`,
+  `volume24hUsd`, `liquidityUsd`, `quoteSymbol`, `pinned` (true for
+  $STONKBROKER). Pinned first, then by 24h volume.
+- `tracked`: how many tokens were queried before vetting.
+
+Notes: DexScreener headline liquidity is spoofable, so a pair only counts
+when its QUOTE side is canonical WETH / USDG / STONK (native quoted pairs
+are labeled "ETH" on the zero address) and the quote side depth
+(`liquidity.quote x priceUsd / priceNative`) is at least $100. Tokens whose
+top pair fails vetting are dropped, never shown with untrusted numbers.
+
 ## Env
 
 - `ROBINHOOD_RPC_URL` (optional) overrides the public Robinhood Chain RPC
-  used by the nft-buys scan. Keyed RPC URLs belong in server env only  - 
+  used by the nft-buys scan and the smartlp lens read. Keyed RPC URLs belong in server env only  - 
   never in `NEXT_PUBLIC_*`.

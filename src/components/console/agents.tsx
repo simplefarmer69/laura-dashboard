@@ -9,8 +9,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { patchJson, type ConsoleState } from "@/components/console/use-swarm-state";
 import { ago } from "@/components/console/format";
-import { SWARM_CHARTER } from "@/lib/swarm/roster";
+import { DEFAULT_AGENTS, SWARM_CHARTER } from "@/lib/swarm/roster";
 import type { Agent, AgentStatus } from "@/lib/types";
+
+/**
+ * The roster is snapshot-driven: the VM publishes state.agents from its own
+ * saved state, which can lag a roster extension in this repo. Merge any
+ * DEFAULT_AGENTS the snapshot does not know yet so new agents appear in the
+ * viewer immediately (the VM picks them up on its next deploy + loadState).
+ */
+function mergedRoster(agents: Agent[]): Agent[] {
+  const known = new Set(agents.map((a) => a.id));
+  return [...agents, ...DEFAULT_AGENTS.filter((a) => !known.has(a.id))];
+}
 
 function statusTone(s: AgentStatus): string {
   switch (s) {
@@ -46,7 +57,7 @@ export function AgentsPanel({ state, refresh }: { state: ConsoleState; refresh: 
         </CardContent>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
-        {state.agents.map((a) => (
+        {mergedRoster(state.agents).map((a) => (
           <AgentCard key={a.id} agent={a} refresh={refresh} />
         ))}
       </div>

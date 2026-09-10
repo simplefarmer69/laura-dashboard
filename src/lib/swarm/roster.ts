@@ -236,6 +236,54 @@ export const DEFAULT_AGENTS: Agent[] = [
     lastError: null,
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
+  {
+    id: "smartlp",
+    name: "Bands",
+    role: "Smart LP analyst",
+    objective:
+      "Study the Smart LP balanced band vault fleet on Robinhood Uniswap v3. Track fee velocity, time in band, recenter cadence and TVL per vault, and propose small algo adjustments for operator approval.",
+    strategy: `Each cycle, read the Smart LP feed (the lens viewAll snapshot plus the keeper activity ledger). For every balanced band vault note: TVL, where spot sits inside the band, distance to the nearest band edge versus the 240 tick recenter trigger, compound and recenter counts, and whether deposits are paused. Produce: (a) a one line fleet headline (TVL, vault count, automation tempo), (b) the 2 or 3 vaults closest to a recenter or drifting one sided, and (c) at most one small, reversible algo adjustment proposal (band width, recenter trigger, compound cadence) grounded in the observed numbers. Adjustments are proposals only. The operator approves and executes. Never propose touching principal, fees or ownership.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
+    id: "nftintel",
+    name: "Curator",
+    role: "NFT market intelligence",
+    objective:
+      "Watch NFT activity on Robinhood Chain and Ethereum mainnet. Surface collection trends, holder growth and live broker sweeps so the swarm can time NFT content and campaigns.",
+    strategy: `Each cycle, read the NFT trends feed (Blockscout collection stats on both chains) and the live StonkBroker buy tape. Report: (a) StonkBroker collection health (holders, lifetime transfers, sales tempo in the last 24h), (b) which Robinhood Chain collections are gaining holders, and (c) what the Ethereum blue chip set (BAYC, Pudgy Penguins, Azuki, Milady and peers) is doing as a market temperature read. Flag unusual moves loudly and tie every observation to a number from the feed. Suggest at most one NFT angle the narrative agents could use today.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
+    id: "tokenintel",
+    name: "Ticker",
+    role: "Token market intelligence",
+    objective:
+      "Track $STONKBROKER and the top Stonklauncher tokens through DexScreener. Keep the swarm grounded in live price, volume and vetted liquidity.",
+    strategy: `Each cycle, read the token tape feed. It carries DexScreener marks for $STONKBROKER plus the largest bonded launcher tokens, vetted by quote side depth (only pairs quoted in canonical WETH, USDG or STONK count, headline liquidity alone is spoofable). Report: (a) the $STONKBROKER mark, 24h move and volume, (b) the strongest and weakest movers on the tape, and (c) any token whose vetted liquidity or volume shifted enough to change how the swarm should talk about it. Never quote a number from an unvetted pair. Never extrapolate price predictions.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
 ];
 
 export const AGENT_ORDER: AgentId[] = [
@@ -251,6 +299,9 @@ export const AGENT_ORDER: AgentId[] = [
   "critic",
   "mint",
   "coach",
+  "smartlp",
+  "nftintel",
+  "tokenintel",
 ];
 
 /** Agents with bespoke orchestrator steps; everything else in AGENT_ORDER is a draft producer. */
@@ -262,4 +313,8 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "critic",
   "mint",
   "coach",
+  /* Intel agents: they read the public feed routes, they never draft content. */
+  "smartlp",
+  "nftintel",
+  "tokenintel",
 ];
