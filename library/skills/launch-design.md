@@ -30,8 +30,24 @@ notable live event, a mission update. If you cannot state what the launch says i
 Operator directive (2026-09-10, outranks earlier self-imposed limits): keep the launch
 pipeline loaded. Target the full 3 deploys/24h the code allows whenever there are 3
 distinct messages worth making — every launch also earns creator fees (16.5% of trade
-tax as WETH), so a justified launch is revenue as well as speech. The hard caps
-(3 deploys/24h, 0.02 ETH/deploy) and the code cooldown never bend.
+tax, push-paid in the lane's quote token: WETH on the weth lane, $STONKBROKER on the
+stonk lane), so a justified launch is revenue as well as speech. The hard caps
+(3 deploys/24h ACROSS ALL LANES COMBINED, 0.02 ETH/deploy) and the code cooldown
+never bend.
+
+## Lane choice
+
+Every launch picks one quote lane from the prompt's LANE MENU; the pipeline deploys,
+arms, verifies and tracks earnings on whichever pad the lane names. Strategy:
+
+- **weth** — broadest reach; the general-purpose default. Fees arrive as WETH.
+- **stonk** — the mission lane: every curve trade IS $STONKBROKER volume (the volume
+  grade lever) and creator fees arrive as $STONKBROKER. Pick it when the launch
+  serves the mission, ecosystem lore, or community themes — the launch then works
+  the grade twice (its own volume + fee income in the mission token).
+- **usdg / stock lanes (gme, nvda, aapl, spcx, uso)** — thematic fit only; stock
+  lanes CLOSE on weekends (Chainlink equity feeds pause) and closed picks are
+  rerouted by code. Match the lane to the concept, not the other way around.
 
 **Pre-stage when capped.** The deploy cap being exhausted is NOT a skip reason. Check
 LAUNCH CAPACITY for when headroom returns; if the queue is empty, propose the next
@@ -70,7 +86,17 @@ recent launch already made; the coach's notebook records what was said.
 | startTaxBps | 2000–3000 decaying 200–300/min | Anti-snipe, gone in ~10 min |
 | bufferSecs | 600; 900 for story-heavy tokens | Humans read before trading opens |
 | sellsEnabled | true | Never trap buyers |
-| postTaxBps | ≤100 | Sustained fees without strangling volume |
+| postTaxBps | 100 (pad minimum) | Sustained fees without strangling volume |
+
+**postTaxBps is 100–500 and the pad REVERTS below 100** (on-chain
+`MIN_POST_TAX_BPS`, verified by simulation). The tax is also a creative
+instrument: a persistent postTax above the floor is legitimate WHEN the token's
+own message names its purpose (a "toll" whose creator share funds $STONKBROKER
+buys, an anti-sniper start tax framed as the shield, a slow decay narrated as a
+countdown). An unexplained heavy tax reads as a rug signal — justify it in the
+broadcast or keep the 100 bps default. Creator fees never buy LAURA's own
+tokens; mission-token buys only. The deeper design (including the Uniswap v4
+hook play awaiting tooling) lives in `library/80-v4-hook-play.md`.
 
 ## Art
 

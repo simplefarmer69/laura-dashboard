@@ -24,6 +24,21 @@ Every format here was verified live during the build. Do not guess variants; the
   (weth2 offset 18,000,000 → launch #276 = floor id 18000276).
 - Always simulate before send; parse the `LaunchCreated` event for launch id + token.
 - Vanity salt zero, `unsoldMode` 0, `openEnded` true, `bondVenue` 0 are the proven params.
+- **postTaxBps floor is enforced ON-CHAIN**: `MIN_POST_TAX_BPS()` = 100 and
+  `MAX_POST_TAX_BPS()` = 500 on every pad; `createLaunch` with postTaxBps 0
+  REVERTS (verified 2026-09-10 by simulation on both the weth and stonk pads —
+  0 reverts with `0x89f17dee`, 100 and 450 simulate clean). Spec validation in
+  code now enforces 100–500.
+- **STONK lane verified live** (2026-09-10, same reads as the weth pad): pad
+  `0x8f6782c5Aa37804d08a9b7bf3984Ff3245Fd6cD4` (site key `stonk2`, floor id
+  offset 11,000,000), quote `0xe934…BF50` ($STONKBROKER), `launchFeeWei` 0,
+  identical bounds and 16.5/16.5/50 fee split. `createLaunch` simulates clean
+  from the swarm wallet. Creator fees on this lane arrive as **$STONKBROKER**
+  — mission-token income — and every curve trade prints mission-token volume.
+- **No creator supply allocation exists on the pad**: the `createLaunch` tuple
+  has no dev-tokens field and `arm` loads the full registered supply. Creator
+  economics = the 16.5% trade-tax push, nothing else; "retention" via buying
+  her own token is wash trading and stays forbidden.
 
 ## Smart Launch V2 creator economics (verified 2026-09-10 from verified pad source)
 
@@ -82,6 +97,11 @@ How LAURA BUYS the mission token with treasury ETH (`src/lib/launchpad/treasury.
   (~$2.8M, pool id `0xd33c…8f92`). Not used: v4 needs Universal Router command
   encoding, and at treasury buy sizes the v3 slippage difference is noise. Revisit
   only if buy sizes ever grow 100x (they must not — caps).
+- **Uniswap v4 singleton located and verified on 4663 (2026-09-10)**: PoolManager
+  `0x8366a39CC670B4001A1121B8F6A443A643e40951` — NOT the canonical vanity address
+  (which has no code here). Universal Router and Permit2 sit at their canonical
+  addresses. Full evidence and the hook design that uses them:
+  `library/80-v4-hook-play.md`.
 - Send pattern: `exactInputSingle` with `tokenIn = WETH9`, `msg.value = amountIn` —
   the router wraps native ETH itself; no WETH approve/wrap step needed. Recipient is
   the treasury wallet; received amount measured as the wallet's STONK balance delta.
