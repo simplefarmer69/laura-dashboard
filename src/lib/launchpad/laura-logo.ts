@@ -10,16 +10,16 @@ import { hashSeed, mulberry32 } from "@/lib/launchpad/art";
  * size in the console (raw SVG / large PNG).
  */
 
-/* StonkBrokers terminal palette: Bloomberg orange primary, volt accent,
- * terminal gray tertiary, warm core, lm-black ink. Field names kept so the
- * SVG body reads unchanged (cyan = primary stroke, teal = circuit accent,
- * violet = tertiary ring/stars). */
+/* StonkBrokers 2026 (v2 / DPP) palette: Clutch neon green primary, volt
+ * accent, readable gray tertiary, warm core, deep purple black ink. Field
+ * names kept so the SVG body reads unchanged (cyan = primary stroke,
+ * teal = circuit accent, violet = tertiary ring/stars). */
 const SENTINEL = {
-  cyan: "#ff6600",
+  cyan: "#39ff14",
   teal: "#cfff04",
-  violet: "#a6a6a6",
-  core: "#fff6e8",
-  ink: "#111111",
+  violet: "#9a9ca6",
+  core: "#f2fff0",
+  ink: "#0d0b11",
 } as const;
 
 /** The canonical LAURA sentinel mark as a 512x512 SVG. */

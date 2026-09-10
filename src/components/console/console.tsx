@@ -84,6 +84,9 @@ export function Console() {
               <h1 className="sb-ticker text-sm font-semibold leading-tight tracking-[0.18em] text-primary sb-glow-text">
                 LAURA
               </h1>
+              <p className="text-xs font-medium tracking-wide text-primary/80">
+                Layered Autonomous Unified Reasoning Agents
+              </p>
               <p className="text-xs text-muted-foreground">
                 {state?.settings.projectName ?? "StonkBrokers"} growth swarm · Robinhood Chain · by Clutch Markets
               </p>
