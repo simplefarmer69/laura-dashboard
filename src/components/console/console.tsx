@@ -67,9 +67,15 @@ export function Console() {
       <header className="sticky top-0 z-20 border-b border-primary/30 bg-background/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center border border-primary bg-primary/10 font-mono text-sm font-bold text-primary sb-glow-text">
-              L
-            </div>
+            {/* LAURA's sentinel mark — served as crisp SVG from the deterministic generator */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/api/laura/logo"
+              alt="LAURA sentinel mark"
+              width={40}
+              height={40}
+              className="size-10 shrink-0 border border-cyan-400/40 bg-black/60 shadow-[0_0_16px_rgba(34,211,238,0.3)]"
+            />
             <div>
               <h1 className="sb-ticker text-sm font-semibold leading-tight text-primary">LAURA</h1>
               <p className="text-xs text-muted-foreground">

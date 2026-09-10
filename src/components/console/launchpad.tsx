@@ -248,16 +248,7 @@ function LaunchCard({
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3">
-            {/* Procedural token art — the logo humans see next to the token */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/api/launches/${l.id}/image`}
-              alt={`${l.symbol} token logo`}
-              width={56}
-              height={56}
-              className="size-14 shrink-0 border border-border/60"
-              loading="lazy"
-            />
+            <LaunchArt id={l.id} symbol={l.symbol} />
             <div>
               <CardTitle className="text-base">
                 {l.name} <span className="font-mono text-sm text-primary">${l.symbol}</span>
@@ -272,6 +263,12 @@ function LaunchCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
+        {l.message && (
+          <blockquote className="border-l-2 border-primary/60 bg-primary/5 px-3 py-2">
+            <p className="font-mono text-[10px] tracking-wider text-primary">LAURA SAYS</p>
+            <p className="mt-0.5 italic">“{l.message}”</p>
+          </blockquote>
+        )}
         <p className="text-muted-foreground">{l.concept}</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-3">
           <Spec label="supply" value={l.supplyTokens.toLocaleString()} />
@@ -322,6 +319,34 @@ function LaunchCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Procedural token art — the logo humans see next to the token on the launcher. */
+function LaunchArt({ id, symbol }: { id: string; symbol: string }) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="relative size-20 shrink-0 overflow-hidden rounded-md border border-primary/30 bg-black/50 shadow-[0_0_16px_rgba(207,255,4,0.12)]">
+      {!loaded && !failed && <div className="absolute inset-0 animate-pulse bg-muted/40" />}
+      {failed ? (
+        <div className="flex size-full items-center justify-center font-mono text-xl text-muted-foreground">
+          {symbol.slice(0, 1)}
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/launches/${id}/image`}
+          alt={`${symbol} token logo`}
+          width={80}
+          height={80}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={`size-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        />
+      )}
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, SendHorizonal } from "lucide-react";
+import { SendHorizonal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,20 @@ interface Msg {
 interface BotsStatus {
   telegram: string;
   discord: string;
+}
+
+/** LAURA's sentinel mark as her chat identity. Crisp SVG at any size. */
+function LauraAvatar({ className = "size-7" }: { className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/api/laura/logo"
+      alt="LAURA"
+      width={28}
+      height={28}
+      className={`border border-cyan-400/40 bg-black/60 shadow-[0_0_10px_rgba(34,211,238,0.25)] ${className}`}
+    />
+  );
 }
 
 const OPENER: Msg = {
@@ -85,7 +99,7 @@ export function ChatPanel() {
       <Card className="flex flex-col lg:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">
-            <MessageCircle className="size-4 text-primary" /> Talk to LAURA
+            <LauraAvatar className="size-6" /> Talk to LAURA
           </CardTitle>
           <CardDescription>
             The public persona: charter-bound, live-data-aware, never gives financial advice.
@@ -94,7 +108,8 @@ export function ChatPanel() {
         <CardContent className="flex min-h-[420px] flex-1 flex-col gap-3">
           <div className="flex-1 space-y-3 overflow-y-auto border border-border/60 bg-black/30 p-3">
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`flex items-start gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "laura" && <LauraAvatar className="mt-0.5 size-7 shrink-0" />}
                 <div
                   className={`max-w-[85%] whitespace-pre-wrap border px-3 py-2 text-sm ${
                     m.role === "user"
@@ -110,7 +125,8 @@ export function ChatPanel() {
               </div>
             ))}
             {busy && (
-              <div className="flex justify-start">
+              <div className="flex items-start justify-start gap-2">
+                <LauraAvatar className="mt-0.5 size-7 shrink-0" />
                 <div className="border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   <span className="sb-blink">▋</span> thinking…
                 </div>
