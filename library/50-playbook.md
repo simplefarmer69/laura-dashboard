@@ -27,12 +27,12 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
 
 ## Hard caps that never bend (code, not judgment)
 
-- 8 deploys per 24h by default (operator tunable via `LAUNCH_MAX_DEPLOYS_PER_DAY`,
-  clamped 1–24) · 0.02 ETH max per deploy (fee + 2x gas; `LAUNCH_MAX_SPEND_ETH_PER_DEPLOY`,
-  clamped 0.005–0.05) · live pad-bounds re-validation · designated funded wallet only ·
-  one deploy per tick · 15-min failure backoff · weekend stock-lane gate (closed lanes
-  queue for Monday) · duplicate name/symbol dedupe. Charter rules 1–7 apply under every
-  grant.
+- 3 deploys per 24h across all lanes combined · 0.02 ETH max per deploy (fee + 2x gas) ·
+  live pad-bounds re-validation · designated funded wallet only · one deploy per tick ·
+  15-min failure backoff · weekend stock-lane gate (closed lanes queue for Monday) ·
+  duplicate name/symbol dedupe. These are hard constants in `LAUNCH_CAPS`
+  (`src/lib/launchpad/service.ts`), the operator's standing safety config. Charter rules
+  1–7 apply under every grant.
 
 ## Levers by grade component
 

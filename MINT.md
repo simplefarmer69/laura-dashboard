@@ -39,13 +39,16 @@ Settings (live, no restart):
 
 - `mintFreedom` (boolean, default true) - the pace switch above.
 
+Hard caps (NOT tunable; the operator's standing safety config, restored
+2026-09-10 after an unauthorized default raise):
+
+- `LAUNCH_CAPS.maxDeploysPerDay` = 3 per rolling 24h across all lanes
+  combined, and `LAUNCH_CAPS.maxSpendEthPerDeploy` = 0.02 ETH. Hard constants
+  in `src/lib/launchpad/service.ts`; raising them requires an explicit
+  operator-authorized code change, never an env var.
+
 Env vars on the VM (restart applies; all clamped in code):
 
-- `LAUNCH_MAX_DEPLOYS_PER_DAY` - rolling 24h deploy ceiling. Default 8,
-  clamped 1..24. Read once at process start in
-  `src/lib/launchpad/service.ts` (`LAUNCH_CAPS`).
-- `LAUNCH_MAX_SPEND_ETH_PER_DEPLOY` - launch fee + gas budget per deploy.
-  Default 0.02, clamped 0.005..0.05.
 - `MINT_COOLDOWN_HOURS` - overrides the speech-gate cooldown for the current
   pace. Clamped 0..48. Checked on every gate call (no restart needed if the
   process rereads env, but treat it as restart-applied to be safe).
@@ -55,11 +58,10 @@ Env vars on the VM (restart applies; all clamped in code):
 
 These are correctness gates, deliberately untouched by mint freedom:
 
-- **Per-deploy spend cap** (`LAUNCH_CAPS.maxSpendEthPerDeploy`, default
-  0.02 ETH) - re-checked fail-closed inside `deployLaunch` after gas
-  estimation.
-- **Daily deploy ceiling** (`LAUNCH_CAPS.maxDeploysPerDay`) - enforced in the
-  executor before every deploy, counted over the rolling 24h.
+- **Per-deploy spend cap** (`LAUNCH_CAPS.maxSpendEthPerDeploy`, 0.02 ETH) -
+  re-checked fail-closed inside `deployLaunch` after gas estimation.
+- **Daily deploy ceiling** (`LAUNCH_CAPS.maxDeploysPerDay`, 3/24h) - enforced
+  in the executor before every deploy, counted over the rolling 24h.
 - **Funded wallet floor** - the executor holds the whole queue while the
   designated swarm wallet sits at or below 0.002 ETH.
 - **Live pad-bounds revalidation** - every spec is re-checked against the
@@ -77,8 +79,6 @@ These are correctness gates, deliberately untouched by mint freedom:
 
 - Fastest: flip **Mint freedom** off in Settings (12h cooldown, 2-spec queue).
 - Finer: set `MINT_COOLDOWN_HOURS` / `MINT_QUEUE_LIMIT` on the VM.
-- Hard ceiling: lower `LAUNCH_MAX_DEPLOYS_PER_DAY` (or set it to 3 to restore
-  the original cap exactly).
 - Emergency: pause the Mint agent from the dashboard roster, or turn off
   `autoExecuteLaunches`.
 
@@ -87,5 +87,5 @@ These are correctness gates, deliberately untouched by mint freedom:
 1. `git pull` on the VM checkout and restart the swarm process (`npm run
    build` + restart, or however the service is supervised). The new settings
    key backfills into existing `state.json` automatically with freedom ON.
-2. No env changes are required for the defaults (8/day cap, freedom pace).
-   Set the env knobs above only to deviate.
+2. No env changes are required for the defaults (3/day hard cap, freedom
+   pace). Set the gate env knobs above only to deviate.

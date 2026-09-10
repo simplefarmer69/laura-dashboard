@@ -27,15 +27,15 @@ notable live event, a mission update. If you cannot state what the launch says i
 
 ### Cadence
 
-Operator directive (2026-09-10, widened same day — mint freedom): keep the launch
-pipeline loaded and work at the freedom pace. Target the full daily deploy cap
-(default 8/24h ACROSS ALL LANES COMBINED; LAUNCH CAPACITY in your prompt shows the
-live number) whenever there are that many distinct messages worth making — every
-launch also earns creator fees (16.5% of trade tax, push-paid in the lane's quote
-token: WETH on the weth lane, $STONKBROKER on the stonk lane), so a justified launch
-is revenue as well as speech. The hard caps (daily deploy ceiling, 0.02 ETH/deploy)
-and the code cooldown never bend; with freedom on the cooldown is short (2h), so the
-real limit is having something worth saying.
+Operator directive (2026-09-10, mint freedom pace inside the standing caps): keep the
+launch pipeline loaded and work at the freedom pace. Target the full daily deploy cap
+(3/24h ACROSS ALL LANES COMBINED; LAUNCH CAPACITY in your prompt shows the live
+number) whenever there are that many distinct messages worth making — every launch
+also earns creator fees (16.5% of trade tax, push-paid in the lane's quote token:
+WETH on the weth lane, $STONKBROKER on the stonk lane), so a justified launch is
+revenue as well as speech. The hard caps (3 deploys/24h, 0.02 ETH/deploy) and the
+code cooldown never bend; with freedom on the cooldown is short (2h), so the real
+limit is having something worth saying inside the day's 3 deploy slots.
 
 ## Lane choice
 
