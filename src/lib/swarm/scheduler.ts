@@ -70,8 +70,12 @@ async function tick(): Promise<void> {
   if (!s) return;
   const state = await loadState();
   const intervalMs = Math.max(30, state.settings.cycleIntervalMinutes) * 60_000;
+  /* Anchor cadence to the latest run's activity, not only to finished runs:
+     a run orphaned by a dev-server restart never gets finishedAt, and anchoring
+     on 0 would make every fresh process fire a cycle immediately (and treat
+     ancient events as fresh triggers). */
   const latestRun = state.runs.at(-1);
-  if (latestRun?.finishedAt && latestRun.finishedAt > s.lastCycleAt) s.lastCycleAt = latestRun.finishedAt;
+  if (latestRun) s.lastCycleAt = Math.max(s.lastCycleAt, latestRun.finishedAt ?? latestRun.startedAt);
 
   const today = utcDate();
   const hasGradeToday = state.grades.some((g) => g.date === today);
@@ -105,6 +109,11 @@ async function tick(): Promise<void> {
     !due && sinceLastCycle >= MIN_EVENT_GAP_MS ? pendingTriggerEvent(state, s.lastCycleAt) : null;
 
   if (due || triggerEvent) {
+    /* Another process (or one killed mid-cycle, recently) may own an in-flight
+       cycle: defer while the newest run is unfinished and younger than 15 min. */
+    if (latestRun && !latestRun.finishedAt && Date.now() - latestRun.startedAt < 15 * 60_000) {
+      return;
+    }
     const used = cyclesInLast24h(state);
     if (used >= state.settings.maxLlmCyclesPerDay) {
       /* Budget exhausted: log once per tick, retry when the window rolls. */

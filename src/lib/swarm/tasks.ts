@@ -300,8 +300,8 @@ export const researchSchema = z.object({
   notebook: z
     .array(
       z.object({
-        topic: z.string().min(3).max(80),
-        text: z.string().min(20).max(700),
+        topic: z.string().min(3).max(120),
+        text: z.string().min(20).max(1500),
       }),
     )
     .max(2),
