@@ -54,7 +54,7 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
                 {t.launches.map((e) => (
                   <div
                     key={e.proposalId}
-                    className="flex items-baseline justify-between gap-2 border-b border-border/40 py-1 text-xs"
+                    className="flex flex-col gap-0.5 border-b border-border/40 py-1 text-xs sm:flex-row sm:items-baseline sm:justify-between sm:gap-2"
                   >
                     <span className="truncate">
                       ${e.symbol} <span className="text-muted-foreground">#{e.launchId} · {e.lane.toUpperCase()}</span>
@@ -62,7 +62,7 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
                         <span className="ml-1 text-[var(--sb-green)]">{e.bonded ? "bonded" : "graduated"}</span>
                       )}
                     </span>
-                    <span className="shrink-0 font-mono text-muted-foreground">
+                    <span className="min-w-0 font-mono text-muted-foreground sm:shrink-0 sm:text-right">
                       earned {e.earnedQuote.toFixed(6)} · claimable {e.claimableQuote.toFixed(6)} · {e.tradeCount} trades
                       {e.claimedQuote > 0 ? ` · claimed ${e.claimedQuote.toFixed(6)}` : ""}
                       {e.bonded
