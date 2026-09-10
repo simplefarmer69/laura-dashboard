@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { pushEvent, updateState } from "@/lib/store";
 import { executeLaunch } from "@/lib/launchpad/executor";
 
@@ -11,6 +12,7 @@ const bodySchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/launches/[id]">) {
+  if (isViewerMode()) return viewerForbidden();
   const { id } = await ctx.params;
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });

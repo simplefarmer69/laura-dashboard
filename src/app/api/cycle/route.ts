@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { isCycleRunning, runCycle } from "@/lib/swarm/orchestrator";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST() {
+  if (isViewerMode()) return viewerForbidden();
   if (isCycleRunning()) {
     return NextResponse.json({ error: "A cycle is already running" }, { status: 409 });
   }

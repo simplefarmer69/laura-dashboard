@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { newId, pushEvent, updateState } from "@/lib/store";
 import type { LaunchProposal } from "@/lib/types";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
@@ -22,6 +23,7 @@ const createSchema = z.object({
 
 /** Creates a launch spec directly (operator- or LAURA-designed outside a cycle). */
 export async function POST(req: NextRequest) {
+  if (isViewerMode()) return viewerForbidden();
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   const p = parsed.data;

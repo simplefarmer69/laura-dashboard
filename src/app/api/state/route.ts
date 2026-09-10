@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isViewerMode } from "@/lib/viewer/mode";
+import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
 import { schedulerRunning } from "@/lib/swarm/scheduler";
@@ -11,6 +13,18 @@ import { loadSkills } from "@/lib/swarm/skills";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  /* Public viewer: serve the latest snapshot the VM published instead of the
+     live store — the viewer deployment has no data dir and no swarm. */
+  if (isViewerMode()) {
+    const snapshot = await readSnapshot();
+    if (!snapshot)
+      return NextResponse.json(
+        { error: "No snapshot published yet — LAURA's host has not pushed one." },
+        { status: 503 },
+      );
+    return NextResponse.json(snapshot, { headers: { "cache-control": "no-store" } });
+  }
+
   const state = await loadState();
   const model = resolveModel(state.settings.llmModel);
   const [notebook, skills] = await Promise.all([loadNotebook(), loadSkills()]);
