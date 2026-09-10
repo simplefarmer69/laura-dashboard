@@ -152,8 +152,32 @@
 }
 
 @utility sb-panel {
+  position: relative;
   border: 1px solid var(--sb-panel-border);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 24px var(--sb-glow);
+  /* Corner registration marks. */
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 0 solid var(--sb-accent);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+  &::before {
+    top: 0;
+    left: 0;
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+  &::after {
+    right: 0;
+    bottom: 0;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+  }
 }
 
 @utility sb-glow-text {

@@ -241,7 +241,10 @@ function Metric({
     <Card>
       <CardHeader className="pb-1">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className={`font-mono text-2xl ${toneClass}`}>{value}</CardTitle>
+        <CardTitle className={`font-mono text-2xl ${toneClass}`}>
+          {tone !== "neutral" && <span className="mr-1 text-sm">{tone === "up" ? "▲" : "▼"}</span>}
+          {value}
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex items-end justify-between gap-3">
         <p className="text-xs text-muted-foreground">{sub}</p>

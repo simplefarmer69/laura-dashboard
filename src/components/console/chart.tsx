@@ -55,8 +55,8 @@ export function LineChart({
     <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img">
       {ticks.map((t, i) => (
         <g key={i}>
-          <line x1={padL} x2={width - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.08)" strokeDasharray="2 4" />
-          <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" fill="#8e8e8a" fontFamily="var(--font-mono)">
+          <line x1={padL} x2={width - padR} y1={y(t)} y2={y(t)} stroke="rgba(150,196,222,0.1)" strokeDasharray="2 4" />
+          <text x={padL - 8} y={y(t) + 3} textAnchor="end" fontSize="10" fill="var(--muted-foreground)" fontFamily="var(--font-mono)">
             {format(t)}
           </text>
         </g>
@@ -67,7 +67,7 @@ export function LineChart({
         <g key={i}>
           <circle cx={x(i)} cy={y(p.value)} r={points.length > 40 ? 1.5 : 2.5} fill={color} />
           {i % labelEvery === 0 && (
-            <text x={x(i)} y={height - 8} textAnchor="middle" fontSize="10" fill="#8e8e8a" fontFamily="var(--font-mono)">
+            <text x={x(i)} y={height - 8} textAnchor="middle" fontSize="10" fill="var(--muted-foreground)" fontFamily="var(--font-mono)">
               {p.label}
             </text>
           )}
