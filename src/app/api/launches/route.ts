@@ -12,6 +12,8 @@ const createSchema = z.object({
   ...launchSpecShape,
   concept: z.string().min(10).max(1200),
   rationale: z.string().min(10).max(1200),
+  /** The broadcast this launch makes to the Telegram audience — LAURA's words. */
+  message: z.string().min(10).max(500).optional(),
   artMotif: z.string().min(2).max(80),
   artPalette: z.enum(ART_PALETTES),
   priority: z.number().min(0).max(100).optional(),
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
       bufferSecs: p.bufferSecs,
       concept: p.concept,
       rationale: p.rationale,
+      message: p.message ?? null,
       artMotif: p.artMotif,
       artPalette: p.artPalette,
       priority: p.priority ?? 0,
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
       kind: "launch.proposed",
       agentId: "operator",
       title: `Launch spec created: ${p.name} ($${p.symbol})`,
-      detail: p.concept,
+      detail: p.message ? `LAURA says: "${p.message}" · ${p.concept}` : p.concept,
       refId: launch.id,
     });
     if (p.approve) {

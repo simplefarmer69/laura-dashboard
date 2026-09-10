@@ -163,9 +163,14 @@ export function coachProposalBudget(state: SwarmState): number {
 }
 
 /**
- * Launch pacing from launch data: never stack unreviewed specs, and give each
- * deployed token time on the curve before the next one competes with it.
+ * Speaking cadence: launches are LAURA's voice, so the gate paces speech, not
+ * just deploys. At most ~2 speech launches/day (12h cooldown after the last
+ * deploy), never a stacked queue. This sits inside the executor's inviolable
+ * hard caps (3 deploys/24h, 0.02 ETH/deploy) — it shapes cadence, they stop
+ * runaways.
  */
+const SPEECH_COOLDOWN_HOURS = 12;
+
 export function mintGate(state: SwarmState): { blocked: boolean; reason: string } {
   const open = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
   if (open >= 2) return { blocked: true, reason: `${open} launch specs already await review or deploy` };
@@ -173,10 +178,10 @@ export function mintGate(state: SwarmState): { blocked: boolean; reason: string 
     .filter((l) => l.status === "deployed" && l.deployedAt !== null)
     .reduce<number>((max, l) => Math.max(max, l.deployedAt ?? 0), 0);
   const sinceH = (Date.now() - lastDeploy) / 3_600_000;
-  if (lastDeploy > 0 && sinceH < 36) {
+  if (lastDeploy > 0 && sinceH < SPEECH_COOLDOWN_HOURS) {
     return {
       blocked: true,
-      reason: `Last deploy was ${sinceH.toFixed(0)}h ago — letting it work the curve before launching another`,
+      reason: `Last launch spoke ${sinceH.toFixed(0)}h ago — letting it work the curve before LAURA says the next thing`,
     };
   }
   return { blocked: false, reason: "" };

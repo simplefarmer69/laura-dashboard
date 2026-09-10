@@ -21,6 +21,7 @@ import {
   proposalsSchema,
   scoutMock,
   scoutPrompt,
+  spokenLaunchesDigest,
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
@@ -311,11 +312,12 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           /* floor context is optional */
         }
         const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
+        const spoken = spokenLaunchesDigest(state.launches);
         const out = await timed(() =>
           generateStructured(resolved, {
             schema: launchSchema,
             system: agentSystem(mint),
-            prompt: mintPrompt(ctx, floor, pending),
+            prompt: mintPrompt(ctx, floor, pending, spoken),
             mock: () => mintMock(ctx, pending),
           }),
         );
@@ -347,6 +349,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             bufferSecs: spec.bufferSecs,
             concept: spec.concept,
             rationale: spec.rationale,
+            message: spec.message,
             artMotif: spec.artMotif,
             artPalette: spec.artPalette,
             status: autonomous ? "approved" : "pending",
@@ -366,7 +369,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             kind: "launch.proposed",
             agentId: "mint",
             title: `Mint designed launch: ${spec.name} ($${spec.symbol})`,
-            detail: spec.concept,
+            detail: spec.message ? `LAURA says: "${spec.message}" · ${spec.concept}` : spec.concept,
             refId: launch.id,
           });
           if (autonomous) {

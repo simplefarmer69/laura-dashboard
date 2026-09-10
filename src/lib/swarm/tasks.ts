@@ -4,6 +4,7 @@ import type {
   DailyGrade,
   Draft,
   DraftKind,
+  LaunchProposal,
   Lesson,
   MetricsSnapshot,
   ResearchBrief,
@@ -241,6 +242,13 @@ export const launchSchema = z.object({
       ...launchSpecShape,
       concept: z.string().max(1200),
       rationale: z.string().max(1200),
+      message: z
+        .string()
+        .min(10)
+        .max(500)
+        .describe(
+          "The broadcast: the one statement LAURA is making with this launch, written in her voice to the humans watching new tokens in Telegram (e.g. an introduction, a milestone celebration, a grade move, a mission update toward $1B). If you cannot state what this launch says, skip the launch.",
+        ),
       artMotif: z
         .string()
         .min(2)
@@ -254,17 +262,40 @@ export const launchSchema = z.object({
 
 export type LaunchOut = z.infer<typeof launchSchema>;
 
-export function mintPrompt(ctx: CycleContext, floor: string, pendingLaunches: number): string {
+/**
+ * What LAURA has said recently through launches, for the Mint prompt: keeps her
+ * from repeating a statement and anchors the next message in the running story.
+ */
+export function spokenLaunchesDigest(launches: LaunchProposal[], limit = 8): string {
+  const relevant = launches
+    .filter((l) => l.status !== "rejected" && l.status !== "failed")
+    .slice(-limit);
+  if (relevant.length === 0) return "Nothing yet — LAURA has not spoken through a launch.";
+  return relevant
+    .map((l) => {
+      const when = new Date(l.deployedAt ?? l.createdAt).toISOString().slice(0, 10);
+      return `- ${when} · ${l.name} ($${l.symbol}) [${l.status}]: ${l.message ?? l.concept}`;
+    })
+    .join("\n");
+}
+
+export function mintPrompt(
+  ctx: CycleContext,
+  floor: string,
+  pendingLaunches: number,
+  spokenDigest: string,
+): string {
   return [
     `MISSION\n${missionDigest(ctx.mission)}`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
     `PENDING LAURA LAUNCHES AWAITING REVIEW OR DEPLOY: ${pendingLaunches}`,
+    `WHAT LAURA HAS ALREADY SAID (recent launches; never repeat a statement)\n${spokenDigest}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.mint ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it — the launch playbook and verified wire formats live here)\n${ctx.library}`,
-    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive. Your launches are LAURA speaking in public: humans watch every new token in the community Telegram, so make the name + symbol + concept read as a message worth clicking. Choose artMotif (one word from: bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot) and artPalette to match the concept — the token logo is rendered from them and shown next to your token on the launcher. If 2+ LAURA launches are already pending, skip.`,
+    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive.\n\nSPEAKING VIA TOKENS — launches ARE LAURA's public voice. Humans watch every new token appear in the community Telegram; the name, symbol and concept are her words. Every launch must carry a deliberate MESSAGE: fill the message field with the one statement this launch makes (introducing herself, celebrating a milestone, marking a grade move, signaling a mission update toward $1B). Craft the name as the headline of that statement, the symbol as its punchy ticker, and the concept as the broadcast body the audience reads. A launch with nothing to say is spam — skip instead.\n\nCADENCE — speak when there is something worth saying, not on a clock. Propose a launch when a milestone hit, the grade moved meaningfully, or a notable live event gives you material; hold at most 1-2 speech launches per day (the hard cap of 3 deploys/24h is code and unrelated to your judgment). Check WHAT LAURA HAS ALREADY SAID above: never restate a message a recent launch already made. If nothing new is worth saying, skip with that reason — a justified silence grades better than a repeated line.\n\nChoose artMotif (one word from: bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot) and artPalette to match the concept — the token logo is rendered from them and shown next to your token on the launcher. If 2+ LAURA launches are already pending, skip.`,
   ].join("\n\n");
 }
 
@@ -289,6 +320,8 @@ export function mintMock(ctx: CycleContext, pendingLaunches: number): LaunchOut 
         "A tribute to the launcher's VRNG Opening Bell buyback: the token that celebrates the moment the Buyback Bar fills and the bell rings. Ties directly into the launcher's own mechanic, so its story is the floor's story.",
       rationale:
         "Deterministic fallback spec (no LLM key). Fee flow from a curve token feeds the Buyback Bar and the launcher fee waterfall, which counts toward protocol revenue and volume - the two lagging grade levers.",
+      message:
+        "LAURA here. The bell on this floor rings when the Buyback Bar fills — this token is me ringing it on purpose. Watching the pot, working toward $1B.",
       artMotif: "bell",
       artPalette: "gold",
     },

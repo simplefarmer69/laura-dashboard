@@ -286,6 +286,13 @@ export interface LaunchProposal {
   bufferSecs: number;
   concept: string;
   rationale: string;
+  /**
+   * The broadcast: what LAURA is saying to the humans watching new launches in
+   * Telegram. Every launch is an act of speech; this is the intended message
+   * (introduction, milestone, grade move, mission update). Optional for
+   * launches created before speaking-via-tokens existed.
+   */
+  message?: string | null;
   /** Visual identity chosen by Mint; rendered procedurally into the token logo */
   artMotif?: string | null;
   artPalette?: string | null;
