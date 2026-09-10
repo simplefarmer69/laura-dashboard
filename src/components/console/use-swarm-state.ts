@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LlmProvider, SwarmState } from "@/lib/types";
 import type { MissionStatus } from "@/lib/mission-status";
+import type { NotebookEntry } from "@/lib/swarm/notebook";
 
 export interface ConsoleState extends SwarmState {
   mission: MissionStatus;
+  evolution: {
+    notebookCount: number;
+    /** Newest first */
+    notebook: NotebookEntry[];
+    skills: { name: string; description: string; agents: string[] }[];
+  };
   runtime: {
     cycleRunning: boolean;
     autopilot: boolean;

@@ -11,6 +11,8 @@ import { patchJson, type ConsoleState } from "@/components/console/use-swarm-sta
 import { ago, when } from "@/components/console/format";
 import type { StrategyProposal } from "@/lib/types";
 
+const WEEK_MS = 7 * 86_400_000;
+
 export function Evolution({ state, refresh }: { state: ConsoleState; refresh: () => Promise<void> }) {
   const pending = useMemo(
     () => state.proposals.filter((p) => p.status === "pending").sort((a, b) => b.createdAt - a.createdAt),
@@ -27,7 +29,9 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
     .slice(0, 12);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="space-y-4">
+      <EvolutionLedger state={state} />
+      <div className="grid gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-medium">
@@ -105,6 +109,90 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
           ))}
         </CardContent>
       </Card>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The development the operator asked to SEE: strategy versions per agent,
+ * self-authored knowledge growth, and the anti-repetition machinery working.
+ */
+function EvolutionLedger({ state }: { state: ConsoleState }) {
+  const now = Date.now();
+  const week = state.events.filter((e) => e.ts >= now - WEEK_MS);
+  const noveltyRejected = week.filter((e) => e.kind === "novelty.rejected").length;
+  const criticVetoed = week.filter((e) => e.kind === "critic.vetoed").length;
+  const versionBumps = week.filter((e) => e.kind === "proposal.adopted" || e.kind === "strategy.edited").length;
+  const lessons7d = state.lessons.filter((l) => l.ts >= now - WEEK_MS).length;
+  const cycles24h = state.runs.filter((r) => r.startedAt >= now - 86_400_000).length;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Evolution this week</CardTitle>
+          <CardDescription>Proof the swarm is developing, not repeating.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-2 text-center">
+          <LedgerStat label="strategy bumps" value={versionBumps} />
+          <LedgerStat label="lessons learned" value={lessons7d} />
+          <LedgerStat label="duplicates killed" value={noveltyRejected + criticVetoed} />
+          <LedgerStat label={`cycles last 24h (max ${state.settings.maxLlmCyclesPerDay})`} value={cycles24h} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">
+            Notebook <span className="font-mono text-muted-foreground">{state.evolution.notebookCount} entries</span>
+          </CardTitle>
+          <CardDescription>Self-authored durable knowledge; newest first.</CardDescription>
+        </CardHeader>
+        <CardContent className="max-h-48 space-y-1.5 overflow-auto">
+          {state.evolution.notebook.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nothing recorded yet.</p>
+          )}
+          {state.evolution.notebook.map((n) => (
+            <div key={n.id} className="text-xs">
+              <span className="font-medium">[{n.topic}]</span>{" "}
+              <span className="text-muted-foreground">{n.text.slice(0, 120)}{n.text.length > 120 ? "…" : ""}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">
+            Agent versions & skills <span className="font-mono text-muted-foreground">{state.evolution.skills.length} skills</span>
+          </CardTitle>
+          <CardDescription>Where each agent's strategy stands today.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {state.agents.map((a) => (
+              <Badge key={a.id} variant="outline" className="font-mono text-[10px]" title={a.role}>
+                {a.name} v{a.strategyVersion}
+              </Badge>
+            ))}
+          </div>
+          <div className="max-h-28 space-y-1 overflow-auto">
+            {state.evolution.skills.map((s) => (
+              <p key={s.name} className="text-[11px] text-muted-foreground">
+                <span className="text-foreground/80">{s.name}</span> ({s.agents.join(", ")})
+              </p>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function LedgerStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/20 py-2">
+      <div className="font-mono text-lg">{value}</div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
     </div>
   );
 }

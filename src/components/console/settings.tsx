@@ -69,13 +69,22 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
           <CardDescription>Cadence, output budget and autonomy level.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Cycle interval (hours)" hint="Used by the scheduler worker">
+          <Field label="Cycle interval (minutes)" hint="Base LLM-cycle cadence; trigger events (launch live, milestone) can run a cycle up to this much earlier">
+            <Input
+              type="number"
+              min={30}
+              max={1440}
+              value={form.cycleIntervalMinutes}
+              onChange={(e) => set("cycleIntervalMinutes", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Max LLM cycles per day" hint="Hard rolling-24h budget on API spend; scheduled and event cycles defer once it's spent">
             <Input
               type="number"
               min={1}
-              max={24}
-              value={form.cycleIntervalHours}
-              onChange={(e) => set("cycleIntervalHours", Number(e.target.value))}
+              max={48}
+              value={form.maxLlmCyclesPerDay}
+              onChange={(e) => set("maxLlmCyclesPerDay", Number(e.target.value))}
             />
           </Field>
           <Field label="Max drafts per cycle">
@@ -94,8 +103,8 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
             <div>
               <Label className="text-xs">Auto-tune parameters</Label>
               <p className="text-[11px] text-muted-foreground">
-                Once per day the tuner adjusts cadence (2–12h) and draft budget (3–8) from grade trend,
-                review backlog and approval rates. Every change is logged in Activity.
+                Once per day the tuner adjusts cadence (45–360 min) and draft budget (3–8) from grade
+                trend, review backlog and approval rates. Every change is logged in Activity.
               </p>
             </div>
             <Switch checked={form.autoTune} onCheckedChange={(v) => set("autoTune", Boolean(v))} />
@@ -149,7 +158,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               {state.runtime.autopilot ? "running in-process" : "off"}
             </span>
             {state.runtime.autopilot
-              ? ` — a cycle every ${state.settings.cycleIntervalHours}h and a grade stamp every UTC day.`
+              ? ` — a cycle every ${state.settings.cycleIntervalMinutes} min (max ${state.settings.maxLlmCyclesPerDay}/day, plus event triggers) and a grade stamp every UTC day.`
               : " — set SWARM_AUTOPILOT=1 (default) or run npm run worker."}
           </p>
         </CardContent>
