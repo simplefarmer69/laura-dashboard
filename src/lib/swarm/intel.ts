@@ -397,7 +397,12 @@ interface SmartLpFeedPayload {
   fleet?: { vaults?: number; tvlUsd?: number };
 }
 
-/** Percent change from the series point closest to `hoursAgo` to the latest point. */
+/**
+ * Percent change from the series point CLOSEST to `hoursAgo` before the latest
+ * point (the series is daily plus one live point, so "closest" beats "last
+ * point at or before target", which can be nearly two days old and overstate
+ * a fast-growing TVL's 24h move).
+ */
 function seriesChangePct(
   series: Array<{ date: number; totalLiquidityUSD: number }>,
   hoursAgo: number,
@@ -405,12 +410,12 @@ function seriesChangePct(
   if (series.length < 2) return null;
   const last = series[series.length - 1];
   const target = last.date - hoursAgo * 3600;
-  let prior = series[0];
+  let prior: { date: number; totalLiquidityUSD: number } | null = null;
   for (const p of series) {
-    if (p.date <= target) prior = p;
-    else break;
+    if (p.date >= last.date) break;
+    if (!prior || Math.abs(p.date - target) < Math.abs(prior.date - target)) prior = p;
   }
-  if (prior.date >= last.date || prior.totalLiquidityUSD <= 0) return null;
+  if (!prior || prior.totalLiquidityUSD <= 0) return null;
   return ((last.totalLiquidityUSD - prior.totalLiquidityUSD) / prior.totalLiquidityUSD) * 100;
 }
 
@@ -702,7 +707,7 @@ function ageOfMs(ts: number | null): string {
 
 function compactUsd(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "n/a";
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 999_500) return `$${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
   return `$${n.toFixed(0)}`;
 }
