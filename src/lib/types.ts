@@ -37,6 +37,54 @@ export interface OnchainReads {
   tokenTotalSupply: number;
 }
 
+/** One tweet worth remembering from the live X reads (clipped for storage). */
+export interface IntelTweet {
+  id: string;
+  /** Username when known (leader timelines), otherwise the numeric author id. */
+  author: string;
+  createdAt: string;
+  text: string;
+  likes: number;
+  retweets: number;
+  replies: number;
+  impressions: number;
+}
+
+/** X read-API intelligence gathered with the app-only bearer (read endpoints only). */
+export interface XIntel {
+  fetchedAt: number;
+  /** Tweets matching the $STONKBROKER search in the last 24h (recent-search window). */
+  mentionCount24h: number;
+  /** Sum of likes+retweets+replies across those mentions. */
+  engagement24h: number;
+  /** Top mentions by engagement, clipped. */
+  topMentions: IntelTweet[];
+  /** Latest original tweets from Robinhood leadership (vladtenev, JohannKerbrat). */
+  leaders: { username: string; tweets: IntelTweet[] }[];
+  /** Which X endpoints answered vs were rate-limited/blocked this cycle. */
+  note: string;
+}
+
+/**
+ * Per-cycle snapshot of live internet context beyond the market metrics:
+ * X mentions/engagement (influence), Robinhood leadership activity, ETH
+ * macro context, and Blockscout holder/transfer counts when reachable.
+ * Every field is optional-by-null — fetchers are non-fatal by design.
+ */
+export interface IntelSnapshot {
+  ts: number;
+  x: XIntel | null;
+  ethUsd: number | null;
+  ethUsd24hChangePct: number | null;
+  /** $STONKBROKER holder count from Blockscout; null when the API is unreachable. */
+  holderCount: number | null;
+  /** Lifetime $STONKBROKER transfer count from Blockscout; null when unreachable. */
+  tokenTransferCount: number | null;
+  /** Endpoints that returned real data this cycle. */
+  sources: string[];
+  warnings: string[];
+}
+
 export interface GradeComponent {
   key: "price" | "revenue" | "volume" | "execution";
   label: string;
@@ -397,6 +445,8 @@ export interface SwarmState {
   runs: CycleRun[];
   grades: DailyGrade[];
   metricsHistory: MetricsSnapshot[];
+  /** Live internet intel per cycle (X reads, ETH context, Blockscout). Absent before the intel layer existed. */
+  intelHistory?: IntelSnapshot[];
   researchBriefs: ResearchBrief[];
   events: SwarmEvent[];
   lessons: Lesson[];

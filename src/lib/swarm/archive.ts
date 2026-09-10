@@ -6,6 +6,7 @@ import type {
   CycleRun,
   DailyGrade,
   Draft,
+  IntelSnapshot,
   LaunchProposal,
   Lesson,
   MetricsSnapshot,
@@ -49,7 +50,8 @@ export type ArchiveStream =
   | "briefs"
   | "milestones"
   | "notebook"
-  | "metrics";
+  | "metrics"
+  | "intel";
 
 export interface ArchiveRow {
   stream: ArchiveStream;
@@ -248,6 +250,21 @@ function milestoneRow(m: MilestoneRecord): ArchiveRow {
   };
 }
 
+function intelRow(s: IntelSnapshot): ArchiveRow {
+  const mentions = s.x ? `${s.x.mentionCount24h} mentions, ${s.x.engagement24h} engagements` : "x unavailable";
+  return {
+    stream: "intel",
+    id: `i_${s.ts}`,
+    cycleId: null,
+    agentId: null,
+    ts: s.ts,
+    json: JSON.stringify(s),
+    text: clip(
+      `intel ${new Date(s.ts).toISOString()}: ${mentions}; holders ${s.holderCount ?? "n/a"}; eth $${s.ethUsd ?? "n/a"}; sources ${s.sources.join(",")}${s.x?.topMentions.length ? `\n${s.x.topMentions.map((t) => `@${t.author}: ${t.text}`).join("\n")}` : ""}`,
+    ),
+  };
+}
+
 function metricsRow(m: MetricsSnapshot): ArchiveRow {
   return {
     stream: "metrics",
@@ -279,6 +296,7 @@ export function archiveState(state: SwarmState): void {
       ...state.researchBriefs.map(briefRow),
       ...state.milestones.map(milestoneRow),
       ...state.metricsHistory.map(metricsRow),
+      ...(state.intelHistory ?? []).map(intelRow),
     ]);
   } catch (err) {
     console.error(`[archive] state archive failed: ${String(err)}`);

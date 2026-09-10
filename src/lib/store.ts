@@ -13,6 +13,7 @@ const MAX_RUNS = 200;
 const MAX_METRICS = 4000;
 const MAX_EVENTS = 1500;
 const MAX_LESSONS = 60;
+const MAX_INTEL = 400;
 
 function freshState(): SwarmState {
   return {
@@ -28,6 +29,7 @@ function freshState(): SwarmState {
     runs: [],
     grades: [],
     metricsHistory: [],
+    intelHistory: [],
     researchBriefs: [],
     events: [],
     lessons: [],
@@ -71,6 +73,7 @@ export async function saveState(state: SwarmState): Promise<void> {
   archiveState(state);
   state.runs = state.runs.slice(-MAX_RUNS);
   state.metricsHistory = state.metricsHistory.slice(-MAX_METRICS);
+  state.intelHistory = (state.intelHistory ?? []).slice(-MAX_INTEL);
   state.events = state.events.slice(-MAX_EVENTS);
   state.lessons = state.lessons.slice(-MAX_LESSONS);
   const run = async () => {
