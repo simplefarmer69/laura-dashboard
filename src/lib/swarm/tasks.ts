@@ -131,6 +131,8 @@ export interface CycleContext {
   opsHealth: string;
   /** $STONKBROKER price/liquidity trend computed from stored snapshots (reads only) */
   priceTrend: string;
+  /** Live internet intel digest (X mentions/leadership, ETH context, holders) — TODAY's world */
+  intel: string;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -147,7 +149,7 @@ export function agentSystem(agent: Agent): string {
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko and Blockscout — TODAY's real world; ground the brief in it)\n${ctx.intel}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours.`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {
@@ -187,6 +189,7 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
     `MISSION\n${missionDigest(ctx.mission)}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
+    `LIVE INTERNET INTEL (real X/market reads from this cycle — ride what is actually happening TODAY; never invent tweets or numbers beyond these)\n${ctx.intel}`,
     `SWARM MEMORY (lessons distilled by the coach; apply them)\n${lessonsDigest(ctx.lessons)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills[agent.id] ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it)\n${ctx.library}`,
@@ -320,6 +323,7 @@ export function researcherPrompt(ctx: CycleContext): string {
     `TODAY (UTC): ${ctx.grade.date}.`,
     `MISSION\n${missionDigest(ctx.mission)}`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
+    `LIVE INTERNET INTEL (this cycle's real X/market reads)\n${ctx.intel}`,
     `RESEARCH BRIEF (scout's, this cycle)\n${briefDigest(ctx.brief)}`,
     `YOUR RECENT RESEARCH (topics you must NOT repeat without material new data)\n${recentOutputDigest(ctx.drafts.filter((d) => d.kind === "research"), "researcher", 10)}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 8)}`,
@@ -456,13 +460,16 @@ export function mintPrompt(
   floor: string,
   pendingLaunches: number,
   spokenDigest: string,
+  capacity: string,
 ): string {
   return [
     `MISSION\n${missionDigest(ctx.mission)}`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
+    `LIVE INTERNET INTEL (today's X mentions, Robinhood leadership activity, ETH context — a launch can ride a live narrative)\n${ctx.intel}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
     `QUEUED LAURA LAUNCHES AWAITING AUTONOMOUS DEPLOY: ${pendingLaunches}`,
+    `LAUNCH CAPACITY & TREASURY (real numbers — ground your skip/propose reasoning in these, not guesses; a proposal made while the deploy cap is exhausted simply queues until headroom returns)\n${capacity}`,
     `WHAT LAURA HAS ALREADY SAID (recent launches; never repeat a statement)\n${spokenDigest}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.mint ?? "None."}`,

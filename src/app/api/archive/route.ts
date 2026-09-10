@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import {
   archiveStats,
   gradeHistory,
@@ -21,6 +22,8 @@ export const dynamic = "force-dynamic";
  *   GET /api/archive?notebook=topic       → every archived revision of a notebook topic
  */
 export async function GET(req: NextRequest) {
+  /* The SQLite deep-memory archive lives on the operator's VM only. */
+  if (isViewerMode()) return viewerForbidden();
   const p = req.nextUrl.searchParams;
   const n = Math.min(Math.max(Number(p.get("n")) || 8, 1), 50);
 

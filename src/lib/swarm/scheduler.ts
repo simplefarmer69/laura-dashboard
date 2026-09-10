@@ -5,6 +5,8 @@ import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
+import { runTreasuryTick } from "@/lib/launchpad/treasury";
+import { maybePublishSnapshot } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
 
@@ -69,6 +71,9 @@ function pendingTriggerEvent(state: SwarmState, sinceTs: number): string | null 
 async function tick(): Promise<void> {
   const s = globalThis.__lauraScheduler;
   if (!s) return;
+  /* Public-viewer feed: push a sanitized snapshot on a ~5-min cadence (the
+     guard lives inside; non-fatal on failure, no-op until configured). */
+  void maybePublishSnapshot();
   const state = await loadState();
   const intervalMs = Math.max(30, state.settings.cycleIntervalMinutes) * 60_000;
   /* Anchor cadence to the latest run's activity, not only to finished runs:
@@ -108,6 +113,11 @@ async function tick(): Promise<void> {
      error handling live inside; never throws). Claims send only when
      settings.autoClaimEarnings is true. */
   await runEarningsMaintenance(state);
+
+  /* Treasury ops: capped $STONKBROKER accumulation buys (mission-token only).
+     All gates live inside (TREASURY_CAPS, floor, executor-busy skip); the
+     pure-math eligibility pre-check makes idle ticks free. Never throws. */
+  await runTreasuryTick(state);
 
   const sinceLastCycle = Date.now() - s.lastCycleAt;
   const due = sinceLastCycle >= intervalMs;
@@ -151,6 +161,8 @@ async function tick(): Promise<void> {
       log(
         `cycle ${run.id} finished: ${run.draftsCreated} drafts, ${run.proposalsCreated} proposals${run.error ? `, error: ${run.error}` : ""}`,
       );
+      /* Fresh cycle output should reach the public viewer immediately. */
+      void maybePublishSnapshot({ force: true });
     } finally {
       if (lock === "acquired") {
         await releaseCycleLock();

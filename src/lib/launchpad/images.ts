@@ -69,12 +69,16 @@ export interface TokenProfileLinks {
   telegram: string;
 }
 
-/** Community links come from env so every LAURA token points home consistently. */
+/**
+ * Community links for every LAURA token profile. Env vars override; the
+ * website falls back to the StonkBrokers site itself — honest (it is where
+ * every launched token trades and LAURA's home) and better than launching
+ * tokens with no working link at all while TOKEN_PROFILE_* stay unset.
+ */
 export function profileLinksFromEnv(): TokenProfileLinks | null {
   const x = process.env.TOKEN_PROFILE_X ?? "";
-  const website = process.env.TOKEN_PROFILE_WEBSITE ?? "";
+  const website = process.env.TOKEN_PROFILE_WEBSITE || SITE;
   const telegram = process.env.TOKEN_PROFILE_TELEGRAM ?? "";
-  if (!x && !website && !telegram) return null;
   return { x, website, telegram };
 }
 

@@ -10,6 +10,12 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  /* Public viewer deployment: a passive renderer of published snapshots.
+     No bots, no scheduler, no executor — nothing that acts or spends. */
+  if (process.env.VIEWER_MODE === "1" || process.env.NEXT_PUBLIC_VIEWER_MODE === "1") {
+    console.log("[laura] viewer mode: bots and autopilot stay off — read-only deployment");
+    return;
+  }
   const { startBots } = await import("@/lib/chat/bots");
   startBots();
   if (process.env.SWARM_AUTOPILOT === "0") return;

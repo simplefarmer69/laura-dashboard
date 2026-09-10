@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { postJson, useSwarmState } from "@/components/console/use-swarm-state";
+import { VIEWER_MODE, ViewerBanner, ViewerShield } from "@/components/console/viewer";
 import { Overview } from "@/components/console/overview";
 import { ReviewQueue } from "@/components/console/queue";
 import { Evolution } from "@/components/console/evolution";
@@ -103,7 +104,12 @@ export function Console() {
               <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
-            <Button size="sm" onClick={() => void startCycle()} disabled={cycleRunning}>
+            <Button
+              size="sm"
+              onClick={() => void startCycle()}
+              disabled={cycleRunning || VIEWER_MODE}
+              title={VIEWER_MODE ? "View-only — cycles run from the operator's console" : undefined}
+            >
               <Play className="size-3.5" /> Run cycle
             </Button>
           </div>
@@ -134,6 +140,7 @@ export function Console() {
             </div>
           </div>
         )}
+        {VIEWER_MODE && <ViewerBanner publishedAt={state?.viewer?.publishedAt ?? null} />}
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
@@ -208,25 +215,37 @@ export function Console() {
               <Growth state={state} />
             </TabsContent>
             <TabsContent value="chat">
-              <ChatPanel />
+              <ViewerShield>
+                <ChatPanel />
+              </ViewerShield>
             </TabsContent>
             <TabsContent value="queue">
-              <ReviewQueue state={state} refresh={refresh} />
+              <ViewerShield>
+                <ReviewQueue state={state} refresh={refresh} />
+              </ViewerShield>
             </TabsContent>
             <TabsContent value="launchpad">
-              <Launchpad state={state} refresh={refresh} />
+              <ViewerShield>
+                <Launchpad state={state} refresh={refresh} />
+              </ViewerShield>
             </TabsContent>
             <TabsContent value="evolution">
-              <Evolution state={state} refresh={refresh} />
+              <ViewerShield>
+                <Evolution state={state} refresh={refresh} />
+              </ViewerShield>
             </TabsContent>
             <TabsContent value="agents">
-              <AgentsPanel state={state} refresh={refresh} />
+              <ViewerShield>
+                <AgentsPanel state={state} refresh={refresh} />
+              </ViewerShield>
             </TabsContent>
             <TabsContent value="runs">
               <RunsPanel state={state} />
             </TabsContent>
             <TabsContent value="settings">
-              <SettingsPanel state={state} refresh={refresh} />
+              <ViewerShield>
+                <SettingsPanel state={state} refresh={refresh} />
+              </ViewerShield>
             </TabsContent>
           </Tabs>
         )}

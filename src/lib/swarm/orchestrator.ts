@@ -5,6 +5,7 @@ import { checkMilestones } from "@/lib/mission";
 import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt, priceTrendDigest, runsDigest } from "@/lib/swarm/context";
+import { collectIntel, intelDigest } from "@/lib/swarm/intel";
 import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
 import { checkNovelty } from "@/lib/swarm/novelty";
@@ -32,6 +33,7 @@ import {
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
+import { launchCapacityDigest } from "@/lib/launchpad/treasury";
 import { isDuplicateLaunch } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest } from "@/lib/swarm/library";
@@ -160,6 +162,29 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       durationMs: grader.ms,
     });
 
+    /* 1b. Live internet intel: real reads (X search/timelines, CoinGecko,
+       Blockscout) so every agent reasons from today's world. Non-fatal by
+       construction — collectIntel settles each source independently. */
+    let intelText = "Live internet intel unavailable this cycle.";
+    try {
+      const intel = await timed(() =>
+        collectIntel(state.settings, state.intelHistory?.at(-1) ?? null),
+      );
+      state.intelHistory = [...(state.intelHistory ?? []), intel.value];
+      intelText = intelDigest(intel.value, state.intelHistory);
+      const snap = intel.value;
+      step({
+        agentId: "system",
+        label: "Internet intel",
+        status: snap.sources.length > 0 ? "ok" : "error",
+        summary: `sources: ${snap.sources.join(", ") || "none"}${snap.x ? ` · ${snap.x.mentionCount24h} X mentions/24h, ${snap.x.engagement24h} engagements` : ""}${snap.warnings.length ? ` · ${snap.warnings.length} warning(s): ${snap.warnings.join("; ").slice(0, 200)}` : ""}`,
+        durationMs: intel.ms,
+      });
+    } catch (err) {
+      step({ agentId: "system", label: "Internet intel", status: "error", summary: String(err), durationMs: 0 });
+    }
+    await saveState(state);
+
     const docs = await fetchDocsExcerpt(state.settings);
     const library = await libraryDigest();
     const skillEntries = await Promise.all(
@@ -181,6 +206,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       skills,
       opsHealth: runsDigest(state.runs.filter((r) => r.id !== run.id)),
       priceTrend: priceTrendDigest(state.metricsHistory, grader.value.metrics),
+      intel: intelText,
     };
 
     /* 2. Scout */
@@ -205,6 +231,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         `https://api.dexscreener.com/token-pairs/v1/${state.settings.chainSlug}/${state.settings.tokenAddress}`,
         `https://api.llama.fi/summary/fees/${state.settings.llamaSlug}`,
         "https://rpc.mainnet.chain.robinhood.com",
+        "https://api.x.com/2/tweets/search/recent (read-only bearer)",
         `${state.settings.projectSite}/docs`,
       ],
     };
@@ -496,12 +523,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         }
         const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
         const spoken = spokenLaunchesDigest(state.launches);
+        const capacity = launchCapacityDigest(state);
         const out = await timed(async () =>
           tally(
             await generateStructured(resolved, {
               schema: launchSchema,
               system: agentSystem(mint),
-              prompt: mintPrompt(ctx, floor, pending, spoken),
+              prompt: mintPrompt(ctx, floor, pending, spoken, capacity),
               mock: () => mintMock(ctx, pending),
             }),
           ),

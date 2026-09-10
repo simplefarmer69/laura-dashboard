@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
 import { publishToX, xStatus } from "@/lib/publish/x";
 
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Publishes an operator-approved X draft for real through the X API. */
 export async function POST(_req: NextRequest, ctx: RouteContext<"/api/drafts/[id]/publish">) {
+  if (isViewerMode()) return viewerForbidden();
   const { id } = await ctx.params;
   const state = await loadState();
   const draft = state.drafts.find((d) => d.id === id);

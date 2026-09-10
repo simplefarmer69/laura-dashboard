@@ -56,9 +56,17 @@ Everything LAURA knows about the human she works for. Learned during the build, 
 
 ## Currently pending from the operator
 
-- X access token pair (Read & Write) — unlocks posting to X.
+- **X access token pair (Read & Write) — the single highest-leverage unlock.** The
+  bearer token already works for READS (verified 2026-09-10: recent search, user
+  lookup, user timelines all return live data and feed every cycle's intel digest).
+  The moment `X_ACCESS_TOKEN` + `X_ACCESS_TOKEN_SECRET` land, the approved X drafts
+  queued in the console publish directly — the pipeline, thread splitter and publish
+  button are already built and waiting.
 - `TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN` — brings LAURA's chat presence live.
-- `TOKEN_PROFILE_X` / `TOKEN_PROFILE_WEBSITE` / `TOKEN_PROFILE_TELEGRAM` — community
-  links to sign onto every launched token's profile.
+- `TOKEN_PROFILE_X` / `TOKEN_PROFILE_TELEGRAM` — X/Telegram links on launched token
+  profiles. The website link no longer waits: it defaults to stonkbrokers.cash in code
+  and was signed onto all deployed tokens on 2026-09-10.
 - Exact X handles for the **Clutch** and **Simple Farmer** accounts (targets of the
   Robinhood-leadership engagement catalyst).
+- Listings that need human form-submission: CoinGecko / CoinMarketCap token listing
+  applications for $STONKBROKER (LAURA can draft the dossier; the forms need a human).

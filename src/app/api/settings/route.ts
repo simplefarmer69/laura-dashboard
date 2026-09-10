@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { updateState } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ const settingsSchema = z
   .partial();
 
 export async function PATCH(req: NextRequest) {
+  if (isViewerMode()) return viewerForbidden();
   const parsed = settingsSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   const settings = await updateState((state) => {

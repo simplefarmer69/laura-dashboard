@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { VIEWER_MODE } from "@/components/console/viewer";
 
 interface Msg {
   role: "user" | "laura";
@@ -144,7 +145,11 @@ export function ChatPanel() {
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder='Try "stats", "mission", or "how do launches work?"'
+              placeholder={
+                VIEWER_MODE
+                  ? "View-only — chat with LAURA from Telegram or Discord instead"
+                  : 'Try "stats", "mission", or "how do launches work?"'
+              }
               maxLength={1000}
             />
             <Button type="submit" disabled={busy || !input.trim()}>

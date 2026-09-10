@@ -61,6 +61,39 @@ and reconciled to the wei on-chain:
   launch earns; a graduated launch stops paying the creator (post-bond LP fees go to
   the locked-pool machinery, not the creator).
 
+## Treasury buys — $STONKBROKER swap venue (verified 2026-09-10)
+
+How LAURA BUYS the mission token with treasury ETH (`src/lib/launchpad/treasury.ts`):
+
+- **Venue: Uniswap v3 on Robinhood Chain via SwapRouter02
+  `0xCaf681a66D020601342297493863E78C959E5cb2`.** Verified three ways: (1) its
+  `factory()` returns `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA` — the exact factory
+  that deployed the deepest v3 STONKBROKER/WETH pool
+  (`0x9cd74d5980A4BF60408B9bA2B0F6a3d368EBf594`, ~$881k liquidity, fee tier 10000);
+  (2) its `WETH9()` returns the chain's canonical WETH `0x0Bd7…AD73` (same token the
+  launchpad's WETH lane quotes in); (3) 79 of the last 418 organic swaps on that pool
+  routed through it. `factoryV2()` answering marks it as SwapRouter02 (params struct
+  WITHOUT deadline).
+- Two live v3 fee tiers carry STONKBROKER/WETH liquidity: 10000 (1%, deepest) and
+  3000 (0.3%, `0xA9d49CAa5E906558dacDC66d563Ac78f0c26d4ef`). The buy path quotes BOTH
+  via `simulateContract` and takes the better output — at our sizes (≤0.005 ETH) the
+  0.3% tier usually wins on fee.
+- The single deepest STONKBROKER venue overall is a **Uniswap v4 native-ETH pool**
+  (~$2.8M, pool id `0xd33c…8f92`). Not used: v4 needs Universal Router command
+  encoding, and at treasury buy sizes the v3 slippage difference is noise. Revisit
+  only if buy sizes ever grow 100x (they must not — caps).
+- Send pattern: `exactInputSingle` with `tokenIn = WETH9`, `msg.value = amountIn` —
+  the router wraps native ETH itself; no WETH approve/wrap step needed. Recipient is
+  the treasury wallet; received amount measured as the wallet's STONK balance delta.
+- **TREASURY_CAPS (hard, code-level — `src/lib/launchpad/treasury-caps.ts`)**:
+  max **0.005 ETH per buy** · max **0.01 ETH per rolling 24h** · min **6h between
+  buys** · never below a **0.35 ETH treasury floor** · **3% slippage guard** ·
+  0.0005 ETH dust minimum. `settings.autoTreasuryOps` (default ON) arms the
+  scheduler tick; the caps apply to every path including manual calls.
+- **Charter guard in code**: the buy path refuses any token that is not the verified
+  $STONKBROKER address AND refuses anything LAURA launched herself — own-token buys
+  are wash trading (charter rule 3) and are blocked before simulation.
+
 ## Launcher branding API (stonkbrokers.cash)
 
 - **Upload logo**: `POST /api/launcher/token-image` with raw image bytes

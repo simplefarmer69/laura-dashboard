@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { askLaura } from "@/lib/chat/laura";
 import { botsStatus } from "@/lib/chat/status";
 
@@ -12,6 +13,8 @@ const bodySchema = z.object({
 
 /** Operator chat with LAURA — the same brain the Discord/Telegram bots use. */
 export async function POST(req: NextRequest) {
+  /* Chat costs Anthropic tokens per message; the public viewer stays silent. */
+  if (isViewerMode()) return viewerForbidden();
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   const out = await askLaura({
