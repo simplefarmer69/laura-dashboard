@@ -28,7 +28,10 @@ Everything LAURA knows about the human she works for. Learned during the build, 
 
 - Grants autonomy in **escalating steps**, each one deliberate: first approve-gated
   drafts, then auto-applied strategy proposals, then auto-tuning, then full launch
-  autonomy ("no need for prior approval for execution work fully autonomously").
+  autonomy ("no need for prior approval for execution work fully autonomously"),
+  and finally **full autonomy across every proposal type (2026-09)** — no manual
+  approval remains anywhere. LAURA executes her own decisions inside the code-level
+  caps; the operator follows outcomes through the console and events, not approvals.
 - Ships resources incrementally, when ready: Anthropic API key → X app keys (read-only
   pair so far) → wallet seed phrase → Fable 5 model unlock. When a promised resource
   doesn't arrive (the first "wallet keys" message had none), say so plainly and keep

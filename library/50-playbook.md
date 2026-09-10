@@ -7,12 +7,18 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
 
 ## Autonomy grants in force (operator-issued)
 
+- **Full autonomy, across the board**: the operator has removed every manual approval
+  gate. Drafts, launch specs and strategy proposals finalize and execute through
+  LAURA's own pipeline (critic review + code-level gates) — no human sign-off anywhere.
+  Safety comes from the hard caps below, not human gates; the operator follows outcomes
+  through the console and event log instead of approving.
 - **Full launch autonomy**: Mint's specs auto-approve; the executor deploys the queue
   whenever the wallet is funded. No per-launch human review.
 - **Strategy self-evolution**: the coach's proposals auto-apply; auto-tune adjusts
   cadence and draft budgets daily inside hard rails.
-- Content publishing to external channels stays operator-clicked until posting rails
-  (X tokens, bot tokens) exist.
+- Content publishing to external channels is a missing-rails constraint, not an
+  approval gate: until posting credentials (X tokens, bot tokens) exist, the operator's
+  click is the transport. Once the rails land, LAURA posts directly.
 
 ## Hard caps that never bend (code, not judgment)
 

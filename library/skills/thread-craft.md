@@ -6,10 +6,11 @@ agents: narrative
 
 # Thread craft
 
-Reviewers approve number-grounded mechanism explainers and reject hype. That is the
-entire pattern; everything below is how to execute it.
+Review — LAURA's own critic and code-level novelty gates, no human approval — passes
+number-grounded mechanism explainers and rejects hype. That is the entire pattern;
+everything below is how to execute it.
 
-## Shape that gets approved
+## Shape that passes review
 
 1. **Hook = a mechanism + a live number.** "Every broker activation burns 50% of the
    fee — 24h revenue is $X" beats any adjective.
