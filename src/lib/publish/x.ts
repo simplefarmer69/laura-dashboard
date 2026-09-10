@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+import { checkXGuards, recordXPost, type XGuardVerdict } from "@/lib/publish/x-guard";
 
 /**
  * X (Twitter) publishing rail. Posting uses OAuth 1.0a user context, signed
@@ -109,13 +110,43 @@ export interface PublishResult {
   tweetIds: string[];
 }
 
-/** Posts a draft as a tweet or reply-chained thread. Throws if creds missing. */
+export interface DryRunResult {
+  /** Whether a real publish would go through right now (creds + guards). */
+  wouldPost: boolean;
+  status: XStatus;
+  guard: XGuardVerdict;
+  /** The exact tweet texts a real publish would send, in order. */
+  tweets: string[];
+}
+
+/**
+ * Everything publishToX does except the network call: creds check, shared
+ * account guard verdict and the exact split. Never posts, never mutates the
+ * post log. Use this to smoke-test the pipeline before the first live post.
+ */
+export async function dryRunToX(body: string, isThread: boolean): Promise<DryRunResult> {
+  const status = xStatus();
+  const guard = await checkXGuards(body);
+  const tweets = splitForThread(body, isThread);
+  return { wouldPost: status.ready && guard.ok && tweets.length > 0, status, guard, tweets };
+}
+
+/**
+ * Posts a draft as a tweet or reply-chained thread. Throws if creds are
+ * missing or the shared-account guards (rate caps, duplicate memory,
+ * self-interaction) refuse the post. Successful posts land in the local post
+ * log so the guards see them.
+ */
 export async function publishToX(body: string, isThread: boolean): Promise<PublishResult> {
   const status = xStatus();
   if (!status.ready) {
     throw new Error(
       `X posting not configured. Missing: ${status.missing.join(", ")}. The bearer token alone is read-only — add the Access Token and Secret (Read & Write) from the X developer portal.`,
     );
+  }
+  const guard = await checkXGuards(body);
+  if (!guard.ok) {
+    throw new Error(`X guard refused the post: ${guard.reasons.join("; ")}`);
   }
   const tweets = splitForThread(body, isThread);
   if (tweets.length === 0) throw new Error("Nothing to post: draft body is empty");
@@ -126,5 +157,7 @@ export async function publishToX(body: string, isThread: boolean): Promise<Publi
     ids.push(posted.id);
     if (tweets.length > 1) await new Promise((r) => setTimeout(r, 1_200));
   }
-  return { url: `https://x.com/i/web/status/${ids[0]}`, tweetIds: ids };
+  const url = `https://x.com/i/web/status/${ids[0]}`;
+  await recordXPost({ url, firstTweetId: ids[0], text: body });
+  return { url, tweetIds: ids };
 }

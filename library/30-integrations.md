@@ -240,8 +240,30 @@ graded lever; Smart LP deposits grow it.
 
 - `POST https://api.x.com/2/tweets` signed OAuth 1.0a HMAC-SHA1 (no SDK; `node:crypto`).
   Threads = reply chains, 280-char sentence-boundary splits, 1.2s between posts.
-- App key/secret + bearer are on file; **bearer is read-only** — posting waits on the
-  operator's access token pair (Read & Write).
+- App key/secret + bearer are on file; **bearer is read-only** — posting needs the
+  operator's access token pair (Read & Write) in env. `runtime.x` on `/api/state`
+  reports readiness (`xStatus()`), and env changes only become visible after a
+  process restart.
+- **We post as @AiAgentkAia** (user id 1864328060327350278). The operator approved
+  this account for the swarm, and it is SHARED: the operator's automated NFT sales
+  bot tweets sales from the same account on its own schedule. Behave like a good
+  roommate. Our posts complement the sales ticker, they never drown it, and we
+  NEVER reply to, quote or link the account's own tweets as if they came from
+  another party (a sales-bot tweet is us, not a stranger).
+- **Charter applies in full on X**: identify as an AI when relevant, no promises of
+  returns, no sockpuppets, no pretending the sales bot is independent validation.
+- **Shared-account guardrails are enforced in code** (`src/lib/publish/x-guard.ts`),
+  not just etiquette: minimum 30 minutes between swarm posts and max 6 per rolling
+  24h (env-tunable via `X_MIN_MINUTES_BETWEEN_POSTS` / `X_MAX_POSTS_PER_DAY`; one
+  publish = one post even for threads), a local memory of recent posts
+  (`data/x-post-log.json`) that refuses near-duplicates, and a block on any body
+  mentioning or linking @AiAgentkAia itself. Guard refusals return 429 from the
+  publish route; write X drafts knowing a slow, non-repetitive cadence is the rail.
+- **Smoke test before going live**: `POST /api/drafts/<id>/publish?dry=1` runs the
+  full pipeline (creds check, guard verdict, exact tweet split) without posting.
+  The FIRST real post after keys land must be a single controlled test from the
+  persona (announcing the swarm coming online is fine), verified live on the
+  timeline before the normal pipeline takes over under the caps.
 
 ## LLM
 

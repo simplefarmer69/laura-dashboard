@@ -1,12 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
-import { publishToX, xStatus } from "@/lib/publish/x";
+import { dryRunToX, publishToX, xStatus } from "@/lib/publish/x";
+import { checkXGuards } from "@/lib/publish/x-guard";
 
 export const dynamic = "force-dynamic";
 
-/** Publishes an operator-approved X draft for real through the X API. */
-export async function POST(_req: NextRequest, ctx: RouteContext<"/api/drafts/[id]/publish">) {
+/**
+ * Publishes an operator-approved X draft for real through the X API.
+ * With `?dry=1` it returns the creds check, shared-account guard verdict and
+ * the exact tweet split without posting or mutating anything — the smoke-test
+ * path for the shared @AiAgentkAia account.
+ */
+export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]/publish">) {
   if (isViewerMode()) return viewerForbidden();
   const { id } = await ctx.params;
   const state = await loadState();
@@ -19,11 +25,27 @@ export async function POST(_req: NextRequest, ctx: RouteContext<"/api/drafts/[id
       { error: `Automatic publishing supports channel "X" for now; this draft targets ${draft.channel}. Use Mark published after posting manually.` },
       { status: 409 },
     );
+
+  if (req.nextUrl.searchParams.get("dry")) {
+    const result = await dryRunToX(draft.body, draft.kind === "thread");
+    return NextResponse.json({ dryRun: true, draftId: draft.id, ...result });
+  }
+
   const status = xStatus();
   if (!status.ready)
     return NextResponse.json(
       { error: `X posting not configured. Missing: ${status.missing.join(", ")} (Access Token + Secret must have Read & Write).` },
       { status: 409 },
+    );
+
+  /* Shared-account guards (rate caps, duplicate memory, self-interaction) are
+     checked here first so a refused click returns 429 without logging an error
+     event; publishToX re-checks as defense in depth. */
+  const guard = await checkXGuards(draft.body);
+  if (!guard.ok)
+    return NextResponse.json(
+      { error: `X guard refused the post: ${guard.reasons.join("; ")}`, guard },
+      { status: 429 },
     );
 
   try {
