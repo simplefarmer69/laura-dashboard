@@ -3,7 +3,7 @@ import { isViewerMode } from "@/lib/viewer/mode";
 import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
 import { LAUNCHPAD } from "@/lib/launchpad/contracts";
-import { LAUNCH_CAPS, launcherGrid, padState, walletStatus } from "@/lib/launchpad/service";
+import { LAUNCH_CAPS, allPadStates, launcherGrid, walletStatus } from "@/lib/launchpad/service";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +19,17 @@ export async function GET() {
     return NextResponse.json(launchpad, { headers: { "cache-control": "no-store" } });
   }
 
-  const [wallet, pad, grid, state] = await Promise.all([
+  const [wallet, pads, grid, state] = await Promise.all([
     walletStatus(),
-    padState("weth").catch(() => null),
+    allPadStates().catch(() => []),
     launcherGrid("new", 10).catch(() => []),
     loadState(),
   ]);
   return NextResponse.json({
     wallet,
-    pad,
+    /* `pad` kept as the WETH lane for older published viewer snapshots. */
+    pad: pads.find((p) => p.lane === "weth") ?? null,
+    pads,
     grid,
     caps: LAUNCH_CAPS,
     explorer: LAUNCHPAD.explorer,

@@ -7,7 +7,7 @@ import { xStatus } from "@/lib/publish/x";
 import { loadNotebook } from "@/lib/swarm/notebook";
 import { loadSkills } from "@/lib/swarm/skills";
 import { LAUNCHPAD } from "@/lib/launchpad/contracts";
-import { LAUNCH_CAPS, launcherGrid, padState, walletStatus } from "@/lib/launchpad/service";
+import { LAUNCH_CAPS, allPadStates, launcherGrid, walletStatus } from "@/lib/launchpad/service";
 import type { Settings, SwarmState } from "@/lib/types";
 
 /**
@@ -54,11 +54,11 @@ function pickSettings(settings: Settings): Partial<Settings> {
 export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
   const state = await loadState();
   const model = resolveModel(state.settings.llmModel);
-  const [notebook, skills, wallet, pad, grid] = await Promise.all([
+  const [notebook, skills, wallet, pads, grid] = await Promise.all([
     loadNotebook(),
     loadSkills(),
     walletStatus().catch(() => null),
-    padState("weth").catch(() => null),
+    allPadStates().catch(() => []),
     launcherGrid("new", 10).catch(() => []),
   ]);
   const xs = xStatus();
@@ -104,7 +104,9 @@ export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
        never touches the RPC or wallet code. All of it is on-chain public. */
     launchpad: {
       wallet,
-      pad,
+      /* `pad` kept as the WETH lane so older viewer builds keep rendering. */
+      pad: pads.find((p) => p.lane === "weth") ?? null,
+      pads,
       grid,
       caps: LAUNCH_CAPS,
       explorer: LAUNCHPAD.explorer,

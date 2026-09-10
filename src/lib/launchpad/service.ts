@@ -7,7 +7,8 @@ import {
   parseEventLogs,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ERC20_MIN_ABI, LAUNCHPAD, PAD_ABI, ROBINHOOD_CHAIN, type PadLane } from "@/lib/launchpad/contracts";
+import { ERC20_MIN_ABI, LAUNCHPAD, PAD_ABI, PAD_LANE_KEYS, ROBINHOOD_CHAIN, type PadLane } from "@/lib/launchpad/contracts";
+import { LANE_INFO, laneClosedReason } from "@/lib/launchpad/lanes";
 import PAD_FULL_ABI_JSON from "@/lib/launchpad/StonkSafeLaunchpadV2.abi.json";
 import type { Abi } from "viem";
 import type { LaunchProposal } from "@/lib/types";
@@ -86,6 +87,58 @@ export async function padState(lane: PadLane): Promise<PadState> {
       maxOpenSecs: Number(bounds[6]),
     },
   };
+}
+
+/** PadState plus the lane facts the console and viewer render per lane. */
+export interface LanePadState extends PadState {
+  quoteSymbol: string;
+  kind: "crypto" | "stock";
+  /** Null when the lane can deploy right now (stock lanes close on weekends). */
+  closedReason: string | null;
+}
+
+/* Batched transport for the all-lanes sweep (8 pads x 3 views): this RPC
+   rate-limits bursts, and these reads back the console/viewer, not deploys. */
+const batchedClient = createPublicClient({
+  chain: ROBINHOOD_CHAIN,
+  transport: http(undefined, { batch: true, retryCount: 3, retryDelay: 600 }),
+});
+
+async function lanePadState(lane: PadLane): Promise<LanePadState> {
+  const address = LAUNCHPAD.pads[lane] as `0x${string}`;
+  const [fee, count, bounds] = await Promise.all([
+    batchedClient.readContract({ address, abi: PAD_ABI, functionName: "launchFeeWei" }),
+    batchedClient.readContract({ address, abi: PAD_ABI, functionName: "launchCount" }),
+    batchedClient.readContract({ address, abi: PAD_ABI, functionName: "bounds" }),
+  ]);
+  return {
+    lane,
+    address,
+    launchFeeWei: fee.toString(),
+    launchCount: Number(count),
+    bounds: {
+      minStartMcapUsd: Number(bounds[0]) / 1e8,
+      maxStartMcapUsd: Number(bounds[1]) / 1e8,
+      minGradMcapUsd: Number(bounds[2]) / 1e8,
+      maxGradMcapUsd: Number(bounds[3]) / 1e8,
+      maxStartTaxBps: Number(bounds[4]),
+      minBufferSecs: Number(bounds[5]),
+      maxOpenSecs: Number(bounds[6]),
+    },
+    quoteSymbol: LANE_INFO[lane].quote,
+    kind: LANE_INFO[lane].kind,
+    closedReason: laneClosedReason(lane),
+  };
+}
+
+/**
+ * Live state of every quote-lane pad, for the console and viewer snapshot.
+ * Lanes whose reads fail are dropped rather than failing the sweep — the
+ * console renders what answered and the deploy path re-reads its own pad.
+ */
+export async function allPadStates(): Promise<LanePadState[]> {
+  const settled = await Promise.allSettled(PAD_LANE_KEYS.map((lane) => lanePadState(lane)));
+  return settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
 }
 
 /** Validates a proposal against the pad's live on-chain bounds. Returns human-readable problems. */

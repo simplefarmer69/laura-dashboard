@@ -11,14 +11,26 @@ import { EarningsPanel } from "@/components/console/earnings";
 import { ago, usd } from "@/components/console/format";
 import type { LaunchProposal, LaunchStatus } from "@/lib/types";
 
+interface PadInfo {
+  address: string;
+  launchFeeWei: string;
+  launchCount: number;
+  bounds: { minStartMcapUsd: number; maxStartMcapUsd: number; minGradMcapUsd: number; maxGradMcapUsd: number };
+}
+
+interface LanePadInfo extends PadInfo {
+  lane: string;
+  quoteSymbol: string;
+  kind: "crypto" | "stock";
+  closedReason: string | null;
+}
+
 interface LaunchpadInfo {
   wallet: { configured: boolean; address: string | null; balanceEth: number | null; funded: boolean };
-  pad: {
-    address: string;
-    launchFeeWei: string;
-    launchCount: number;
-    bounds: { minStartMcapUsd: number; maxStartMcapUsd: number; minGradMcapUsd: number; maxGradMcapUsd: number };
-  } | null;
+  /** WETH lane only — kept for older published snapshots. */
+  pad: PadInfo | null;
+  /** Every quote-lane pad (weth, stonk, usdg + weekday stock lanes). */
+  pads?: LanePadInfo[];
   grid: {
     token: string;
     name: string;
@@ -108,14 +120,39 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Rocket className="size-4 text-primary" /> Smart Launch V2 pad (WETH lane)
+              <Rocket className="size-4 text-primary" /> Smart Launch V2 pads (quote lanes)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {info?.pad ? (
+            {info?.pads && info.pads.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                  {info.pads.map((p) => (
+                    <a
+                      key={p.lane}
+                      className="flex items-baseline justify-between gap-2 hover:underline"
+                      href={`${info.explorer}/address/${p.address}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={p.closedReason ?? `${p.quoteSymbol}-quoted lane · ${p.address}`}
+                    >
+                      <span className="font-mono uppercase">{p.lane}</span>
+                      <span className={p.closedReason ? "text-[var(--sb-gold)]" : "text-muted-foreground"}>
+                        {p.launchCount} · {p.closedReason ? "closed" : "open"}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+                <p className="pt-1 text-xs text-muted-foreground">
+                  Mint picks the lane per launch; stock lanes close on weekends. Bounds (all lanes):
+                  start {usd(info.pads[0].bounds.minStartMcapUsd)}–{usd(info.pads[0].bounds.maxStartMcapUsd)},
+                  graduation {usd(info.pads[0].bounds.minGradMcapUsd)}–{usd(info.pads[0].bounds.maxGradMcapUsd)}
+                </p>
+              </>
+            ) : info?.pad ? (
               <>
                 <p>
-                  <span className="text-muted-foreground">Launches on pad </span>
+                  <span className="text-muted-foreground">Launches on WETH pad </span>
                   <span className="font-mono">{info.pad.launchCount}</span>
                   <span className="text-muted-foreground"> · fee </span>
                   <span className="font-mono">{(Number(info.pad.launchFeeWei) / 1e18).toFixed(4)} ETH</span>
