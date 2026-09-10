@@ -58,6 +58,28 @@ holds the durable ones from the build itself.
   on it.
 - `tsx -e` can't do top-level await or relative imports from /tmp; use a script file
   in the repo with absolute imports and `--tsconfig`.
+- **The host VM sleeps when nobody's watching — and no in-guest code can prevent it.**
+  On 2026-09-10 the swarm went silent 02:17→07:41 UTC. It was NOT a scheduler bug:
+  `instrumentation.ts register()` starts the loop at server boot (every "autopilot
+  online" in the logs lands right after "Ready", before any request), and earnings
+  ticks ran every ~10 min right up to 02:16:51. Then the hypervisor froze the whole VM
+  (kernel: `random: crng reseeded due to virtual machine fork` on resume at 07:40:58;
+  `/proc/uptime` hours short of wall time). While frozen, timers, HTTP handling and
+  even a would-be keepalive curl loop are all equally dead — options like a
+  "swarm-heartbeat" tmux session or a standalone worker process live inside the same
+  frozen guest and change nothing. The durable posture is therefore: (1) keep the
+  in-process scheduler started from `instrumentation.ts` (works in dev and prod, no
+  HTTP needed while the VM is awake); (2) make cadence wall-clock anchored so the
+  first tick after resume immediately runs anything overdue (cycle, grade, earnings —
+  verified: the 07:41:24 tick fired the overdue cycle unprompted); (3) log a per-tick
+  heartbeat and an explicit "resumed after Xm (host suspended)" line so future gaps
+  are diagnosable from scrollback alone. True 24/7 ticking requires an always-on host,
+  which is outside the repo's control.
+- The scheduler's executor gate must include every kind of unfinished launch work.
+  It originally ran the executor only for `approved` specs and deployed-but-unarmed
+  launches, so once everything was armed the verify pass never ran and SPEAKS (#278)
+  sat with `verifiedAt` unset for hours. Gate now also fires on
+  deployed+armed+unverified.
 
 ## Deep memory (LAURA's storage architecture)
 
