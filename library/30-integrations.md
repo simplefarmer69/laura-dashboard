@@ -211,6 +211,31 @@ the stonkbrokers.cash `/exchange` client bundle, then verified on-chain:
 - Batch logo map: `GET /api/safe-launch/token-logo?tokens=<a>,<b>`.
 - Also available: `/api/safe-launch/stats`, `/leaderboard`, `/mcap-series`, `/buys`.
 
+## BrokerTools (brokertools.info, verified 2026-09-10)
+
+BrokerTools is an independent explorer and data terminal for Robinhood Chain
+(their words: "high context explorer and data terminal"). It indexes Stonklauncher
+tokens, StonkBrokers NFTs, transactions and addresses. Public, keyless, read only.
+Two JSON endpoints are wired into the swarm:
+
+- `GET https://brokertools.info/api/firehose` returns the ~120 most recent
+  chain wide DEX trades (token, symbol, side, usd, priceUsd, venue). The intel
+  digest condenses this into a tape line every cycle: trade count, window span,
+  buy vs sell USD flow, most traded symbols, and $STONKBROKER's own trades with
+  net flow. Read it as "what is the chain trading right now".
+- `GET https://brokertools.info/api/launches?offset=0` returns the Stonklauncher
+  index (total launches tracked plus rows sorted by mcap with buyers and phase).
+  The digest carries the total and the top launches by mcap. Use it to sanity
+  check launch concepts against what is actually holding a market cap.
+- The dashboard proxy is `/api/feeds/brokertools` (2 minute cache, last good
+  fallback). Search endpoints (`/api/suggest?q=`) and per token tape
+  (`/api/index/<token>/firehose`) exist but are not wired.
+
+Every agent also receives a live TVL line each cycle from the same intel pass:
+protocol TVL on Robinhood Chain from DefiLlama (slug `stonkbrokers`, with 24h
+and 7d change) plus the Smart LP vault fleet TVL from the lens read. TVL is a
+graded lever; Smart LP deposits grow it.
+
 ## X (Twitter)
 
 - `POST https://api.x.com/2/tweets` signed OAuth 1.0a HMAC-SHA1 (no SDK; `node:crypto`).

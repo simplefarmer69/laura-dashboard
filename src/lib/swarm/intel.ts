@@ -1,4 +1,15 @@
-import type { IntelSnapshot, IntelTweet, LaunchRadar, LaunchRadarToken, Settings, XIntel } from "@/lib/types";
+import type {
+  BrokerToolsIntel,
+  BrokerToolsLaunch,
+  BrokerToolsSymbolFlow,
+  IntelSnapshot,
+  IntelTvl,
+  IntelTweet,
+  LaunchRadar,
+  LaunchRadarToken,
+  Settings,
+  XIntel,
+} from "@/lib/types";
 
 /**
  * LAURA's live-internet intelligence layer: real reads from the open internet
@@ -68,6 +79,8 @@ declare global {
         eth?: Cache<{ usd: number; change24hPct: number }>;
         blockscout?: Cache<{ holders: number | null; transfers: number | null }>;
         radar?: Cache<LaunchRadar>;
+        tvl?: Cache<IntelTvl>;
+        brokerTools?: Cache<BrokerToolsIntel>;
       }
     | undefined;
 }
@@ -86,6 +99,9 @@ const TRACKED_IDS_TTL_MS = 60 * 60_000;
 const ETH_TTL_MS = 10 * 60_000;
 const BLOCKSCOUT_TTL_MS = 30 * 60_000;
 const RADAR_TTL_MS = 15 * 60_000;
+/** DefiLlama refreshes roughly hourly; the Smart LP lens read is one eth_call. */
+const TVL_TTL_MS = 10 * 60_000;
+const BROKERTOOLS_TTL_MS = 10 * 60_000;
 
 async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
   const res = await fetch(url, {
@@ -364,6 +380,179 @@ export async function fetchLaunchRadar(settings: Settings): Promise<LaunchRadar>
   return value;
 }
 
+/* ----------------------- live TVL (DefiLlama + Smart LP) ----------------------- */
+
+/** Dashboard feed base, same convention as worldfeeds.ts (heavy caching server-side). */
+function feedsBase(): string {
+  return (process.env.LAURA_FEEDS_BASE || "https://laura.stonkbrokers.io").replace(/\/$/, "");
+}
+
+interface LlamaProtocolPayload {
+  currentChainTvls?: Record<string, number>;
+  tvl?: Array<{ date: number; totalLiquidityUSD: number }>;
+}
+
+interface SmartLpFeedPayload {
+  ok?: boolean;
+  fleet?: { vaults?: number; tvlUsd?: number };
+}
+
+/** Percent change from the series point closest to `hoursAgo` to the latest point. */
+function seriesChangePct(
+  series: Array<{ date: number; totalLiquidityUSD: number }>,
+  hoursAgo: number,
+): number | null {
+  if (series.length < 2) return null;
+  const last = series[series.length - 1];
+  const target = last.date - hoursAgo * 3600;
+  let prior = series[0];
+  for (const p of series) {
+    if (p.date <= target) prior = p;
+    else break;
+  }
+  if (prior.date >= last.date || prior.totalLiquidityUSD <= 0) return null;
+  return ((last.totalLiquidityUSD - prior.totalLiquidityUSD) / prior.totalLiquidityUSD) * 100;
+}
+
+/**
+ * Live TVL for the graded protocol: the DefiLlama listing (protocol TVL on
+ * Robinhood Chain with 24h/7d change from the daily series, staking excluded,
+ * same exclusions as the grader) plus the Smart LP vault fleet TVL read from
+ * the dashboard's own smartlp feed (one lens eth_call server-side). Either
+ * half can fail independently; only a double miss throws.
+ *
+ * Exported for direct smoke-testing; cycles reach it through collectIntel.
+ */
+export async function fetchTvl(settings: Settings): Promise<IntelTvl> {
+  const c = caches();
+  if (c.tvl && Date.now() - c.tvl.at < TVL_TTL_MS) return c.tvl.value;
+  const [llama, smartlp] = await Promise.allSettled([
+    getJson<LlamaProtocolPayload>(`https://api.llama.fi/protocol/${settings.llamaSlug}`),
+    getJson<SmartLpFeedPayload>(`${feedsBase()}/api/feeds/smartlp`),
+  ]);
+  if (llama.status === "rejected" && smartlp.status === "rejected") {
+    throw new Error(`DefiLlama: ${String(llama.reason)}; smartlp feed: ${String(smartlp.reason)}`);
+  }
+  let protocolTvlUsd: number | null = null;
+  let change24hPct: number | null = null;
+  let change7dPct: number | null = null;
+  if (llama.status === "fulfilled") {
+    protocolTvlUsd = Object.entries(llama.value.currentChainTvls ?? {})
+      .filter(([k]) => !k.includes("-") && k !== "staking" && k !== "borrowed" && k !== "pool2")
+      .reduce((s, [, v]) => s + v, 0);
+    const series = (llama.value.tvl ?? []).filter(
+      (p) => p && Number.isFinite(p.date) && Number.isFinite(p.totalLiquidityUSD),
+    );
+    change24hPct = seriesChangePct(series, 24);
+    change7dPct = seriesChangePct(series, 24 * 7);
+  }
+  const fleet = smartlp.status === "fulfilled" ? smartlp.value.fleet : undefined;
+  const value: IntelTvl = {
+    fetchedAt: Date.now(),
+    protocolTvlUsd,
+    change24hPct,
+    change7dPct,
+    smartLpTvlUsd: typeof fleet?.tvlUsd === "number" ? fleet.tvlUsd : null,
+    smartLpVaults: typeof fleet?.vaults === "number" ? fleet.vaults : null,
+  };
+  c.tvl = { at: Date.now(), value };
+  return value;
+}
+
+/* ------------------- BrokerTools terminal (brokertools.info) ------------------- */
+
+const BROKERTOOLS_BASE = "https://brokertools.info";
+
+interface BrokerToolsTapeRow {
+  token?: string;
+  symbol?: string;
+  ts?: number;
+  side?: string;
+  usd?: number;
+}
+
+interface BrokerToolsLaunchRow {
+  symbol?: string;
+  mcapUsd?: number;
+  buyers?: number;
+  phase?: string;
+}
+
+/**
+ * READ-ONLY reads from brokertools.info, an independent explorer/indexer for
+ * Robinhood Chain ("high context explorer and data terminal", public and
+ * unkeyed). Two endpoints verified live 2026-09-10:
+ *   GET /api/firehose            - the ~120 most recent chain-wide DEX trades
+ *                                  (token, symbol, side, usd, venue)
+ *   GET /api/launches?offset=0   - Stonklauncher index (total + rows sorted
+ *                                  by mcap: symbol, mcapUsd, buyers, phase)
+ * Aggregated into compact flow stats here; either endpoint can fail
+ * independently and only a double miss throws.
+ *
+ * Exported for direct smoke-testing; cycles reach it through collectIntel.
+ */
+export async function fetchBrokerTools(settings: Settings): Promise<BrokerToolsIntel> {
+  const c = caches();
+  if (c.brokerTools && Date.now() - c.brokerTools.at < BROKERTOOLS_TTL_MS) return c.brokerTools.value;
+  const [tape, launches] = await Promise.allSettled([
+    getJson<{ rows?: BrokerToolsTapeRow[] }>(`${BROKERTOOLS_BASE}/api/firehose`),
+    getJson<{ total?: number; rows?: BrokerToolsLaunchRow[] }>(
+      `${BROKERTOOLS_BASE}/api/launches?offset=0`,
+    ),
+  ]);
+  if (tape.status === "rejected" && launches.status === "rejected") {
+    throw new Error(`firehose: ${String(tape.reason)}; launches: ${String(launches.reason)}`);
+  }
+
+  const rows = tape.status === "fulfilled" ? (tape.value.rows ?? []) : [];
+  const mission = settings.tokenAddress.toLowerCase();
+  let buyUsd = 0;
+  let sellUsd = 0;
+  let missionTrades = 0;
+  let missionNetUsd = 0;
+  let oldestTs: number | null = null;
+  const bySymbol = new Map<string, BrokerToolsSymbolFlow>();
+  for (const r of rows) {
+    const usd = typeof r.usd === "number" && Number.isFinite(r.usd) ? r.usd : 0;
+    if (r.side === "buy") buyUsd += usd;
+    else if (r.side === "sell") sellUsd += usd;
+    if (typeof r.ts === "number" && (oldestTs === null || r.ts < oldestTs)) oldestTs = r.ts;
+    const sym = r.symbol || "?";
+    const flow = bySymbol.get(sym) ?? { symbol: sym, trades: 0, usd: 0 };
+    flow.trades += 1;
+    flow.usd += usd;
+    bySymbol.set(sym, flow);
+    if ((r.token ?? "").toLowerCase() === mission) {
+      missionTrades += 1;
+      missionNetUsd += r.side === "sell" ? -usd : usd;
+    }
+  }
+  const topSymbols = [...bySymbol.values()].sort((a, b) => b.usd - a.usd).slice(0, 3);
+
+  const launchRows = launches.status === "fulfilled" ? (launches.value.rows ?? []) : [];
+  const topLaunches: BrokerToolsLaunch[] = launchRows.slice(0, 3).map((r) => ({
+    symbol: r.symbol ?? "?",
+    mcapUsd: typeof r.mcapUsd === "number" && Number.isFinite(r.mcapUsd) ? r.mcapUsd : null,
+    buyers: typeof r.buyers === "number" ? r.buyers : null,
+    phase: r.phase ?? null,
+  }));
+
+  const value: BrokerToolsIntel = {
+    fetchedAt: Date.now(),
+    tapeTrades: rows.length,
+    tapeSpanMin: oldestTs !== null ? Math.max(1, Math.round((Date.now() / 1000 - oldestTs) / 60)) : null,
+    buyUsd: Math.round(buyUsd),
+    sellUsd: Math.round(sellUsd),
+    topSymbols,
+    missionTrades,
+    missionNetUsd: Math.round(missionNetUsd),
+    launchesTotal: launches.status === "fulfilled" ? (launches.value.total ?? null) : null,
+    topLaunches,
+  };
+  c.brokerTools = { at: Date.now(), value };
+  return value;
+}
+
 /**
  * Gathers the cycle's live-internet snapshot. Never throws: every source is
  * settled independently; failures become warnings and null fields, with the
@@ -374,15 +563,18 @@ export async function collectIntel(
   settings: Settings,
   prev: IntelSnapshot | null,
 ): Promise<IntelSnapshot> {
-  const [search, leaders, tracked, catalysts, eth, chain, radar] = await Promise.allSettled([
-    fetchXMentions(),
-    fetchXLeaders(),
-    fetchXTracked(),
-    fetchXCatalysts(),
-    fetchEth(),
-    fetchBlockscout(settings),
-    fetchLaunchRadar(settings),
-  ]);
+  const [search, leaders, tracked, catalysts, eth, chain, radar, tvl, brokerTools] =
+    await Promise.allSettled([
+      fetchXMentions(),
+      fetchXLeaders(),
+      fetchXTracked(),
+      fetchXCatalysts(),
+      fetchEth(),
+      fetchBlockscout(settings),
+      fetchLaunchRadar(settings),
+      fetchTvl(settings),
+      fetchBrokerTools(settings),
+    ]);
   const sources: string[] = [];
   const warnings: string[] = [];
   const xNotes: string[] = [];
@@ -463,6 +655,22 @@ export async function collectIntel(
     warnings.push(`DexScreener launch radar: ${String(radar.reason)}`);
   }
 
+  let liveTvl: IntelTvl | null = null;
+  if (tvl.status === "fulfilled") {
+    sources.push("defillama-tvl");
+    liveTvl = tvl.value;
+  } else {
+    warnings.push(`TVL (DefiLlama/Smart LP): ${String(tvl.reason)}`);
+  }
+
+  let brokerToolsIntel: BrokerToolsIntel | null = null;
+  if (brokerTools.status === "fulfilled") {
+    sources.push("brokertools");
+    brokerToolsIntel = brokerTools.value;
+  } else {
+    warnings.push(`BrokerTools: ${String(brokerTools.reason)}`);
+  }
+
   return {
     ts: Date.now(),
     x,
@@ -471,6 +679,8 @@ export async function collectIntel(
     holderCount: holders,
     tokenTransferCount: transfers,
     launchRadar,
+    tvl: liveTvl,
+    brokerTools: brokerToolsIntel,
     sources,
     warnings,
   };
@@ -502,6 +712,53 @@ function radarPct(pct: number | null): string {
   return `${pct >= 0 ? "+" : ""}${Math.abs(pct) >= 100 ? pct.toFixed(0) : pct.toFixed(1)}%`;
 }
 
+/** Renders the live TVL line of the digest; "" when no TVL data exists. */
+export function tvlDigest(tvl: IntelTvl | null | undefined): string {
+  if (!tvl || (tvl.protocolTvlUsd === null && tvl.smartLpTvlUsd === null)) return "";
+  const parts: string[] = [];
+  if (tvl.protocolTvlUsd !== null) {
+    const changes = [
+      tvl.change24hPct !== null ? `${radarPct(tvl.change24hPct)} 24h` : null,
+      tvl.change7dPct !== null ? `${radarPct(tvl.change7dPct)} 7d` : null,
+    ].filter(Boolean);
+    parts.push(
+      `protocol TVL ${compactUsd(tvl.protocolTvlUsd)}${changes.length ? ` (${changes.join(", ")})` : ""}`,
+    );
+  }
+  if (tvl.smartLpTvlUsd !== null) {
+    parts.push(
+      `Smart LP vault fleet ${compactUsd(tvl.smartLpTvlUsd)}${tvl.smartLpVaults !== null ? ` across ${tvl.smartLpVaults} vaults` : ""}`,
+    );
+  }
+  return `TVL LIVE (DeFiLlama + Smart LP lens): ${parts.join("; ")}. TVL is a graded lever; Smart LP deposits grow it.`;
+}
+
+/** Renders the BrokerTools section of the digest; "" when no data exists. */
+export function brokerToolsDigest(bt: BrokerToolsIntel | null | undefined): string {
+  if (!bt || (bt.tapeTrades === 0 && bt.launchesTotal === null)) return "";
+  const lines = ["BROKERTOOLS TERMINAL (brokertools.info, independent Robinhood Chain indexer, live):"];
+  if (bt.tapeTrades > 0) {
+    const span = bt.tapeSpanMin !== null ? ` in ~${bt.tapeSpanMin}m` : "";
+    const tops = bt.topSymbols.map((s) => `${s.symbol} ${compactUsd(s.usd)}/${s.trades}tx`).join(", ");
+    const mission =
+      bt.missionTrades > 0
+        ? ` $STONKBROKER ${bt.missionTrades} trades, net ${bt.missionNetUsd >= 0 ? "+" : "-"}${compactUsd(Math.abs(bt.missionNetUsd))}.`
+        : " No $STONKBROKER trades in this tape window.";
+    lines.push(
+      `- Chain DEX tape: ${bt.tapeTrades} trades${span}, buys ${compactUsd(bt.buyUsd)} vs sells ${compactUsd(bt.sellUsd)}; most traded ${tops}.${mission}`,
+    );
+  }
+  if (bt.launchesTotal !== null) {
+    const tops = bt.topLaunches
+      .map((l) => `${l.symbol} ${compactUsd(l.mcapUsd)}${l.phase ? ` ${l.phase}` : ""}`)
+      .join(", ");
+    lines.push(
+      `- Stonklauncher index: ${bt.launchesTotal} launches tracked${tops ? `; top mcap ${tops}` : ""}.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 /** Renders the launch-radar section of the digest; "" when no radar data exists. */
 export function launchRadarDigest(radar: LaunchRadar | null | undefined): string {
   if (!radar || (radar.tokens.length === 0 && !radar.mission)) return "";
@@ -524,10 +781,11 @@ export function launchRadarDigest(radar: LaunchRadar | null | undefined): string
 
 /**
  * Compact prompt injection: what the live internet says TODAY. The X/macro/
- * holder section keeps its ~1500-char budget; the launch-radar section is
- * appended after that cap with its own ~900-char budget so a verbose X day
- * can never crowd it out. History gives the mention/engagement trend so
- * influence reads as a delta, not a lone number.
+ * holder section keeps its ~1500-char budget; the live-TVL line (~320), the
+ * BrokerTools section (~600) and the launch-radar section (~900) are appended
+ * after that cap with their own budgets so a verbose X day can never crowd
+ * them out. History gives the mention/engagement trend so influence reads as
+ * a delta, not a lone number.
  */
 export function intelDigest(current: IntelSnapshot | null, history: IntelSnapshot[]): string {
   if (!current) return "Live internet intel unavailable this cycle (all fetchers failed).";
@@ -585,6 +843,8 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
   }
   if (current.warnings.length > 0) lines.push(`Intel warnings: ${current.warnings.join(" · ")}`);
   const main = lines.join("\n").slice(0, 1500);
+  const tvl = tvlDigest(current.tvl).slice(0, 320);
+  const brokerTools = brokerToolsDigest(current.brokerTools).slice(0, 600);
   const radar = launchRadarDigest(current.launchRadar).slice(0, 900);
-  return radar ? `${main}\n${radar}` : main;
+  return [main, tvl, brokerTools, radar].filter(Boolean).join("\n");
 }

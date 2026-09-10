@@ -92,9 +92,76 @@ export interface IntelSnapshot {
    * fetch failed this cycle.
    */
   launchRadar?: LaunchRadar | null;
+  /**
+   * Live TVL read: DefiLlama protocol TVL plus the Smart LP vault fleet.
+   * Optional: snapshots recorded before the fetcher existed lack the field;
+   * null when both sources failed this cycle.
+   */
+  tvl?: IntelTvl | null;
+  /**
+   * BrokerTools (brokertools.info) read: live Robinhood Chain DEX trade tape
+   * and Stonklauncher index from an independent indexer. Optional for the
+   * same archive-compatibility reason; null when the fetch failed.
+   */
+  brokerTools?: BrokerToolsIntel | null;
   /** Endpoints that returned real data this cycle. */
   sources: string[];
   warnings: string[];
+}
+
+/** Live TVL snapshot: DefiLlama protocol listing + Smart LP vault fleet. */
+export interface IntelTvl {
+  fetchedAt: number;
+  /** Protocol TVL on Robinhood Chain per DefiLlama (staking excluded). */
+  protocolTvlUsd: number | null;
+  /** TVL change vs ~24h ago, percent; null when the series is too short. */
+  change24hPct: number | null;
+  /** TVL change vs ~7d ago, percent; null when the series is too short. */
+  change7dPct: number | null;
+  /** Smart LP (Safety Deposit Box) vault fleet TVL from the on-chain lens read. */
+  smartLpTvlUsd: number | null;
+  /** Vault count behind smartLpTvlUsd. */
+  smartLpVaults: number | null;
+}
+
+/** One symbol aggregated from the BrokerTools DEX trade tape. */
+export interface BrokerToolsSymbolFlow {
+  symbol: string;
+  trades: number;
+  usd: number;
+}
+
+/** One Stonklauncher launch as indexed by BrokerTools. */
+export interface BrokerToolsLaunch {
+  symbol: string;
+  mcapUsd: number | null;
+  buyers: number | null;
+  phase: string | null;
+}
+
+/**
+ * READ-ONLY chain intel from brokertools.info, an independent Robinhood
+ * Chain explorer/indexer. Feeds prompts only — never any treasury or launch
+ * execution path.
+ */
+export interface BrokerToolsIntel {
+  fetchedAt: number;
+  /** Trades in the latest tape page (~120 most recent chain-wide DEX trades). */
+  tapeTrades: number;
+  /** Minutes the tape page spans (recency signal for chain activity). */
+  tapeSpanMin: number | null;
+  buyUsd: number;
+  sellUsd: number;
+  /** Most-traded symbols in the tape by USD, descending. */
+  topSymbols: BrokerToolsSymbolFlow[];
+  /** $STONKBROKER trades present in the tape. */
+  missionTrades: number;
+  /** $STONKBROKER net flow in the tape (buys minus sells), USD. */
+  missionNetUsd: number;
+  /** Total launches the BrokerTools Stonklauncher index tracks. */
+  launchesTotal: number | null;
+  /** Top launches by market cap. */
+  topLaunches: BrokerToolsLaunch[];
 }
 
 /** One token on the Robinhood Chain launch radar (its deepest DexScreener pair). */
