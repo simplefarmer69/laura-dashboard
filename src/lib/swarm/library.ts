@@ -13,31 +13,82 @@ import { skillsIndex } from "@/lib/swarm/skills";
 
 const LIBRARY_DIR = process.env.SWARM_LIBRARY_DIR ?? path.join(process.cwd(), "library");
 const CACHE_TTL_MS = 60_000;
+const SEP = "\n\n---\n\n";
 
-let cache: { at: number; text: string } | null = null;
+interface LibraryDoc {
+  file: string;
+  text: string;
+}
 
-export async function libraryText(): Promise<string> {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.text;
+let cache: { at: number; docs: LibraryDoc[] } | null = null;
+
+async function libraryDocs(): Promise<LibraryDoc[]> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.docs;
+  let docs: LibraryDoc[] = [];
   try {
     const files = (await fs.readdir(LIBRARY_DIR)).filter((f) => f.endsWith(".md")).sort();
-    const parts = await Promise.all(files.map((f) => fs.readFile(path.join(LIBRARY_DIR, f), "utf8")));
-    const text = parts.join("\n\n---\n\n").trim();
-    cache = { at: Date.now(), text };
-    return text;
+    docs = await Promise.all(
+      files.map(async (f) => ({
+        file: f,
+        text: (await fs.readFile(path.join(LIBRARY_DIR, f), "utf8")).trim(),
+      })),
+    );
   } catch {
-    return "";
+    docs = [];
   }
+  cache = { at: Date.now(), docs };
+  return docs;
+}
+
+export async function libraryText(): Promise<string> {
+  return (await libraryDocs())
+    .map((d) => d.text)
+    .join(SEP)
+    .trim();
 }
 
 /**
- * Per-section budgets instead of one tail truncation. The old version sliced
- * the assembled text from the end — and because the curated docs alone exceed
- * the cap, the skill index and the ENTIRE self-authored notebook (the swarm's
- * own accumulated memory) were silently cut from every prompt. Now the
- * notebook and skill index always survive; the docs absorb the truncation.
+ * Docs section under a budget, allocated PER DOC instead of truncating the
+ * concatenation. The old head-truncation meant that once the docs outgrew the
+ * budget, every doc past the cut point (30-integrations onward, including any
+ * newly added doc) was silently absent from every prompt. Now every doc keeps
+ * at least its head (front-load the load-bearing summary in each doc), and
+ * docs earlier in the numbered order absorb whatever budget remains, so the
+ * operator/project docs keep their depth.
  */
-export async function libraryDigest(maxChars = 14_000): Promise<string> {
-  const [docs, notebook, skills] = await Promise.all([libraryText(), notebookDigest(), skillsIndex()]);
+function docsSection(docs: LibraryDoc[], budget: number): string {
+  if (docs.length === 0) return "Library docs empty.";
+  const sepTotal = SEP.length * (docs.length - 1);
+  const total = docs.reduce((s, d) => s + d.text.length, 0);
+  if (total + sepTotal <= budget) return docs.map((d) => d.text).join(SEP);
+  const usable = Math.max(0, budget - sepTotal);
+  const floor = Math.min(1_000, Math.floor(usable / docs.length));
+  const alloc = docs.map((d) => Math.min(d.text.length, floor));
+  let leftover = usable - alloc.reduce((s, n) => s + n, 0);
+  for (let i = 0; i < docs.length && leftover > 0; i++) {
+    const grant = Math.min(docs[i].text.length - alloc[i], leftover);
+    alloc[i] += grant;
+    leftover -= grant;
+  }
+  return docs
+    .map((d, i) => {
+      if (d.text.length <= alloc[i]) return d.text;
+      const marker = `\n[...trimmed; full doc: library/${d.file}]`;
+      return `${d.text.slice(0, Math.max(200, alloc[i] - marker.length))}${marker}`;
+    })
+    .join(SEP);
+}
+
+/**
+ * Per-section budgets instead of one tail truncation: the skill index and the
+ * self-authored notebook always survive, and the docs section is budgeted per
+ * doc (see docsSection) so every library doc reaches every prompt with at
+ * least its head. Default raised 14k → 22k when per-doc budgeting landed, so
+ * the operator and project docs keep the same depth they had while the other
+ * docs gain their heads.
+ */
+export async function libraryDigest(maxChars = 22_000): Promise<string> {
+  const [docs, notebook, skills] = await Promise.all([libraryDocs(), notebookDigest(), skillsIndex()]);
   /* Notebook: keep the TAIL (newest entries last is the file's order). */
   const notebookBudget = 4_500;
   const notebookText =
@@ -49,12 +100,7 @@ export async function libraryDigest(maxChars = 14_000): Promise<string> {
     skills.length <= skillsBudget ? skills : `${skills.slice(0, skillsBudget)}\n[...skill index truncated]`;
   const notebookSec = `## Self-authored notebook (written by the swarm itself; newest last)\n${notebookText}`;
   const skillsSec = `## Skill index (full skill text is injected per role)\n${skillsText}`;
-  const sep = "\n\n---\n\n";
-  const docsBudget = Math.max(3_000, maxChars - notebookSec.length - skillsSec.length - sep.length * 2);
-  const docsAll = docs || "Library docs empty.";
-  const docsSec =
-    docsAll.length <= docsBudget
-      ? docsAll
-      : `${docsAll.slice(0, docsBudget)}\n[...library docs truncated at ${docsBudget} chars]`;
-  return [docsSec, skillsSec, notebookSec].join(sep);
+  const docsBudget = Math.max(3_000, maxChars - notebookSec.length - skillsSec.length - SEP.length * 2);
+  const docsSec = docsSection(docs, docsBudget);
+  return [docsSec, skillsSec, notebookSec].join(SEP);
 }
