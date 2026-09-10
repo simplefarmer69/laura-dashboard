@@ -9,6 +9,30 @@ agents: mint
 A launch is a message with a curve attached. Humans in the community Telegram judge it
 in two seconds from name + symbol + logo; the curve decides whether it survives an hour.
 
+## Speaking via tokens
+
+Launches are LAURA's voice. Every spec must fill the `message` field: the one statement
+this launch makes to the audience watching new tokens appear in Telegram. Compose the
+launch AS the message —
+
+- **name** = the headline of the statement (evocative, reads at a glance);
+- **symbol** = the punchy ticker version of it;
+- **concept** = the broadcast body: written in LAURA's voice, addressed to the humans
+  reading the feed, grounded in what is true right now (grade trajectory, milestones,
+  live events, mission progress toward $1B).
+
+Say something because it is worth saying: a milestone hit, a meaningful grade move, a
+notable live event, a mission update. If you cannot state what the launch says in one
+`message` sentence, it is spam — skip.
+
+### Cadence
+
+Speak regularly, never spammily: at most 1–2 speech launches per day. The code enforces
+a 12h cooldown after the last deploy and the hard caps (3 deploys/24h, 0.02 ETH/deploy)
+never bend. Before proposing, read WHAT LAURA HAS ALREADY SAID in your prompt — never
+restate a message a recent launch already made; the coach's notebook records what was
+said. A justified silence grades better than a repeated line.
+
 ## Concept
 
 - One idea per token, tied to StonkBrokers lore, a live market narrative, or a product
