@@ -29,12 +29,32 @@ export async function libraryText(): Promise<string> {
   }
 }
 
+/**
+ * Per-section budgets instead of one tail truncation. The old version sliced
+ * the assembled text from the end — and because the curated docs alone exceed
+ * the cap, the skill index and the ENTIRE self-authored notebook (the swarm's
+ * own accumulated memory) were silently cut from every prompt. Now the
+ * notebook and skill index always survive; the docs absorb the truncation.
+ */
 export async function libraryDigest(maxChars = 14_000): Promise<string> {
   const [docs, notebook, skills] = await Promise.all([libraryText(), notebookDigest(), skillsIndex()]);
-  const text = [
-    docs || "Library docs empty.",
-    `## Skill index (full skill text is injected per role)\n${skills}`,
-    `## Self-authored notebook (written by the swarm itself; newest last)\n${notebook}`,
-  ].join("\n\n---\n\n");
-  return text.length <= maxChars ? text : `${text.slice(0, maxChars)}\n[...library truncated]`;
+  /* Notebook: keep the TAIL (newest entries last is the file's order). */
+  const notebookBudget = 4_500;
+  const notebookText =
+    notebook.length <= notebookBudget
+      ? notebook
+      : `[...older notebook entries elided; the archive keeps them all]\n${notebook.slice(-notebookBudget)}`;
+  const skillsBudget = 1_500;
+  const skillsText =
+    skills.length <= skillsBudget ? skills : `${skills.slice(0, skillsBudget)}\n[...skill index truncated]`;
+  const notebookSec = `## Self-authored notebook (written by the swarm itself; newest last)\n${notebookText}`;
+  const skillsSec = `## Skill index (full skill text is injected per role)\n${skillsText}`;
+  const sep = "\n\n---\n\n";
+  const docsBudget = Math.max(3_000, maxChars - notebookSec.length - skillsSec.length - sep.length * 2);
+  const docsAll = docs || "Library docs empty.";
+  const docsSec =
+    docsAll.length <= docsBudget
+      ? docsAll
+      : `${docsAll.slice(0, docsBudget)}\n[...library docs truncated at ${docsBudget} chars]`;
+  return [docsSec, skillsSec, notebookSec].join(sep);
 }
