@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sf), "SF Pro Display", -apple-system, ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -84,48 +84,52 @@
 }
 
 .dark {
-  /* StonkBrokers terminal palette — the stonkbrokers.io Bloomberg look:
-     lm-black #111111 depths, lm-dark-gray #1c1c1c panels, Bloomberg orange
-     #FF6600 primary, volt #CFFF04 accent, pure green/red signal colors.
-     Yellow is the single warning signal; red is reserved for failures. */
-  --background: #111111;
-  --foreground: #e8e8e8;
-  --card: #1c1c1c;
-  --card-foreground: #e8e8e8;
-  --popover: #232323;
-  --popover-foreground: #e8e8e8;
-  --primary: #ff6600;
-  --primary-foreground: #111111;
-  --secondary: #232323;
-  --secondary-foreground: #e8e8e8;
-  --muted: #1c1c1c;
-  --muted-foreground: #a6a6a6;
-  --accent: #2a2a2a;
-  --accent-foreground: #e8e8e8;
-  --destructive: #ff3333;
-  --border: rgba(255, 102, 0, 0.16);
-  --input: rgba(255, 102, 0, 0.22);
-  --ring: rgba(255, 102, 0, 0.55);
-  --chart-1: #ff6600;
-  --chart-2: #00ff00;
+  /* StonkBrokers 2026 (v2 / DPP) palette — matches stonkbrokers.io in 2026
+     mode and stonkbrokers.wtf: deep purple black page, #16141a panels,
+     Clutch neon green #39FF14 accent (text tints, never fills), volt #CFFF04
+     copy highlights, soft Clutch red #FB5663, thin white borders, 0.5rem
+     radius, SF Pro type. Liquid glass chips replace filled pills. */
+  --background: #0d0b11;
+  --foreground: #d7d9db;
+  --card: #16141a;
+  --card-foreground: #d7d9db;
+  --popover: #1a1820;
+  --popover-foreground: #d7d9db;
+  --primary: #39ff14;
+  --primary-foreground: #0d0b11;
+  --secondary: #1e1c24;
+  --secondary-foreground: #d7d9db;
+  --muted: #16141a;
+  --muted-foreground: #9a9ca6;
+  --accent: #221f2a;
+  --accent-foreground: #d7d9db;
+  --destructive: #fb5663;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.16);
+  --ring: rgba(57, 255, 20, 0.45);
+  --chart-1: #39ff14;
+  --chart-2: #30d158;
   --chart-3: #cfff04;
-  --chart-4: #a6a6a6;
-  --chart-5: #ff3333;
-  --sidebar: #1c1c1c;
-  --sidebar-foreground: #e8e8e8;
-  --sidebar-primary: #ff6600;
-  --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #2a2a2a;
-  --sidebar-accent-foreground: #e8e8e8;
-  --sidebar-border: rgba(255, 102, 0, 0.16);
-  --sidebar-ring: rgba(255, 102, 0, 0.55);
-  --radius: 0px;
-  --sb-accent: #ff6600;
-  --sb-green: #00ff00;
-  --sb-gold: #ffff00;
-  --sb-neg: #ff3333;
-  --sb-glow: rgba(255, 102, 0, 0.16);
-  --sb-panel-border: rgba(255, 102, 0, 0.32);
+  --chart-4: #9a9ca6;
+  --chart-5: #fb5663;
+  --sidebar: #16141a;
+  --sidebar-foreground: #d7d9db;
+  --sidebar-primary: #39ff14;
+  --sidebar-primary-foreground: #0d0b11;
+  --sidebar-accent: #221f2a;
+  --sidebar-accent-foreground: #d7d9db;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: rgba(57, 255, 20, 0.45);
+  --radius: 0.5rem;
+  --sb-accent: #39ff14;
+  --sb-green: #30d158;
+  --sb-volt: #cfff04;
+  --sb-gold: #f4df60;
+  --sb-neg: #fb5663;
+  --sb-glow: rgba(57, 255, 20, 0.12);
+  --sb-panel-border: rgba(255, 255, 255, 0.14);
+  --dpp-card-from: #171717;
+  --dpp-card-to: #0d0b13;
 }
 
 @layer base {
@@ -138,51 +142,63 @@
     @apply bg-background text-foreground;
     /* Numerals line up in every data column, sans or mono. */
     font-variant-numeric: tabular-nums;
-    background-image:
-      radial-gradient(1100px 380px at 50% -120px, rgba(255, 102, 0, 0.05), transparent 72%),
-      linear-gradient(rgba(255, 102, 0, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 102, 0, 0.02) 1px, transparent 1px);
-    background-size: auto, 32px 32px, 32px 32px;
+    background-image: radial-gradient(1100px 420px at 50% -140px, rgba(57, 255, 20, 0.04), transparent 72%);
   }
   html {
     @apply font-sans;
   }
   ::selection {
-    background: rgba(255, 102, 0, 0.35);
+    background: rgba(57, 255, 20, 0.28);
+    color: #0d0b11;
   }
 }
 
+/* Highlighted panel: the DPP gradient card surface with a soft neon halo.
+   No corner marks, no colored borders — one thin white border, deep shadow. */
 @utility sb-panel {
   position: relative;
   border: 1px solid var(--sb-panel-border);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 24px var(--sb-glow);
-  /* Corner registration marks. */
-  &::before,
-  &::after {
-    content: "";
-    position: absolute;
-    width: 9px;
-    height: 9px;
-    border: 0 solid var(--sb-accent);
-    opacity: 0.75;
-    pointer-events: none;
-  }
-  &::before {
-    top: 0;
-    left: 0;
-    border-top-width: 1px;
-    border-left-width: 1px;
-  }
-  &::after {
-    right: 0;
-    bottom: 0;
-    border-right-width: 1px;
-    border-bottom-width: 1px;
-  }
+  border-radius: 0.5rem;
+  background: linear-gradient(160deg, var(--dpp-card-from), var(--dpp-card-to));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 0 28px var(--sb-glow);
+}
+
+/* Liquid glass shell — the iOS 26 recipe from the v2 design system
+   (connect button / era switch language). Neutral fill, white inner rims;
+   tint TEXT only, never the fill. */
+@utility sb-glass {
+  border-radius: 0.5rem;
+  background: rgba(51, 51, 51, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.12),
+    inset 0 0 10px rgba(242, 242, 242, 0.1),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.32),
+    inset -1px -1px 1px rgba(255, 255, 255, 0.14);
+}
+
+/* Inline glass chip for statuses and counters. */
+@utility sb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 0.375rem;
+  padding: 0.1rem 0.45rem;
+  background: rgba(51, 51, 51, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  box-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.12),
+    inset 0 0 10px rgba(242, 242, 242, 0.1),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.32),
+    inset -1px -1px 1px rgba(255, 255, 255, 0.14);
 }
 
 @utility sb-glow-text {
-  text-shadow: 0 0 12px var(--sb-glow), 0 0 2px rgba(207, 255, 4, 0.6);
+  text-shadow: 0 0 14px var(--sb-glow), 0 0 2px rgba(57, 255, 20, 0.5);
 }
 
 @utility sb-ticker {
@@ -235,7 +251,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(100deg, transparent 25%, rgba(255, 102, 0, 0.06) 50%, transparent 75%);
+    background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.05) 50%, transparent 75%);
     animation: sb-sweep 2.4s ease-in-out infinite;
   }
 }

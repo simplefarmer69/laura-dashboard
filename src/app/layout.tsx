@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
+/* SF Pro Display — the StonkBrokers 2026 (v2 / DPP) type system. */
+const sf = localFont({
+  src: [
+    { path: "../../public/fonts/sf/sfprodisplayregular.otf", weight: "400", style: "normal" },
+    { path: "../../public/fonts/sf/sfprodisplaymedium.otf", weight: "500", style: "normal" },
+    { path: "../../public/fonts/sf/sfprodisplaybold.otf", weight: "700", style: "normal" },
+  ],
+  variable: "--font-sf",
+  display: "swap",
 });
 
 const jetbrains = JetBrains_Mono({
@@ -14,20 +21,20 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const viewport: Viewport = {
-  themeColor: "#111111",
+  themeColor: "#0d0b11",
 };
 
 export const metadata: Metadata = {
-  title: "LAURA · StonkBrokers growth swarm",
+  title: "LAURA · Layered Autonomous Unified Reasoning Agents · StonkBrokers growth swarm",
   description:
-    "Operator terminal for LAURA, the self-improving StonkBrokers growth swarm: daily grader, live actions, agent roster, review queue and strategy evolution.",
+    "Operator terminal for LAURA (Layered Autonomous Unified Reasoning Agents), the self-improving StonkBrokers growth swarm: daily grader, live actions, agent roster, review queue and strategy evolution.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrains.variable} dark h-full antialiased`}
+      className={`${sf.variable} ${jetbrains.variable} dark h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}

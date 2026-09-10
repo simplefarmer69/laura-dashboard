@@ -8,6 +8,15 @@ import { Progress } from "@/components/ui/progress";
 import { Sparkline } from "@/components/console/sparkline";
 import { ago, gradeTone, pct, usd } from "@/components/console/format";
 import { kindTone } from "@/components/console/activity";
+import {
+  DefillamaPanel,
+  EspnPanel,
+  LauncherFeedPanel,
+  LiveApiCalls,
+  NftBuysPanel,
+  PolymarketPanel,
+  useFeeds,
+} from "@/components/console/feeds";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 
 export function Overview({
@@ -24,6 +33,7 @@ export function Overview({
   const pendingProposals = state.proposals.filter((p) => p.status === "pending").length;
   const priceSeries = state.metricsHistory.map((m) => m.priceUsd);
   const gradeSeries = state.grades.map((g) => g.score);
+  const feeds = useFeeds();
 
   if (!grade || !metrics) {
     return (
@@ -97,6 +107,8 @@ export function Overview({
           </ul>
         </CardContent>
       </Card>
+
+      <LiveApiCalls calls={feeds.calls} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
@@ -209,6 +221,17 @@ export function Overview({
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="lg:col-span-3">
+        <DefillamaPanel data={feeds.defillama} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
+        <LauncherFeedPanel data={feeds.launcher} />
+        <NftBuysPanel data={feeds.nftBuys} />
+        <PolymarketPanel data={feeds.polymarket} />
+        <EspnPanel data={feeds.espn} />
       </div>
     </div>
   );

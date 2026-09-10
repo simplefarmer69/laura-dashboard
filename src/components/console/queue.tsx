@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, Copy, Pencil, Send, X } from "lucide-react";
+import { Check, Copy, Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,13 +20,6 @@ const FILTERS: { key: DraftStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-async function postJsonAction<T>(url: string): Promise<T> {
-  const res = await fetch(url, { method: "POST" });
-  const data = (await res.json()) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-  return data;
-}
-
 export function ReviewQueue({ state, refresh }: { state: ConsoleState; refresh: () => Promise<void> }) {
   const [filter, setFilter] = useState<DraftStatus | "all">("pending");
   const drafts = useMemo(
@@ -37,22 +30,9 @@ export function ReviewQueue({ state, refresh }: { state: ConsoleState; refresh: 
     [state.drafts, filter],
   );
   const agentName = (id: string) => state.agents.find((a) => a.id === id)?.name ?? id;
-  const xReadyCount = useMemo(
-    () =>
-      state.drafts.filter((d) => d.status === "approved" && /^(x|twitter)$/i.test(d.channel.trim()))
-        .length,
-    [state.drafts],
-  );
 
   return (
     <div className="space-y-4">
-      {!state.runtime.x.ready && xReadyCount > 0 && (
-        <div className="border border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/10 px-3 py-2 text-xs text-[var(--sb-gold)]">
-          {xReadyCount} approved X draft{xReadyCount === 1 ? " is" : "s are"} ready to publish the moment
-          the X access-token pair lands (missing: {state.runtime.x.missing.join(", ")}). The read-only
-          bearer already feeds live intel; the token pair unlocks posting.
-        </div>
-      )}
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => {
           const count =
@@ -94,13 +74,7 @@ export function ReviewQueue({ state, refresh }: { state: ConsoleState; refresh: 
 
       <div className="grid gap-4 xl:grid-cols-2">
         {drafts.map((d) => (
-          <DraftCard
-            key={d.id}
-            draft={d}
-            agentName={agentName(d.agentId)}
-            xReady={state.runtime.x.ready}
-            refresh={refresh}
-          />
+          <DraftCard key={d.id} draft={d} agentName={agentName(d.agentId)} refresh={refresh} />
         ))}
       </div>
     </div>
@@ -127,14 +101,13 @@ function statusVariant(s: DraftStatus): "default" | "secondary" | "destructive" 
 function DraftCard({
   draft,
   agentName,
-  xReady,
   refresh,
 }: {
   draft: Draft;
   agentName: string;
-  xReady: boolean;
   refresh: () => Promise<void>;
 }) {
+  const settled = draft.status === "approved" || draft.status === "rejected";
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(draft.body);
   const [note, setNote] = useState(draft.reviewerNote ?? "");
@@ -163,23 +136,8 @@ function DraftCard({
     toast("Copied to clipboard");
   }
 
-  const isXDraft = /^(x|twitter)$/i.test(draft.channel.trim());
-
-  async function publishX() {
-    setBusy(true);
-    try {
-      const out = await postJsonAction<{ url: string; tweets: number }>(`/api/drafts/${draft.id}/publish`);
-      toast.success(`Posted to X (${out.tweets} post${out.tweets > 1 ? "s" : ""})`, { description: out.url });
-      await refresh();
-    } catch (err) {
-      toast.error("X publish failed", { description: String(err) });
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
-    <Card className="flex flex-col">
+    <Card className={settled ? "flex flex-col opacity-70" : "flex flex-col"}>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={statusVariant(draft.status)} className="capitalize">
@@ -228,46 +186,33 @@ function DraftCard({
             View live post ↗
           </a>
         )}
-        <div className="mt-auto flex flex-wrap gap-2">
-          <Button size="sm" variant="ghost" onClick={() => void copy()}>
-            <Copy className="size-3.5" /> Copy
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setEditing((v) => !v)}>
-            <Pencil className="size-3.5" /> {editing ? "Preview" : "Edit"}
-          </Button>
-          <div className="ml-auto flex gap-2">
-            {draft.status === "pending" && (
-              <>
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => void decide("rejected")}>
-                  <X className="size-3.5" /> Reject
+        {!settled && (
+          <div className="mt-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="ghost" onClick={() => void copy()}>
+              <Copy className="size-3.5" /> Copy
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing((v) => !v)}>
+              <Pencil className="size-3.5" /> {editing ? "Preview" : "Edit"}
+            </Button>
+            <div className="ml-auto flex gap-2">
+              {draft.status === "pending" && (
+                <>
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => void decide("rejected")}>
+                    <X className="size-3.5" /> Reject
+                  </Button>
+                  <Button size="sm" disabled={busy} onClick={() => void decide("approved")}>
+                    <Check className="size-3.5" /> Approve
+                  </Button>
+                </>
+              )}
+              {draft.status === "published" && (
+                <Button size="sm" variant="ghost" disabled={busy} onClick={() => void decide("pending")}>
+                  Reopen
                 </Button>
-                <Button size="sm" disabled={busy} onClick={() => void decide("approved")}>
-                  <Check className="size-3.5" /> Approve
-                </Button>
-              </>
-            )}
-            {draft.status === "approved" && isXDraft && (
-              <Button
-                size="sm"
-                disabled={busy || !xReady}
-                onClick={() => void publishX()}
-                title={xReady ? "Post via the X API" : "Add X_ACCESS_TOKEN + X_ACCESS_TOKEN_SECRET to enable"}
-              >
-                <Send className="size-3.5" /> {xReady ? "Publish to X" : "Publish to X (locked: access token)"}
-              </Button>
-            )}
-            {draft.status === "approved" && (
-              <Button size="sm" variant={isXDraft ? "outline" : "default"} disabled={busy} onClick={() => void decide("published")}>
-                <Send className="size-3.5" /> Mark published
-              </Button>
-            )}
-            {(draft.status === "rejected" || draft.status === "published") && (
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void decide("pending")}>
-                Reopen
-              </Button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
