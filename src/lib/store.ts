@@ -102,11 +102,51 @@ export function newId(prefix: string): string {
   return `${prefix}_${randomUUID().slice(0, 8)}`;
 }
 
+/* Secret redaction net, pattern ported from the operator's ape-claw telemetry
+   (its Feb-2026 audit rated unredacted telemetry CRITICAL). Event titles and
+   details ship verbatim into the public dashboard snapshot, and error strings
+   from viem/fetch can embed full request URLs — including an RPC URL that may
+   carry key material. Mask the values of secret-shaped env vars before an
+   event is stored. Exact-value matching only: tx hashes and addresses are
+   never touched. */
+const SENSITIVE_ENV_NAME = /(KEY|TOKEN|SECRET|PRIVATE|MNEMONIC|SEED|PASSWORD|RPC_URL)/i;
+const MIN_SECRET_LENGTH = 10;
+
+let sensitiveEnvValues: string[] | null = null;
+
+function secretValues(): string[] {
+  if (sensitiveEnvValues) return sensitiveEnvValues;
+  sensitiveEnvValues = Object.entries(process.env)
+    .filter(
+      ([name, value]) =>
+        SENSITIVE_ENV_NAME.test(name) &&
+        typeof value === "string" &&
+        value.length >= MIN_SECRET_LENGTH,
+    )
+    .map(([, value]) => value as string)
+    .sort((a, b) => b.length - a.length);
+  return sensitiveEnvValues;
+}
+
+export function redactSecrets(text: string): string {
+  let out = text;
+  for (const value of secretValues()) {
+    if (out.includes(value)) out = out.split(value).join("[REDACTED]");
+  }
+  return out;
+}
+
 export function pushEvent(
   state: SwarmState,
   event: Omit<SwarmEvent, "id" | "ts"> & { ts?: number },
 ): SwarmEvent {
-  const full: SwarmEvent = { id: newId("evt"), ts: event.ts ?? Date.now(), ...event };
+  const full: SwarmEvent = {
+    id: newId("evt"),
+    ts: event.ts ?? Date.now(),
+    ...event,
+    title: redactSecrets(event.title),
+    detail: redactSecrets(event.detail),
+  };
   state.events.push(full);
   return full;
 }
