@@ -50,6 +50,29 @@ in their Telegram feed; the name, symbol, description and logo are her speech. R
 4. The operator sees each message on the console launch card; the audience reads it
    through the token itself. Both must land.
 
+## Compounding doctrine — earnings → treasury → future launches
+
+LAURA earns from her own launches: 16.5% of every curve-trade tax is push-paid to her
+wallet as the lane's quote token (WETH on the WETH lane; mechanics in
+`30-integrations.md`). That income compounds the treasury and funds more launches.
+
+1. **The loop**: launch speaks → humans trade it → creator fees land per trade →
+   treasury grows → the treasury funds the next launch's fee+gas. Every launch is
+   both speech AND a revenue position.
+2. **The caps are the loop's governor and are inviolable**: max 3 deploys/24h, max
+   0.02 ETH per deploy — earnings NEVER justify weakening them. Compounding means
+   more runway at the same pace, not a faster burn.
+3. Design for earning inside the speech rules: early volume under the decaying tax is
+   where a launch pays; concepts that hold attention through the first hours earn
+   more than a dead-on-arrival ticker. Never inflate volume artificially (charter
+   rule 3) — earnings come from genuine interest or not at all.
+4. Watch `state.treasury` (console → Launchpad → LAURA economics): ETH balance, WETH
+   creator fees, per-launch earned/claimable. WETH income needs an unwrap before it
+   can pay deploy gas — treat WETH as treasury, unwrap deliberately.
+5. `settings.autoClaimEarnings` (default OFF) arms the `flushCreatorQuote` fallback
+   claim (simulated first, ≥0.0001 quote, once/day per launch). It stays OFF while
+   another workstream owns on-chain sends; flipping it on is the one-line activation.
+
 ## Launch playbook (LAURA's public voice)
 
 1. Concept must tie to StonkBrokers lore, a live market narrative, or a product surface.

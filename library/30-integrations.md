@@ -25,6 +25,42 @@ Every format here was verified live during the build. Do not guess variants; the
 - Always simulate before send; parse the `LaunchCreated` event for launch id + token.
 - Vanity salt zero, `unsoldMode` 0, `openEnded` true, `bondVenue` 0 are the proven params.
 
+## Smart Launch V2 creator economics (verified 2026-09-10 from verified pad source)
+
+How LAURA EARNS from her launches — confirmed against the Blockscout-verified
+`StonkSafeLaunchpadV2` source (`_splitTax` / `_pushCreatorQuote` / `flushCreatorQuote`)
+and reconciled to the wei on-chain:
+
+- **Every curve trade (buy AND sell) pays the launch tax; the pad splits it**:
+  `creatorFeeBps` **1650 (16.5%) to the CREATOR**, `protocolFeeBps` 1650 to the
+  protocol treasury, `lpFeeBps` 5000 escrowed for the locked bond pool, remainder
+  (~17%) to the referral/Clock In punch machinery. Snapshotted per launch at create
+  (`creatorFeeBpsSnap` on `getLaunch(id)`).
+- **Creator fees are PUSH-PAID instantly** inside each trade: the pad calls
+  `quote.transfer(creator, tax × creatorFeeBpsSnap / 10000)`. On the WETH lane the
+  income lands in the wallet **as WETH** (unwrap to spend as ETH); on the STONK lane
+  as $STONKBROKER. Verified: two 10%-taxed buys on launches #276/#277 delivered
+  exactly 0.000066922052191435 WETH to LAURA's wallet (16.5% of the 0.000405588 tax).
+- **Claim path (fallback only)**: if the push transfer fails, the amount accrues in
+  `creatorQuoteOwed(id)` (event `CreatorQuoteAccrued`) and anyone can call
+  `flushCreatorQuote(id)` — nonpayable, permissionless, always pays the creator
+  (event `CreatorQuoteFlushed`, reverts `NothingOwed()` when zero). For a plain EOA
+  creator the push never fails, so this ledger normally stays 0 (it is 0 for all 277
+  WETH-lane and 79 STONK-lane launches today).
+- **Graduation proceeds are NOT creator income**: at `graduate` → `bond` the raise
+  (`realQuote`) plus the escrowed LP-fee reserve mint into a permanently locked
+  CL/Uniswap-v3 pool. Exception: a zero-raise bond returns the unsold supply to the
+  creator. Degen (`icoBoost`) launches stream the LP share to the ICO Kickstarter
+  per trade instead of escrowing.
+- Earnings tracking in code: `src/lib/launchpad/earnings.ts` — sums `taxPaid` from
+  `SafeBuy`/`SafeSell` logs × `creatorFeeBpsSnap`, reads `creatorQuoteOwed`, snapshots
+  wallet ETH/WETH/STONK into `state.treasury` every ~10 min from the scheduler tick.
+  Autonomous claiming is gated behind `settings.autoClaimEarnings` (default false).
+- Implication: **creator income scales with trade volume × tax bps**. Tax decays per
+  minute from `startTaxBps` to `postTaxBps`, so early volume under high tax is where a
+  launch earns; a graduated launch stops paying the creator (post-bond LP fees go to
+  the locked-pool machinery, not the creator).
+
 ## Launcher branding API (stonkbrokers.cash)
 
 - **Upload logo**: `POST /api/launcher/token-image` with raw image bytes
