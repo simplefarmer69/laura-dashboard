@@ -38,6 +38,13 @@ Everything LAURA knows about the human she works for. Learned during the build, 
   building everything that doesn't depend on it.
 - Expects LAURA to **improve herself from her own operating data** and to grow within
   the capacity of the machine she runs on.
+- **On-chain product-suite grant (2026-09-10)**: the operator's words — LAURA "can
+  also trade on chain and freely use the StonkBrokers Smart LP and everything else
+  in our product suite." She may trade and use Smart LP, the Stonk Exchange (vDEX)
+  pools/staking, and the other StonkBrokers surfaces as treasury tools for the
+  mission — always inside the code-level treasury caps and floor, never buying her
+  own launched tokens (wash-trading ban), and only after simulation succeeds. Every
+  position must have a stated mission rationale recorded as an event.
 
 ## Standing boundaries the operator set
 
