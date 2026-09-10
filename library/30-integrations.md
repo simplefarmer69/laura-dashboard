@@ -94,6 +94,40 @@ How LAURA BUYS the mission token with treasury ETH (`src/lib/launchpad/treasury.
   $STONKBROKER address AND refuses anything LAURA launched herself — own-token buys
   are wash trading (charter rule 3) and are blocked before simulation.
 
+## Stonk Exchange (vDEX, "powered by up.") — Smart LP contracts (verified 2026-09-10)
+
+The protocol's own DEX is a **Velodrome/Slipstream-style concentrated-liquidity
+deployment** with gauge staking and $UP emissions. Addresses reverse-engineered from
+the stonkbrokers.cash `/exchange` client bundle, then verified on-chain:
+
+- **CL factory** `0x1ac9dB4a2608ba45D6127B1737949b51Bb54B7F3` — matches `factory()` of
+  the live up. pools DexScreener lists (dexId "up").
+- **NonfungiblePositionManager** `0x07F44c47743A2f36414A82b9F558ECFCf0EEdCEf` —
+  `factory()` returns the CL factory, `WETH9()` the canonical WETH. Mint params are
+  Slipstream-shaped: `{token0, token1, tickSpacing, tickLower, tickUpper,
+  amount0/1Desired, amount0/1Min, recipient, deadline, sqrtPriceX96}` (NO fee field;
+  `sqrtPriceX96: 0` when the pool exists). Native ETH goes in as
+  `multicall([mint, refundETH])` with `msg.value` — the manager wraps and refunds.
+- **Voter** `0x7F749fDD351C1Ceed82d76d7699CB631Eb8332a7` — `gauges(pool)` resolves the
+  staking gauge. **Gauge flow**: `positionManager.approve(gauge, tokenId)` →
+  `gauge.deposit(tokenId)`; claim `gauge.getReward(tokenId)`; exit
+  `gauge.withdraw(tokenId)` — **no lockup anywhere on this path**.
+- **STONKBROKER/WETH CL pool** `0xB11ba9a4d345434c25d625C076f23Ad14abC6B3c` (token0
+  WETH, token1 STONK, tickSpacing 200, fee 1%). Its gauge
+  `0x534577F108201CDD0f121ED5f7Ff97B8994bbD07` had a LIVE rewardRate (~0.094 $UP/s)
+  paying **$UP** `0x57C0E45cB534413D1C20A4240955d6bB250BB4F1` on 2026-09-10.
+- Other bundle constants (recorded, unused): swapRouter `0xC062…9415`, quoter
+  `0x0398…5B49`, votingEscrow `0x5d32…B7B6` (veUP LOCKUP — never use for treasury),
+  minter, rewardsDistributor, compounderVault, emissionDepositRouter.
+- Velodrome-CL nuance: a **staked** position earns gauge emissions ($UP) instead of
+  swap fees (fees route to the voter machinery); an unstaked position earns the pool's
+  swap fees directly.
+- Code: `src/lib/launchpad/smart-lp.ts` — full-range mint (never out of range, no tick
+  management), auto-stake, value refresh, and the verified exit path
+  (`exitLpPosition`: unstake → decreaseLiquidity → collect). Caps live in
+  `treasury-caps.ts`: **max 0.02 ETH-equivalent total in LP/staking**, 1% amount
+  tolerance, 0.001 ETH minimum side, and the same 0.35 ETH treasury floor.
+
 ## Launcher branding API (stonkbrokers.cash)
 
 - **Upload logo**: `POST /api/launcher/token-image` with raw image bytes

@@ -4,7 +4,7 @@ import { Coins } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ago, when } from "@/components/console/format";
-import { TREASURY_CAPS, buyEligibility } from "@/lib/launchpad/treasury-caps";
+import { TREASURY_CAPS, buyEligibility, lpDeployedEthEquiv } from "@/lib/launchpad/treasury-caps";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 
 /**
@@ -125,6 +125,64 @@ function TreasuryOps({ state }: { state: ConsoleState }) {
         {TREASURY_CAPS.minBuyGapHours}h between buys · never below the {TREASURY_CAPS.treasuryFloorEth} ETH
         treasury floor · mission token only, never LAURA&apos;s own launches.
       </p>
+      <SmartLp state={state} />
+    </div>
+  );
+}
+
+/**
+ * Smart LP: full-range STONKBROKER/WETH position(s) on the Stonk Exchange
+ * vDEX, staked in the gauge for $UP emissions. Deployed capital is bounded
+ * by TREASURY_CAPS.maxLpEthEquivTotal; the exit path (unstake → decrease →
+ * collect) is one code path with no lockups.
+ */
+function SmartLp({ state }: { state: ConsoleState }) {
+  const positions = (state.treasuryLp ?? []).filter((p) => !p.exitedAt);
+  const deployed = lpDeployedEthEquiv(state);
+
+  return (
+    <div className="space-y-2 border-t border-border/60 pt-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium">Smart LP — Stonk Exchange (vDEX)</span>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {deployed.toFixed(4)}/{TREASURY_CAPS.maxLpEthEquivTotal} ETH-equiv deployed
+        </span>
+      </div>
+      {positions.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          No open position. The scheduler enters one full-range STONKBROKER/WETH position (and stakes it
+          for $UP) once accumulated $STONKBROKER is worth pairing.
+        </p>
+      ) : (
+        positions.map((p) => (
+          <div key={p.id} className="space-y-1">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-4">
+              <Stat label="position" value={`#${p.tokenId} full-range`} />
+              <Stat
+                label="entry"
+                value={`${p.ethIn.toFixed(4)} ETH + ${p.stonkIn.toFixed(0)} STONK`}
+              />
+              <Stat
+                label="now"
+                value={
+                  p.currentEthValue !== undefined
+                    ? `${p.currentEthValue.toFixed(4)} ETH + ${(p.currentStonkValue ?? 0).toFixed(0)} STONK`
+                    : "refresh pending"
+                }
+              />
+              <Stat
+                label={p.gauge ? "staked · $UP earned" : "unstaked"}
+                value={p.gauge ? (p.pendingUpRewards ?? 0).toFixed(4) : "earning swap fees"}
+              />
+            </div>
+            <p className="font-mono text-[11px] text-muted-foreground" title={when(p.ts)}>
+              entered {ago(p.ts)} · mint tx {p.mintTxHash.slice(0, 10)}…
+              {p.stakeTxHash ? ` · stake tx ${p.stakeTxHash.slice(0, 10)}…` : ""}
+              {p.valueUpdatedAt ? ` · value ${ago(p.valueUpdatedAt)}` : ""}
+            </p>
+          </div>
+        ))
+      )}
     </div>
   );
 }

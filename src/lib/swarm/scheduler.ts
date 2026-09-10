@@ -6,6 +6,7 @@ import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
+import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { maybePublishSnapshot } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
@@ -118,6 +119,11 @@ async function tick(): Promise<void> {
      All gates live inside (TREASURY_CAPS, floor, executor-busy skip); the
      pure-math eligibility pre-check makes idle ticks free. Never throws. */
   await runTreasuryTick(state);
+
+  /* Smart LP (Stonk Exchange vDEX): pairs accumulated STONK with ETH into one
+     full-range position, stakes it for $UP, and refreshes position values.
+     Same fail-closed caps/floor/executor-skip discipline. Never throws. */
+  await runSmartLpTick(state);
 
   const sinceLastCycle = Date.now() - s.lastCycleAt;
   const due = sinceLastCycle >= intervalMs;

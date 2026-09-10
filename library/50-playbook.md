@@ -117,6 +117,33 @@ spending through the treasury floor. Buys are position-building for the DAIO man
 not price manipulation: tiny, slow, transparent (every buy is a `treasury.buy` event
 with the tx hash, visible on the console economics panel).
 
+## Product-suite doctrine (operator grant 2026-09-10)
+
+The operator granted the full StonkBrokers suite as treasury tools. What LAURA uses
+and what she deliberately does not:
+
+- **Smart LP (Stonk Exchange vDEX) — USED.** Accumulated $STONKBROKER pairs with a
+  matched slice of ETH into ONE full-range CL position on the protocol's own venue,
+  staked in the gauge for $UP emissions (`smart-lp.ts`; contracts in
+  `30-integrations.md`). Mission value: closes part of the venue-split gap (most
+  STONK liquidity/volume sits on venues the protocol doesn't control), adds protocol
+  TVL, and is visible alignment from her public wallet. Cap: **0.02 ETH-equivalent
+  total**; exit is one code path with no lockups. Full-range only — no active range
+  management, no rebalancing.
+- **Rebalance/selling — NOT WIRED.** Default posture is accumulate-and-hold the
+  mission token. LP entry pairs existing STONK with ETH, so no sell leg is needed.
+  No speculation on unrelated tokens, ever.
+- **veUP voting escrow — NEVER.** It is a lockup; lockups trap the treasury.
+- **Anvil broker swap — SKIPPED.** 666,666 STONK per broker is orders of magnitude
+  beyond the treasury caps.
+- **Clock In trigger — SKIPPED for now.** Gas-only when the pot is full, but LAURA
+  holds no activated broker (no drop eligibility) and pot-full detection isn't in the
+  intel loop yet. Revisit if it becomes a cheap, visible protocol-support action.
+- **Safety Deposit Box (lockers) — SKIPPED.** Locking treasury assets contradicts the
+  exit-path rule.
+- **NFT-backed loans — SKIPPED.** No broker NFT to collateralize; borrowing is not a
+  treasury need under the floor discipline.
+
 ## Launch playbook (LAURA's public voice)
 
 1. Concept must tie to StonkBrokers lore, a live market narrative, or a product surface.

@@ -21,7 +21,29 @@ export const TREASURY_CAPS = {
   slippageBps: 300,
   /** Skip dust buys smaller than this */
   minEthPerBuy: 0.0005,
+  /**
+   * Smart LP (Stonk Exchange vDEX) rails — operator suite grant 2026-09-10.
+   * Total capital deployed into LP/staking, in ETH-equivalent (ETH side plus
+   * the STONK side valued at pool price at entry).
+   */
+  maxLpEthEquivTotal: 0.02,
+  /** Amount tolerance on LP mint/exit (basis points; matches the site UI's 1%) */
+  lpSlippageBps: 100,
+  /** Skip LP entries whose ETH side would be under this (dust position) */
+  minLpEthSide: 0.001,
 } as const;
+
+/** ETH-equivalent already deployed into open LP positions (entry-priced). */
+export function lpDeployedEthEquiv(state: SwarmState): number {
+  return (state.treasuryLp ?? [])
+    .filter((p) => !p.exitedAt)
+    .reduce((s, p) => s + p.ethIn * 2, 0); // full-range entry is ~50/50 by value
+}
+
+/** True when the LP total cap leaves room for another ETH-equivalent chunk. */
+export function lpCapAllows(state: SwarmState, addEthEquiv: number): boolean {
+  return lpDeployedEthEquiv(state) + addEthEquiv <= TREASURY_CAPS.maxLpEthEquivTotal + 1e-12;
+}
 
 const DAY_MS = 24 * 3600_000;
 
