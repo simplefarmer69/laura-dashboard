@@ -3,7 +3,8 @@
 import { Coins } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ago } from "@/components/console/format";
+import { ago, when } from "@/components/console/format";
+import { TREASURY_CAPS, buyEligibility } from "@/lib/launchpad/treasury";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 
 /**

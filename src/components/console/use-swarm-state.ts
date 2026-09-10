@@ -20,6 +20,8 @@ export interface ConsoleState extends SwarmState {
     llmModel: string;
     x: { appKeys: boolean; accessKeys: boolean; ready: boolean; missing: string[] };
   };
+  /** Present only on the public viewer deployment: snapshot provenance. */
+  viewer?: { publishedAt: number } | null;
 }
 
 export function useSwarmState(pollMs = 15_000) {
