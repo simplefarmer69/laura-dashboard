@@ -2,25 +2,35 @@ import { createPublicClient, http, parseAbiItem, type Log } from "viem";
 import { cached, feedError, feedResponse } from "@/lib/feeds/util";
 
 /**
- * StonkBroker NFT buy feed  -  the OpenSea buybot's data source, served to the
+ * StonkBroker NFT buy feed - the OpenSea buybot's data source, served to the
  * swarm directly from chain. Seaport 1.6 is the only NFT marketplace on
  * Robinhood Chain, so every secondary broker sale emits OrderFulfilled there.
  *
  * Correctness rules inherited from the sales bot + DefiLlama adapter:
  *  - matchOrders emits TWO OrderFulfilled events per trade (listing leg +
- *    bid leg)  -  dedupe by (tx, tokenId), preferring the bid leg for price.
- *  - a failed log scan must never advance the cursor or shrink the feed;
+ *    bid leg) - dedupe by (tx, tokenId), preferring the bid leg for price.
+ *  - a failed log scan must never advance a cursor or shrink the feed;
  *    the last good sale list keeps serving.
+ *
+ * Scan shape: broker sales are RARE (a handful per day), so a forward-only
+ * cold scan starting hours back never reaches the newest sales before the
+ * serverless instance recycles. Instead the module keeps a scanned window
+ * [low, high]: each request extends high forward to head (cheap, incremental)
+ * and, until enough sales are on the tape, extends low BACKWARD from head -
+ * newest sales are found in the very first chunks.
  */
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const RPC_URL = process.env.ROBINHOOD_RPC_URL ?? "https://rpc.mainnet.chain.robinhood.com";
 const SEAPORT = "0x0000000000000068f116a894984e2db1123eb395" as const;
 const BROKERS = "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0"; // StonkBrokers collection
 const CHUNK = 25_000n; // Seaport is unfiltered by collection, keep chunks light
-const MAX_CHUNKS_PER_PASS = 3; // bound each request; the cursor carries progress
-const COLD_LOOKBACK = 600_000n; // ~17h at ~10 blocks/s
+const MAX_FWD_CHUNKS = 3; // forward catch-up budget per request
+const MAX_BACK_CHUNKS = 4; // backward seed budget per request (~100k blocks)
+const MIN_SEED = 8; // stop seeding once this many sales are on the tape
+const MAX_BACKFILL = 3_000_000n; // ~3.5 days at ~10 blocks/s
 const MAX_SALES = 40;
 
 const ORDER_FULFILLED = parseAbiItem(
@@ -40,9 +50,10 @@ type Sale = {
   leg: "bid" | "listing";
 };
 
-/* Module state: cursor + accumulated sales. The cursor only advances after a
- * fully successful pass, so a mid-scan RPC failure replays the range. */
-const state: { cursor: bigint; sales: Sale[] } = { cursor: 0n, sales: [] };
+/* Module state: the contiguous scanned window [low, high] plus accumulated
+ * sales. Bounds only move after a chunk fully succeeds, so a mid-scan RPC
+ * failure replays the range and the feed never shrinks. */
+const state: { high: bigint; low: bigint; sales: Sale[] } = { high: 0n, low: 0n, sales: [] };
 
 type Item = { itemType: number; token: string; identifier: bigint; amount: bigint };
 
@@ -93,52 +104,78 @@ function decodeSaleCandidates(log: Log<bigint, number, false, typeof ORDER_FULFI
   return out;
 }
 
-async function scan(): Promise<{ sales: Sale[]; headBlock: number; syncedTo: number }> {
-  const head = await client.getBlockNumber();
-  if (state.cursor === 0n) {
-    state.cursor = head > COLD_LOOKBACK ? head - COLD_LOOKBACK - 1n : 0n;
+async function scanRange(fromBlock: bigint, toBlock: bigint): Promise<Array<Omit<Sale, "ts">> | null> {
+  let logs;
+  try {
+    logs = await client.getLogs({
+      address: SEAPORT,
+      event: ORDER_FULFILLED,
+      fromBlock,
+      toBlock,
+      strict: false,
+    });
+  } catch {
+    return null; // caller keeps its bound - the range replays next pass
   }
-  if (state.cursor >= head) {
-    return { sales: state.sales, headBlock: Number(head), syncedTo: Number(state.cursor) };
+  const found: Array<Omit<Sale, "ts">> = [];
+  for (const log of logs) {
+    try {
+      found.push(...decodeSaleCandidates(log as Log<bigint, number, false, typeof ORDER_FULFILLED>));
+    } catch {
+      /* undecodable variant: skip the log, never the pass */
+    }
+  }
+  return found;
+}
+
+async function scan(): Promise<{ sales: Sale[]; headBlock: number; syncedTo: number; scannedFrom: number }> {
+  const head = await client.getBlockNumber();
+  if (state.high === 0n) {
+    // Cold start: nothing scanned yet - the window is empty at head and the
+    // backward seed below fills the tape from the newest blocks first.
+    state.high = head;
+    state.low = head + 1n;
   }
 
-  // Incremental scan: a bounded number of chunks per request so a cold sync
-  // never blows the request budget (Seaport logs cannot be filtered by
-  // collection, so chunks are heavy). The cursor advances ONLY after a chunk
-  // fully succeeds; a failed chunk ends the pass and replays next time, so
-  // no range is ever skipped and the feed never shrinks.
   const found: Array<Omit<Sale, "ts">> = [];
-  for (let i = 0; i < MAX_CHUNKS_PER_PASS && state.cursor < head; i++) {
-    const start = state.cursor + 1n;
+  const uniqueCount = () => {
+    const keys = new Set(state.sales.map((s) => `${s.tx}:${s.tokenId}`));
+    for (const c of found) keys.add(`${c.tx}:${c.tokenId}`);
+    return keys.size;
+  };
+
+  // 1) Forward catch-up toward head (bounded).
+  for (let i = 0; i < MAX_FWD_CHUNKS && state.high < head; i++) {
+    const start = state.high + 1n;
     const end = start + CHUNK > head ? head : start + CHUNK;
-    let logs;
-    try {
-      logs = await client.getLogs({
-        address: SEAPORT,
-        event: ORDER_FULFILLED,
-        fromBlock: start,
-        toBlock: end,
-        strict: false,
-      });
-    } catch {
-      break; // cursor stays at the last fully scanned chunk
-    }
-    for (const log of logs) {
-      try {
-        found.push(...decodeSaleCandidates(log as Log<bigint, number, false, typeof ORDER_FULFILLED>));
-      } catch {
-        /* undecodable variant: skip the log, never the pass */
-      }
-    }
-    state.cursor = end;
+    const got = await scanRange(start, end);
+    if (got === null) break;
+    found.push(...got);
+    state.high = end;
+  }
+
+  // 2) Backward seed, newest-first, until the tape holds MIN_SEED sales or
+  //    the bounded backfill window is exhausted (bounded chunks per request).
+  const floor = head > MAX_BACKFILL ? head - MAX_BACKFILL : 0n;
+  for (let i = 0; i < MAX_BACK_CHUNKS && state.low > floor && uniqueCount() < MIN_SEED; i++) {
+    const end = state.low - 1n;
+    const start = end - CHUNK + 1n > floor ? end - CHUNK + 1n : floor;
+    const got = await scanRange(start, end);
+    if (got === null) break;
+    found.push(...got);
+    state.low = start;
   }
 
   // Timestamp only the (few) blocks that carried new sales.
   const blockTs = new Map<number, number>();
   for (const s of found) {
     if (!blockTs.has(s.block)) {
-      const b = await client.getBlock({ blockNumber: BigInt(s.block) });
-      blockTs.set(s.block, Number(b.timestamp) * 1000);
+      try {
+        const b = await client.getBlock({ blockNumber: BigInt(s.block) });
+        blockTs.set(s.block, Number(b.timestamp) * 1000);
+      } catch {
+        /* fall back below */
+      }
     }
   }
 
@@ -155,7 +192,12 @@ async function scan(): Promise<{ sales: Sale[]; headBlock: number; syncedTo: num
   const merged = [...byKey.values()].sort((a, b) => b.block - a.block).slice(0, MAX_SALES);
 
   state.sales = merged;
-  return { sales: merged, headBlock: Number(head), syncedTo: Number(state.cursor) };
+  return {
+    sales: merged,
+    headBlock: Number(head),
+    syncedTo: Number(state.high),
+    scannedFrom: Number(state.low),
+  };
 }
 
 export async function GET() {
@@ -169,6 +211,7 @@ export async function GET() {
         collection: BROKERS,
         headBlock: res.data.headBlock,
         syncedTo: res.data.syncedTo,
+        scannedFrom: res.data.scannedFrom,
         sales: res.data.sales,
       },
       15,
