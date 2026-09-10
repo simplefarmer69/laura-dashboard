@@ -21,6 +21,7 @@ import {
   pct,
   recentOutputDigest,
   reviewerFeedback,
+  swarmCoverageDigest,
   usd,
 } from "@/lib/swarm/context";
 
@@ -191,9 +192,10 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `LIBRARY (durable build knowledge; trust it)\n${ctx.library}`,
     `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, agent.id)}`,
     `YOUR OWN RECENT OUTPUT (do NOT repeat these themes or angles)\n${recentOutputDigest(ctx.drafts, agent.id)}`,
+    `WHAT THE REST OF THE SWARM COVERED RECENTLY (differentiate from these too — the critic vetoes cross-agent repeats)\n${swarmCoverageDigest(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
     `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever.`,
-    `ANTI-REPETITION RULE: your new drafts must differ from every item in YOUR OWN RECENT OUTPUT in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs.`,
+    `ANTI-REPETITION RULE: your new drafts must differ from every item in YOUR OWN RECENT OUTPUT *and* in WHAT THE REST OF THE SWARM COVERED in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs and from other agents' recent work.`,
   ].join("\n\n");
 }
 

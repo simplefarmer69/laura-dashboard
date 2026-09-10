@@ -109,6 +109,23 @@ export function recentOutputDigest(drafts: Draft[], agentId: string, limit = 5):
     .join("\n");
 }
 
+/**
+ * What the REST of the swarm covered recently, injected so agents differentiate
+ * from each other, not just from themselves. Cross-agent repetition is the
+ * critic's top veto reason; vetoed titles are included so the same angle is
+ * not re-attempted by the next agent.
+ */
+export function swarmCoverageDigest(drafts: Draft[], excludeAgentId: string, limit = 15): string {
+  const recent = drafts.filter((d) => d.agentId !== excludeAgentId).slice(-limit);
+  if (recent.length === 0) return "No other-agent output yet.";
+  return recent
+    .map((d) => {
+      const veto = d.status === "rejected" ? " [VETOED as repetition — do not retry this angle]" : "";
+      return `- ${d.agentId}: "${d.title}" (${d.kind})${veto}`;
+    })
+    .join("\n");
+}
+
 /** Operational health of recent cycles: duration, output, LLM failures. For the coach. */
 export function runsDigest(runs: CycleRun[], limit = 6): string {
   const recent = runs.filter((r) => r.finishedAt).slice(-limit);
