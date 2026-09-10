@@ -105,7 +105,9 @@ export function validateAgainstBounds(p: LaunchProposal, pad: PadState): string[
   if (p.taxDecayPerMinuteBps < 0 || p.taxDecayPerMinuteBps > 2000)
     problems.push("Tax decay must be 0-2000 bps/min");
   if (p.bufferSecs < b.minBufferSecs) problems.push(`Buffer must be at least ${b.minBufferSecs}s`);
-  if (p.postTaxBps < 0 || p.postTaxBps > 500) problems.push("Post tax must be 0-500 bps");
+  /* Pad enforces MIN_POST_TAX_BPS()=100 / MAX_POST_TAX_BPS()=500 at create
+     (verified by simulation on both pads 2026-09-10: postTaxBps 0 reverts). */
+  if (p.postTaxBps < 100 || p.postTaxBps > 500) problems.push("Post tax must be 100-500 bps (pad minimum is enforced on-chain)");
   return problems;
 }
 
