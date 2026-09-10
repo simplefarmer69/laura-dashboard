@@ -84,60 +84,70 @@
 }
 
 .dark {
-  /* StonkBrokers terminal palette (stonkbrokers.cash) */
-  --background: #0b0b0c;
-  --foreground: #f5f5f0;
-  --card: #161618;
-  --card-foreground: #f5f5f0;
-  --popover: #161618;
-  --popover-foreground: #f5f5f0;
-  --primary: #cfff04;
-  --primary-foreground: #111111;
-  --secondary: #1c1c1f;
-  --secondary-foreground: #f5f5f0;
-  --muted: #1c1c1f;
-  --muted-foreground: #8e8e8a;
-  --accent: #232323;
-  --accent-foreground: #f5f5f0;
-  --destructive: #e24b4a;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: rgba(207, 255, 4, 0.6);
-  --chart-1: #cfff04;
-  --chart-2: #39ff14;
-  --chart-3: #e4c36a;
-  --chart-4: #8e8e8a;
-  --chart-5: #e24b4a;
-  --sidebar: #161618;
-  --sidebar-foreground: #f5f5f0;
-  --sidebar-primary: #cfff04;
-  --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #232323;
-  --sidebar-accent-foreground: #f5f5f0;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: rgba(207, 255, 4, 0.6);
+  /* Sentinel palette — anchored to LAURA's mark (src/lib/launchpad/laura-logo.ts):
+     cyan #22d3ee primary, teal #2dd4bf positive, ink #01040a depths.
+     Amber is the single warning signal; red is reserved for failures/negative. */
+  --background: #04070d;
+  --foreground: #d9e5ec;
+  --card: #090f17;
+  --card-foreground: #d9e5ec;
+  --popover: #0b121b;
+  --popover-foreground: #d9e5ec;
+  --primary: #22d3ee;
+  --primary-foreground: #02131a;
+  --secondary: #0e1620;
+  --secondary-foreground: #d9e5ec;
+  --muted: #0d141d;
+  --muted-foreground: #7e909d;
+  --accent: #102030;
+  --accent-foreground: #d9e5ec;
+  --destructive: #e5484d;
+  --border: rgba(150, 196, 222, 0.13);
+  --input: rgba(150, 196, 222, 0.18);
+  --ring: rgba(34, 211, 238, 0.55);
+  --chart-1: #22d3ee;
+  --chart-2: #2dd4bf;
+  --chart-3: #d9a860;
+  --chart-4: #64798a;
+  --chart-5: #e5484d;
+  --sidebar: #090f17;
+  --sidebar-foreground: #d9e5ec;
+  --sidebar-primary: #22d3ee;
+  --sidebar-primary-foreground: #02131a;
+  --sidebar-accent: #102030;
+  --sidebar-accent-foreground: #d9e5ec;
+  --sidebar-border: rgba(150, 196, 222, 0.13);
+  --sidebar-ring: rgba(34, 211, 238, 0.55);
   --radius: 0px;
-  --sb-accent: #cfff04;
-  --sb-green: #39ff14;
-  --sb-gold: #e4c36a;
-  --sb-neg: #e24b4a;
-  --sb-glow: rgba(207, 255, 4, 0.22);
-  --sb-panel-border: rgba(207, 255, 4, 0.35);
+  --sb-accent: #22d3ee;
+  --sb-green: #2dd4bf;
+  --sb-gold: #d9a860;
+  --sb-neg: #e5484d;
+  --sb-glow: rgba(34, 211, 238, 0.16);
+  --sb-panel-border: rgba(34, 211, 238, 0.32);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(126, 144, 157, 0.3) transparent;
   }
   body {
     @apply bg-background text-foreground;
+    /* Numerals line up in every data column, sans or mono. */
+    font-variant-numeric: tabular-nums;
     background-image:
-      linear-gradient(rgba(207, 255, 4, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(207, 255, 4, 0.025) 1px, transparent 1px);
-    background-size: 32px 32px;
+      radial-gradient(1100px 380px at 50% -120px, rgba(34, 211, 238, 0.05), transparent 72%),
+      linear-gradient(rgba(34, 211, 238, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 211, 238, 0.02) 1px, transparent 1px);
+    background-size: auto, 32px 32px, 32px 32px;
   }
   html {
     @apply font-sans;
+  }
+  ::selection {
+    background: rgba(34, 211, 238, 0.28);
   }
 }
 
@@ -156,6 +166,15 @@
   text-transform: uppercase;
 }
 
+/* Micro-label: the caption style for every data readout. */
+@utility sb-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
 @keyframes sb-blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0.15; }
@@ -163,4 +182,35 @@
 
 @utility sb-blink {
   animation: sb-blink 1.2s steps(1) infinite;
+}
+
+@keyframes sb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Soft pulse for live indicators — meaningful motion only. */
+@utility sb-pulse {
+  animation: sb-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes sb-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+/* Loading placeholder: outlined panel with one slow light sweep,
+   shaped like the content it stands in for (no gray blob spam). */
+@utility sb-skeleton {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 25%, rgba(34, 211, 238, 0.06) 50%, transparent 75%);
+    animation: sb-sweep 2.4s ease-in-out infinite;
+  }
 }
