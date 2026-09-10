@@ -190,15 +190,41 @@ type NftFeed = {
   sales?: Array<{ priceEth?: number; ts?: number }>;
 };
 
+/**
+ * The cycle runs inside the same server that serves /api/feeds/nft-buys, and
+ * that local instance holds the warmed Seaport scan window. The public deploy
+ * recycles serverless instances before their backward seed reaches the newest
+ * sale, so it can serve an empty tape while real sales exist on-chain. Local
+ * first (port 4747 is pinned in package.json dev/start), configured base as
+ * the fallback for anything running without the local server.
+ */
+async function nftFeed(): Promise<NftFeed> {
+  try {
+    const local = await getJson<NftFeed>("http://127.0.0.1:4747/api/feeds/nft-buys", 25_000);
+    if ((local.sales ?? []).length > 0) return local;
+  } catch {
+    /* local server unavailable: fall through to the configured base */
+  }
+  return getJson<NftFeed>(`${feedsBase()}/api/feeds/nft-buys`, 12_000);
+}
+
 async function nftLine(): Promise<string[]> {
-  const { data } = await cached("swarm:feed:nft", 5 * 60_000, () =>
-    getJson<NftFeed>(`${feedsBase()}/api/feeds/nft-buys`, 12_000),
-  );
+  const { data } = await cached("swarm:feed:nft", 5 * 60_000, nftFeed);
+  const sales = (data.sales ?? []).filter((s) => Number.isFinite(Number(s.priceEth)));
   const dayAgo = Date.now() - 24 * 3600_000;
-  const recent = (data.sales ?? []).filter((s) => (s.ts ?? 0) > dayAgo && Number.isFinite(Number(s.priceEth)));
-  if (recent.length === 0) return [];
-  const top = Math.max(...recent.map((s) => Number(s.priceEth)));
-  return [`- StonkBroker NFT sales last 24h: ${recent.length} (top ${top.toFixed(3)} ETH)`];
+  const recent = sales.filter((s) => (s.ts ?? 0) > dayAgo);
+  if (recent.length > 0) {
+    const top = Math.max(...recent.map((s) => Number(s.priceEth)));
+    return [`- StonkBroker NFT sales last 24h: ${recent.length} (top ${top.toFixed(3)} ETH)`];
+  }
+  /* A quiet market reads better as an explicit fact than a vanished section:
+   * the scan is healthy, there are just no fills inside the window. */
+  const newest = sales.length ? Math.max(...sales.map((s) => s.ts ?? 0)) : 0;
+  return [
+    newest > 0
+      ? `- StonkBroker NFT sales last 24h: none (newest sale on the tape is ~${Math.round((Date.now() - newest) / 3600_000)}h old)`
+      : "- StonkBroker NFT sales last 24h: none on the scanned window",
+  ];
 }
 
 /* -------------------------------- digest --------------------------------- */

@@ -28,9 +28,10 @@ const SEAPORT = "0x0000000000000068f116a894984e2db1123eb395" as const;
 const BROKERS = "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0"; // StonkBrokers collection
 const CHUNK = 25_000n; // Seaport is unfiltered by collection, keep chunks light
 const MAX_FWD_CHUNKS = 3; // forward catch-up budget per request
-const MAX_BACK_CHUNKS = 4; // backward seed budget per request (~100k blocks)
+const MAX_BACK_CHUNKS = 8; // backward seed budget per request (~200k blocks; broker sales can sit hours apart, so a cold instance must reach further back per request)
 const MIN_SEED = 8; // stop seeding once this many sales are on the tape
 const MAX_BACKFILL = 3_000_000n; // ~3.5 days at ~10 blocks/s
+const MS_PER_BLOCK = 100; // Robinhood Chain runs ~10 blocks/s (verified against sale block timestamps)
 const MAX_SALES = 40;
 
 const ORDER_FULFILLED = parseAbiItem(
@@ -180,13 +181,17 @@ async function scan(): Promise<{ sales: Sale[]; headBlock: number; syncedTo: num
   }
 
   // Merge with history, dedupe by (tx, tokenId) preferring the bid leg.
+  // When the block timestamp lookup failed, estimate from the block delta at
+  // the chain's steady rate: Date.now() here would stamp an hours-old sale
+  // as brand new and poison every "last 24h" consumer downstream.
+  const estTs = (block: number) => Date.now() - (Number(head) - block) * MS_PER_BLOCK;
   const byKey = new Map<string, Sale>();
   for (const s of state.sales) byKey.set(`${s.tx}:${s.tokenId}`, s);
   for (const c of found) {
     const key = `${c.tx}:${c.tokenId}`;
     const prev = byKey.get(key);
     if (!prev || (prev.leg === "listing" && c.leg === "bid")) {
-      byKey.set(key, { ...c, ts: blockTs.get(c.block) ?? prev?.ts ?? Date.now() });
+      byKey.set(key, { ...c, ts: blockTs.get(c.block) ?? prev?.ts ?? estTs(c.block) });
     }
   }
   const merged = [...byKey.values()].sort((a, b) => b.block - a.block).slice(0, MAX_SALES);
