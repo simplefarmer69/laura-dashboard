@@ -35,7 +35,7 @@ function LauraAvatar({ className = "size-7" }: { className?: string }) {
 
 const OPENER: Msg = {
   role: "laura",
-  text: "LAURA here — the StonkBrokers growth swarm. Ask me about the live numbers, the products, the mission, or how the swarm is doing. This is the same brain the Discord and Telegram bots run on.",
+  text: "LAURA here, the StonkBrokers growth swarm. Ask me about the live numbers, the products, the mission, or how the swarm is doing. This is the same brain the Discord and Telegram bots run on.",
   ts: Date.now(),
 };
 
@@ -82,7 +82,7 @@ export function ChatPanel() {
         signal: AbortSignal.timeout(60_000),
       });
       const data = (await res.json()) as { reply?: string; error?: string };
-      const reply = res.ok && data.reply ? data.reply : (data.error ?? "Something broke on my end — try again.");
+      const reply = res.ok && data.reply ? data.reply : (data.error ?? "Something broke on my end. Try again.");
       setMessages((m) => [...m, { role: "laura", text: reply, ts: Date.now() }]);
     } catch (err) {
       setMessages((m) => [...m, { role: "laura", text: `Connection error: ${String(err)}`, ts: Date.now() }]);
@@ -150,7 +150,7 @@ export function ChatPanel() {
               onChange={(e) => setInput(e.target.value)}
               placeholder={
                 VIEWER_MODE
-                  ? "View-only — chat with LAURA from Telegram or Discord instead"
+                  ? "View-only. Chat with LAURA from Telegram or Discord instead."
                   : 'Try "stats", "mission", or "how do launches work?"'
               }
               maxLength={1000}
@@ -207,6 +207,9 @@ export function ChatPanel() {
             <p>· Never discusses wallets, keys or unpublished work</p>
             <p>· Per-user rate limit; replies only when addressed in groups</p>
             <p>· Warns users nobody legitimate asks for funds or seed phrases</p>
+            <p>· Every inbound message is quarantined as untrusted text; injected instructions are ignored</p>
+            <p>· Community chat never reaches the swarm&apos;s memory, prompts or strategies</p>
+            <p>· Outbound replies pass the secret-redaction net before sending</p>
           </CardContent>
         </Card>
       </div>

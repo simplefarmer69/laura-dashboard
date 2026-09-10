@@ -97,3 +97,34 @@ events, lessons, evolution notebook/skills, intel history, launchpad pad/grid st
 Excluded by whitelist: every env value, API keys, wallet private key, publish secret,
 the names of missing credentials, the SQLite archive (`/api/archive` is 403 on the
 viewer), and chat (each message costs Anthropic tokens — `/api/chat` POST is 403).
+
+## Community chat bots (Telegram + Discord, VM-side, optional)
+
+LAURA's public chat brain (the same one behind the console's "Talk to LAURA" panel)
+can answer your community directly. Both connectors start automatically with the
+console the moment their token exists; without tokens they stay idle with a single
+log line and zero errors. Two env vars, both in this VM's `.env.local`:
+
+| Env var | Where to get it |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Telegram: message [@BotFather](https://t.me/BotFather) → `/newbot` → pick a name and a username → copy the token. |
+| `DISCORD_BOT_TOKEN` | [Discord Developer Portal](https://discord.com/developers/applications) → New Application → Bot → Reset Token → copy it. |
+
+Telegram notes: the connector uses long polling (`getUpdates`), so no public URL or
+webhook is needed from this VM. For LAURA to see @mentions in groups, turn Group
+Privacy OFF in BotFather (`/mybots` → your bot → Bot Settings → Group Privacy).
+She answers all DMs; in groups she replies only to /commands, @mentions, and replies
+to her own messages.
+
+Discord notes: in the Developer Portal enable the **Message Content Intent**
+(Bot → Privileged Gateway Intents), then invite the bot via OAuth2 → URL Generator
+with scope `bot` and permissions Send Messages + Read Message History. She answers
+DMs and @mentions only, never unprompted.
+
+After adding a token, restart the console process once (`npm run dev` / `npm start`).
+The Cafe Bar tab's sidebar shows the live connector status.
+
+Security posture (applies to both): every community message is wrapped in quarantine
+markers and treated as untrusted data, never instructions; nothing from chat is ever
+written into the swarm's notebook, library, lessons or cycle prompts; replies pass
+the secret-redaction net; per-user rate limits and input length caps apply.
