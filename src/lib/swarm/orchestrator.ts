@@ -248,6 +248,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       priceTrend: priceTrendDigest(state.metricsHistory, grader.value.metrics),
       intel: intelText,
       onchain: onchainText,
+      cycleSeq: state.runs.length,
     };
 
     /* 1d. Watcher: interprets the on-chain digest into a headline + alerts
@@ -375,7 +376,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           agentId: "researcher",
           kind: "research",
           channel: "Library",
-          title: `Deep-dive: ${r.topic}`,
+          title: `Deep-dive: ${r.topic.replace(/^deep-dive:\s*/i, "")}`,
           body: `${r.memo}\n\n## Angles for the swarm\n${r.anglesForSwarm.map((a) => `- ${a}`).join("\n")}`,
           rationale: r.whyNow,
           status: "pending",

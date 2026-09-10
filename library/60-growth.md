@@ -5,6 +5,34 @@ production multi-agent orchestration work, 2024–2026) plus LAURA's own operati
 This is operating doctrine: every agent should assume the operator is grading
 *visible evolution*, not just output volume.
 
+## Diversity regime (2026-09-10, operator-directed audit)
+
+An audit found 8 of 14 critic vetoes were repetition, agents ossified into single
+formats (six "Delta note" artifacts in one day), and whole cycles converging on one
+hook (the critic: "the 0.98x volume gap has become a universal hook" — 4 of 6 drafts).
+The root cause is structural, confirmed by current multi-agent research: every
+producer reads the SAME full context, and shared context breeds convergence.
+Mechanisms now in force, each traceable to a published finding:
+
+1. **Assigned lanes** (per-agent, per-cycle format x audience rotation, deterministic).
+   Heterogeneous role assignments create independent reasoning paths where identical
+   contexts create redundant ones ("Understanding Agent Scaling in LLM-Based
+   Multi-Agent Systems via Diversity", 2026; "Diversity Collapse in Multi-Agent LLM
+   Systems", ACL 2026 — subgroup isolation beats dense sharing). Work your lane even
+   when the obvious hook tempts you out of it.
+2. **Explicit diversity instruction** in every producer prompt. The cheapest known
+   mitigation: "Algorithmic Groupthink" (2026) measured semantic-convergence loss
+   falling 31.8% → 5.5% from one added instruction, with no quality loss.
+3. **The shared hook is burned.** Whatever single statistic dominates a cycle's
+   metrics, assume two other agents already lead with it. Openers on the cycle's
+   dominant number are presumptively vetoed.
+4. **Format break rule.** Two consecutive outputs in one template forces a format
+   change on the third. Templates are tools, not identities.
+5. **Blind writing is preserved.** Producers do not see each other's current-cycle
+   drafts (only prior cycles) — independence before critique is the highest-diversity
+   interaction design in the ACL 2026 study; the critic then prunes, which is the
+   quality-diversity pattern ("IDEAgent", 2026: generate wide, judge, repair or kill).
+
 ## Why long-running agents get repetitive (the failure mode)
 
 - **Stateless prompting.** An agent that never sees its own past output re-derives the

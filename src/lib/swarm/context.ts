@@ -115,6 +115,49 @@ export function recentOutputDigest(drafts: Draft[], agentId: string, limit = 5):
  * critic's top veto reason; vetoed titles are included so the same angle is
  * not re-attempted by the next agent.
  */
+/**
+ * Deterministic per-agent, per-cycle lane assignment — context partitioning
+ * against diversity collapse. Research on multi-agent LLM systems (2026:
+ * "Algorithmic Groupthink", "Diversity Collapse in Multi-Agent LLM Systems")
+ * shows producers sharing one identical context converge on the same hook;
+ * heterogeneous role/format assignments create independent reasoning paths.
+ * Wheel lengths are co-prime (8 x 7 = 56 combos) so pairings don't cycle fast;
+ * the agent-id hash offsets agents so no two share a lane within a cycle.
+ */
+const LANE_FORMATS = [
+  "explainer thread",
+  "single-number data read (one metric, fully unpacked)",
+  "story or scenario piece (narrative, not bullets)",
+  "step-by-step how-to walkthrough",
+  "contrarian or myth-busting take",
+  "Q&A / interview format",
+  "comparison piece (this vs that, with a verdict)",
+  "field report (what actually happened on chain today, first person)",
+] as const;
+
+const LANE_AUDIENCES = [
+  "current $STONKBROKER holders",
+  "meme-stock retail (GME/AMC lineage, apes culture)",
+  "NFT collectors new to Robinhood Chain",
+  "builders and integrators",
+  "CEX listing decision-makers and market-structure people",
+  "crypto X commentators looking for a story",
+  "Robinhood app users curious about the chain",
+] as const;
+
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function laneAssignment(agentId: string, cycleSeq: number): string {
+  const seed = hashId(agentId) + cycleSeq;
+  const format = LANE_FORMATS[seed % LANE_FORMATS.length];
+  const audience = LANE_AUDIENCES[seed % LANE_AUDIENCES.length];
+  return `format: ${format} · primary audience: ${audience}`;
+}
+
 export function swarmCoverageDigest(drafts: Draft[], excludeAgentId: string, limit = 15): string {
   const recent = drafts.filter((d) => d.agentId !== excludeAgentId).slice(-limit);
   if (recent.length === 0) return "No other-agent output yet.";

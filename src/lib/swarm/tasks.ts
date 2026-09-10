@@ -17,6 +17,7 @@ import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import {
   briefDigest,
   gradeDigest,
+  laneAssignment,
   metricsDigest,
   pct,
   recentOutputDigest,
@@ -137,6 +138,8 @@ export interface CycleContext {
   intel: string;
   /** Watcher's on-chain digest: LAURA's own treasury/LP/earnings state + live pool reads */
   onchain: string;
+  /** Monotonic cycle counter (state.runs.length) — seeds deterministic lane rotation */
+  cycleSeq: number;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -248,8 +251,9 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `YOUR OWN RECENT OUTPUT (do NOT repeat these themes or angles)\n${recentOutputDigest(ctx.drafts, agent.id)}`,
     `WHAT THE REST OF THE SWARM COVERED RECENTLY (differentiate from these too — the critic vetoes cross-agent repeats)\n${swarmCoverageDigest(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
+    `ASSIGNED LANE THIS CYCLE (context partitioning — the whole swarm reads the same data, so lanes are what keep outputs from converging; work YOUR lane, not the hook everyone else will pick)\n${laneAssignment(agent.id, ctx.cycleSeq)}`,
     `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever.`,
-    `ANTI-REPETITION RULE: your new drafts must differ from every item in YOUR OWN RECENT OUTPUT *and* in WHAT THE REST OF THE SWARM COVERED in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs and from other agents' recent work.`,
+    `ANTI-REPETITION RULE: generate output semantically distinct from all previous outputs — yours and the swarm's. Your new drafts must differ from every item in YOUR OWN RECENT OUTPUT *and* in WHAT THE REST OF THE SWARM COVERED in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). FORMAT BREAK: if your last two outputs share one template (e.g. two "Delta note" or "Desk note" artifacts), you MUST change format this cycle — your assigned lane tells you which one to use. THE SHARED HOOK IS BURNED: whatever single statistic or narrative dominates this cycle's metrics/brief, assume at least two other agents lead with it — if your draft opens on it, find a different door in. Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs and from other agents' recent work.`,
   ].join("\n\n");
 }
 
