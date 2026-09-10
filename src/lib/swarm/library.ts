@@ -117,7 +117,7 @@ export async function libraryDigest(maxChars = 24_000): Promise<string> {
  */
 const PROTECTED_DOCS = new Set(["10-operator.md", "20-project.md"]);
 /** Hard cap on library docs so self-editing can grow the shelf but never flood
- * the per-doc digest budgets (10 operator-authored docs + Sage's ledger ship
+ * the per-doc digest budgets (11 operator-authored docs + Sage's ledger ship
  * in the repo; 14 leaves modest self-edit headroom). */
 const MAX_LIBRARY_FILES = 14;
 /** Numbered kebab-case markdown names only; no separators means no traversal. */
