@@ -35,7 +35,9 @@ export const draftSchema = z.object({
   channel: z.string().max(100),
   title: z.string().max(300),
   body: z.string().max(20000),
-  rationale: z.string().max(1200),
+  /* Generous: the anti-repetition rule asks rationales to explain differentiation,
+     and a too-tight cap costs a repair round-trip per producer. */
+  rationale: z.string().max(2500),
 });
 
 export const draftsSchema = z.object({ drafts: z.array(draftSchema).min(1).max(3) });
@@ -68,6 +70,37 @@ export const proposalsSchema = z.object({
       }),
     )
     .max(2),
+  /**
+   * Optional: create or replace ONE skill file in /library/skills. This is the
+   * coach's lever on operating procedures (never code, never caps). Writing an
+   * existing skill name replaces that file wholesale.
+   */
+  skillEdit: z
+    .object({
+      name: z.string().min(3).max(60),
+      description: z.string().min(10).max(200),
+      agents: z
+        .array(
+          z.enum([
+            "all",
+            "scout",
+            "researcher",
+            "narrative",
+            "steward",
+            "bd",
+            "analyst",
+            "growth",
+            "critic",
+            "mint",
+            "coach",
+          ]),
+        )
+        .min(1)
+        .max(10),
+      body: z.string().min(50).max(5000),
+      rationale: z.string().min(10).max(500),
+    })
+    .nullable(),
 });
 
 export type BriefOut = z.infer<typeof briefSchema>;
@@ -256,13 +289,14 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
 
 /* ------------------------------- Researcher ------------------------------- */
 
+/* Generous caps (see library learnings: tight caps cause NoObjectGenerated failures). */
 export const researchSchema = z.object({
-  topic: z.string().min(3).max(120),
+  topic: z.string().min(3).max(300),
   /** Why this topic now, and why it is NOT a repeat of recent research. */
-  whyNow: z.string().max(600),
-  memo: z.string().min(200).max(8000),
+  whyNow: z.string().max(2000),
+  memo: z.string().min(100).max(12000),
   /** One concrete, novel angle per producer for next cycle. */
-  anglesForSwarm: z.array(z.string().max(400)).min(1).max(5),
+  anglesForSwarm: z.array(z.string().max(1000)).min(1).max(6),
   notebook: z
     .array(
       z.object({
@@ -318,15 +352,15 @@ export const criticSchema = z.object({
   reviews: z
     .array(
       z.object({
-        draftId: z.string().max(60),
+        draftId: z.string().max(80),
         verdict: z.enum(["pass", "veto"]),
         /** For vetoes: the earlier draft it duplicates or the specific defect. */
-        reason: z.string().max(500),
+        reason: z.string().max(1200),
       }),
     )
     .max(12),
   /** The repetition pattern forming across the swarm and what would break it. */
-  observation: z.string().max(700),
+  observation: z.string().max(2000),
 });
 
 export type CriticOut = z.infer<typeof criticSchema>;
@@ -478,7 +512,7 @@ export function coachPrompt(ctx: CycleContext): string {
       return `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected. ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or charter compliance.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
 }
 
 export function coachMock(ctx: CycleContext): ProposalsOut {
@@ -502,7 +536,7 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
       evidence: `price component ${weakest.score.toFixed(0)}/100 today`,
     });
   }
-  if (!target) return { lessons, notebook: [], proposals: [] };
+  if (!target) return { lessons, notebook: [], proposals: [], skillEdit: null };
   const addition =
     weakest.key === "price"
       ? "Lead with the fixed 666,666 $STONKBROKER swap unit and current pool depth so readers understand why liquidity, not hype, sets the path into a broker."
@@ -525,5 +559,6 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
         ],
       },
     ],
+    skillEdit: null,
   };
 }

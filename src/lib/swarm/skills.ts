@@ -75,3 +75,63 @@ export async function skillsIndex(): Promise<string> {
   if (skills.length === 0) return "No skills recorded yet.";
   return skills.map((s) => `- ${s.name} (${s.agents.join(", ")}): ${s.description}`).join("\n");
 }
+
+/* ------------------------- Self-editing (coach) ---------------------------- */
+
+/** Hard cap on skill files so self-editing can grow the library but never flood it. */
+const MAX_SKILL_FILES = 16;
+
+export interface SkillEdit {
+  name: string;
+  description: string;
+  agents: string[];
+  body: string;
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/**
+ * The coach's code-free lever on operating procedures: create or replace one
+ * skill file. Constrained by construction — the filename is a slug of the
+ * name (no traversal possible), writes never leave /library/skills, the file
+ * count is capped, and frontmatter values are stripped of newlines. Code,
+ * caps and everything outside the skills dir stay out of reach.
+ */
+export async function writeSkill(edit: SkillEdit): Promise<{ file: string; created: boolean }> {
+  const slug = slugify(edit.name);
+  if (!slug) throw new Error(`skill name "${edit.name}" produced an empty filename slug`);
+  const file = `${slug}.md`;
+  const target = path.resolve(SKILLS_DIR, file);
+  if (path.dirname(target) !== path.resolve(SKILLS_DIR)) throw new Error("skill path escaped the skills dir");
+
+  await fs.mkdir(SKILLS_DIR, { recursive: true });
+  const existing = (await fs.readdir(SKILLS_DIR)).filter((f) => f.endsWith(".md"));
+  const created = !existing.includes(file);
+  if (created && existing.length >= MAX_SKILL_FILES) {
+    throw new Error(
+      `skill cap reached (${MAX_SKILL_FILES} files): update an existing skill instead of creating "${file}"`,
+    );
+  }
+
+  const line = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
+  const agents = edit.agents.map((a) => line(a).toLowerCase()).filter(Boolean);
+  const content = [
+    "---",
+    `name: ${line(edit.name)}`,
+    `description: ${line(edit.description)}`,
+    `agents: ${agents.join(", ") || "all"}`,
+    "---",
+    "",
+    edit.body.trim(),
+    "",
+  ].join("\n");
+  await fs.writeFile(target, content, "utf8");
+  cache = null; // next loadSkills() re-reads from disk
+  return { file, created };
+}

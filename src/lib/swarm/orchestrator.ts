@@ -37,7 +37,7 @@ import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest } from "@/lib/swarm/library";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
-import { skillsForAgent } from "@/lib/swarm/skills";
+import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { utcDate } from "@/lib/grader/score";
 import type {
@@ -630,6 +630,35 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           detail: rec.entry.text,
           refId: rec.entry.id,
         });
+      }
+      /* Skill self-editing: one file per cycle, constrained to /library/skills
+         by writeSkill (slugged filename, dir-escape check, file-count cap).
+         Failure is recorded, never fatal to the cycle. */
+      const skillEdit = out.value.value.skillEdit;
+      if (skillEdit) {
+        try {
+          const res = await writeSkill({
+            name: skillEdit.name,
+            description: skillEdit.description,
+            agents: skillEdit.agents,
+            body: skillEdit.body,
+          });
+          pushEvent(state, {
+            kind: "skill.updated",
+            agentId: "coach",
+            title: `Skill ${res.created ? "created" : "updated"}: ${skillEdit.name}`,
+            detail: `${skillEdit.rationale} (file ${res.file}; applies to ${skillEdit.agents.join(", ")})`,
+            refId: run.id,
+          });
+        } catch (err) {
+          pushEvent(state, {
+            kind: "error",
+            agentId: "coach",
+            title: `Skill edit rejected: ${skillEdit.name}`,
+            detail: String(err),
+            refId: run.id,
+          });
+        }
       }
       const proposalBudget = coachProposalBudget(state);
       for (const p of out.value.value.proposals.slice(0, proposalBudget)) {
