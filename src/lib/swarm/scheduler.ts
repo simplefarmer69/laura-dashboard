@@ -1,5 +1,6 @@
 import os from "node:os";
 import { loadState } from "@/lib/store";
+import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy";
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { utcDate } from "@/lib/grader/score";
@@ -49,6 +50,13 @@ async function tick(): Promise<void> {
 
   const today = utcDate();
   const hasGradeToday = state.grades.some((g) => g.date === today);
+
+  /* Full proposal autonomy: sweep anything still waiting on review. Idempotent —
+     only "pending" items move, so once the backlog clears this is a no-op. */
+  if (state.settings.autoApproveProposals && hasPendingApprovals(state)) {
+    const swept = await sweepPendingApprovals();
+    if (swept > 0) log(`auto-approved ${swept} pending item(s)`);
+  }
 
   /* Full launch autonomy: work the launch queue every tick (fails closed on
      wallet, caps and pad bounds; deploys at most one launch per tick). Runs

@@ -27,6 +27,7 @@ import { launcherGrid } from "@/lib/launchpad/service";
 import { isDuplicateLaunch } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest } from "@/lib/swarm/library";
+import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent } from "@/lib/swarm/skills";
 import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
@@ -234,6 +235,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         );
         const accepted = out.value.value.drafts.slice(0, budget);
         budget -= accepted.length;
+        const autoApprove = state.settings.autoApproveProposals;
         for (const d of accepted) {
           const draft: Draft = {
             id: newId("draft"),
@@ -244,13 +246,14 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             title: d.title,
             body: d.body,
             rationale: d.rationale,
-            status: "pending",
+            status: autoApprove ? "approved" : "pending",
             createdAt: Date.now(),
-            reviewedAt: null,
-            reviewerNote: null,
+            reviewedAt: autoApprove ? Date.now() : null,
+            reviewerNote: autoApprove ? AUTO_APPROVE_NOTE : null,
           };
           state.drafts.push(draft);
           agent.stats.drafts += 1;
+          if (autoApprove) agent.stats.approved += 1;
           run.draftsCreated += 1;
           pushEvent(state, {
             kind: "draft.created",
@@ -259,6 +262,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             detail: `${d.kind} for ${d.channel} · ${d.rationale}`,
             refId: draft.id,
           });
+          if (autoApprove) {
+            pushEvent(state, {
+              kind: "draft.approved",
+              agentId: "system",
+              title: `Auto-approved: ${d.title}`,
+              detail: `${AUTO_APPROVE_NOTE}; publishing stays a separate step.`,
+              refId: draft.id,
+            });
+          }
         }
         markRan(agent);
         step({
@@ -317,7 +329,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           }
         }
         if (spec) {
-          const autonomous = state.settings.autoExecuteLaunches;
+          const autonomous = state.settings.autoExecuteLaunches || state.settings.autoApproveProposals;
           const launch: LaunchProposal = {
             id: newId("launch"),
             cycleId: run.id,
@@ -457,8 +469,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           detail: p.rationale,
           refId: proposal.id,
         });
-        if (state.settings.autoApplyStrategyProposals) {
-          applyProposal(state, proposal, "Auto-applied by coach (operator enabled auto-apply)", "coach");
+        if (state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals) {
+          applyProposal(
+            state,
+            proposal,
+            state.settings.autoApproveProposals ? AUTO_APPROVE_NOTE : "Auto-applied by coach (operator enabled auto-apply)",
+            "coach",
+          );
           proposal.autoApplied = true;
         }
       }
@@ -467,7 +484,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         agentId: "coach",
         label: "Lessons & proposals",
         status: "ok",
-        summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}`,
+        summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}`,
         durationMs: out.ms,
       });
     }

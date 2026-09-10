@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   llmModel: "",
   autoTune: true,
   autoExecuteLaunches: true,
+  autoApproveProposals: true,
 };
 
 /**

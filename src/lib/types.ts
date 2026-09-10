@@ -195,6 +195,13 @@ export interface Settings {
    * pad bounds, funded designated wallet) still apply and fail closed.
    */
   autoExecuteLaunches: boolean;
+  /**
+   * Full proposal autonomy: drafts, strategy proposals and launch specs
+   * auto-approve on creation, and anything left pending is swept to approved
+   * on the next scheduler tick. External publishing and the launch hard caps
+   * (deploys/day, spend/deploy, pad bounds) remain gated.
+   */
+  autoApproveProposals: boolean;
 }
 
 export type SwarmEventKind =
