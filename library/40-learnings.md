@@ -83,6 +83,20 @@ holds the durable ones from the build itself.
   library docs, remember the docs section absorbs truncation from the end: durable
   facts belong in earlier-numbered files.
 
+## Self-improvement toolkit (code-backed, current)
+
+- **Price trend in prompts.** Every agent's METRICS block now includes a price/liquidity
+  trend digest computed from stored snapshots (6h/24h/3d/7d windows, history depth, and
+  when the grader's 7d baseline unlocks). Price is the weakest lever — use these numbers
+  instead of reasoning from a single 24h move. Reads only; no trading exists anywhere.
+- **Cycle telemetry.** Each run records LLM calls, mock fallbacks and schema repairs;
+  the coach sees them as OPERATIONAL HEALTH and the console Runs panel shows them.
+- **Watchdog.** Two consecutive failed cycles push a `swarm.health` event so breakage is
+  visible in the console instead of silent in logs.
+- **Skill self-editing.** The coach may rewrite one skill file per cycle (constrained to
+  `/library/skills`, 16-file cap, never code or caps) — operating procedures now evolve
+  with evidence, like strategies do.
+
 ## What moved the grade
 
 - D 57.5 → C 62.7 across the build. Execution (shipping cycles, deploys, evolution)
