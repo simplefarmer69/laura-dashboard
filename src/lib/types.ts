@@ -310,6 +310,9 @@ export type SwarmEventKind =
   | "earnings.accrued"
   | "earnings.claimed"
   | "treasury.buy"
+  | "treasury.lp"
+  | "treasury.stake"
+  | "treasury.exit"
   | "tuner.adjusted"
   | "skill.updated"
   | "swarm.health"
@@ -445,6 +448,38 @@ export interface TreasuryBuy {
   router: string;
 }
 
+/**
+ * One Smart LP position on the Stonk Exchange (vDEX, powered by up.) —
+ * a full-range STONKBROKER/WETH concentrated-liquidity NFT, optionally
+ * staked in the pool's gauge for $UP emissions.
+ */
+export interface TreasuryLpPosition {
+  id: string;
+  ts: number;
+  /** Position NFT id on the vDEX NonfungiblePositionManager */
+  tokenId: string;
+  pool: string;
+  /** WETH provided at entry (native ETH, wrapped by the manager) */
+  ethIn: number;
+  /** $STONKBROKER provided at entry */
+  stonkIn: number;
+  /** Position liquidity (uint128 as string) */
+  liquidity: string;
+  mintTxHash: string;
+  /** Gauge the NFT is staked in (earns $UP emissions); null = unstaked, earning swap fees */
+  gauge: string | null;
+  stakeTxHash: string | null;
+  /** Live value estimate, refreshed by the treasury tick */
+  currentEthValue?: number;
+  currentStonkValue?: number;
+  /** Pending $UP rewards when staked (readable from the gauge) */
+  pendingUpRewards?: number;
+  valueUpdatedAt?: number;
+  /** Set when the position was withdrawn back to the wallet */
+  exitedAt?: number | null;
+  exitTxHash?: string | null;
+}
+
 /** Periodic on-chain snapshot of LAURA's treasury and launch earnings. */
 export interface TreasurySnapshot {
   updatedAt: number;
@@ -479,6 +514,8 @@ export interface SwarmState {
   treasury?: TreasurySnapshot | null;
   /** Ledger of mission-token accumulation buys (caps are computed from this). */
   treasuryBuys?: TreasuryBuy[];
+  /** Smart LP positions on the Stonk Exchange vDEX (caps computed from this). */
+  treasuryLp?: TreasuryLpPosition[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
 }
