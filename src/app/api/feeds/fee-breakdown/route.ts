@@ -250,7 +250,7 @@ const MAX_FWD_CHUNKS = 6;
 // out of budget keeps honest partial coverage flags.
 const MAX_BACK_CHUNKS = 100;
 const BACK_CONCURRENCY = 4;
-const PASS_BUDGET_MS = 38_000;
+const PASS_BUDGET_MS = 50_000;
 const HOUR_MS = 3_600_000;
 const D7_MS = 7 * 24 * HOUR_MS;
 /** Scan floor: 7d plus margin so the d7 window is fully inside coverage. */
