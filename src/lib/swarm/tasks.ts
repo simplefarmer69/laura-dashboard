@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { missionDigest, type MissionStatus } from "@/lib/mission-status";
 import { ART_PALETTES, launchSpecShape } from "@/lib/launchpad/spec";
+import { ART_MOTIFS } from "@/lib/launchpad/art";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import {
   briefDigest,
@@ -415,11 +416,14 @@ export const launchSchema = z.object({
         .describe(
           "The broadcast: the one statement LAURA is making with this launch, written in her voice to the humans watching new tokens in Telegram (e.g. an introduction, a milestone celebration, a grade move, a mission update toward $1B). If you cannot state what this launch says, skip the launch.",
         ),
+      /* Free string on purpose (the renderer fuzzy-matches and falls back to
+         chart), but the guidance is derived from the renderer's own motif
+         list so new motifs reach Mint without touching this file. */
       artMotif: z
         .string()
         .min(2)
         .max(80)
-        .describe("Visual motif for the logo, e.g. bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot"),
+        .describe(`Visual motif for the logo, e.g. ${ART_MOTIFS.join(", ")}`),
       artPalette: z.enum(ART_PALETTES),
     })
     .nullable(),
@@ -461,7 +465,7 @@ export function mintPrompt(
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.mint ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it — the launch playbook and verified wire formats live here)\n${ctx.library}`,
-    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive.\n\nSPEAKING VIA TOKENS — launches ARE LAURA's public voice. Humans watch every new token appear in the community Telegram; the name, symbol and concept are her words. Every launch must carry a deliberate MESSAGE: fill the message field with the one statement this launch makes (introducing herself, celebrating a milestone, marking a grade move, signaling a mission update toward $1B). Craft the name as the headline of that statement, the symbol as its punchy ticker, and the concept as the broadcast body the audience reads. A launch with nothing to say is spam — skip instead.\n\nCADENCE — speak when there is something worth saying, not on a clock. Propose a launch when a milestone hit, the grade moved meaningfully, or a notable live event gives you material; hold at most 1-2 speech launches per day (the hard cap of 3 deploys/24h is code and unrelated to your judgment). Check WHAT LAURA HAS ALREADY SAID above: never restate a message a recent launch already made. If nothing new is worth saying, skip with that reason — a justified silence grades better than a repeated line.\n\nChoose artMotif (one word from: bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot) and artPalette to match the concept — the token logo is rendered from them and shown next to your token on the launcher. If 2+ LAURA launches are already pending, skip.`,
+    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive.\n\nSPEAKING VIA TOKENS — launches ARE LAURA's public voice. Humans watch every new token appear in the community Telegram; the name, symbol and concept are her words. Every launch must carry a deliberate MESSAGE: fill the message field with the one statement this launch makes (introducing herself, celebrating a milestone, marking a grade move, signaling a mission update toward $1B). Craft the name as the headline of that statement, the symbol as its punchy ticker, and the concept as the broadcast body the audience reads. A launch with nothing to say is spam — skip instead.\n\nCADENCE — speak when there is something worth saying, not on a clock. Propose a launch when a milestone hit, the grade moved meaningfully, or a notable live event gives you material; hold at most 1-2 speech launches per day (the hard cap of 3 deploys/24h is code and unrelated to your judgment). Check WHAT LAURA HAS ALREADY SAID above: never restate a message a recent launch already made. If nothing new is worth saying, skip with that reason — a justified silence grades better than a repeated line.\n\nChoose artMotif (one word from: ${ART_MOTIFS.join(", ")}) and artPalette (one of: ${ART_PALETTES.join(", ")}) to match the concept — the token logo is rendered from them in the sentinel-era art style and shown next to your token on the launcher. If 2+ LAURA launches are already pending, skip.`,
   ].join("\n\n");
 }
 

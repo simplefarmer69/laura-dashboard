@@ -24,7 +24,9 @@ export const launchSpecShape = {
   bufferSecs: z.number().min(600).max(3600),
 } as const;
 
-/* Must stay a superset-compatible mirror of ART_PALETTES in art.ts (zod needs the literal tuple). */
+/* Palette vocabulary, as the literal tuple zod's enum needs. This is the
+   source of truth: art.ts types its palette map with these keys, so adding a
+   palette on either side without the other is a compile error (no drift). */
 export const ART_PALETTES = ["emerald", "amber", "crimson", "violet", "cyan", "gold", "ion", "aurora"] as const;
 
 /** True when a non-rejected, non-failed launch already uses this name or symbol. */

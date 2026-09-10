@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { ART_PALETTES as PALETTE_NAMES } from "@/lib/launchpad/spec";
 
 /**
  * Procedural token art: LAURA designs each launch's logo herself.
@@ -17,7 +18,9 @@ import sharp from "sharp";
 /** Bump when the composition changes so old launches keep their stored art. */
 export const ART_VERSION = 2;
 
-export const ART_PALETTES = {
+/* Keyed by the palette tuple in spec.ts (the zod-enum source of truth), so a
+   palette added on either side is a compile error until both agree. */
+export const ART_PALETTES: Record<(typeof PALETTE_NAMES)[number], { glow: string; accent: string; dim: string }> = {
   emerald: { glow: "#34d399", accent: "#d1fae5", dim: "#053f31" },
   amber: { glow: "#fbbf24", accent: "#fef3c7", dim: "#4a2a08" },
   crimson: { glow: "#f87171", accent: "#fee2e2", dim: "#4c1212" },
@@ -27,7 +30,7 @@ export const ART_PALETTES = {
   /* Sentinel-era additions: colder, more futuristic grounds */
   ion: { glow: "#60a5fa", accent: "#dbeafe", dim: "#12295a" },
   aurora: { glow: "#2dd4bf", accent: "#ccfbf1", dim: "#0a3d38" },
-} as const;
+};
 
 export type ArtPalette = keyof typeof ART_PALETTES;
 
