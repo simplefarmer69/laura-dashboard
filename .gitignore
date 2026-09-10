@@ -24,6 +24,13 @@
 .DS_Store
 *.pem
 
+# keys and secrets (belt and braces; secrets live in env, never in files here)
+*.key
+*key*.json
+!package*.json
+!**/artifacts.json
+secrets/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
