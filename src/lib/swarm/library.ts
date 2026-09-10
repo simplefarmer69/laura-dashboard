@@ -85,9 +85,10 @@ function docsSection(docs: LibraryDoc[], budget: number): string {
  * doc (see docsSection) so every library doc reaches every prompt with at
  * least its head. Default raised 14k → 22k when per-doc budgeting landed, so
  * the operator and project docs keep the same depth they had while the other
- * docs gain their heads.
+ * docs gain their heads; raised 22k → 23k when 25-stonkbrokers-official.md
+ * joined, covering its 1k floor so no existing doc lost depth.
  */
-export async function libraryDigest(maxChars = 22_000): Promise<string> {
+export async function libraryDigest(maxChars = 23_000): Promise<string> {
   const [docs, notebook, skills] = await Promise.all([libraryDocs(), notebookDigest(), skillsIndex()]);
   /* Notebook: keep the TAIL (newest entries last is the file's order). */
   const notebookBudget = 4_500;
