@@ -460,6 +460,7 @@ export function mintPrompt(
   floor: string,
   pendingLaunches: number,
   spokenDigest: string,
+  capacity: string,
 ): string {
   return [
     `MISSION\n${missionDigest(ctx.mission)}`,
@@ -468,6 +469,7 @@ export function mintPrompt(
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
     `QUEUED LAURA LAUNCHES AWAITING AUTONOMOUS DEPLOY: ${pendingLaunches}`,
+    `LAUNCH CAPACITY & TREASURY (real numbers — ground your skip/propose reasoning in these, not guesses; a proposal made while the deploy cap is exhausted simply queues until headroom returns)\n${capacity}`,
     `WHAT LAURA HAS ALREADY SAID (recent launches; never repeat a statement)\n${spokenDigest}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.mint ?? "None."}`,

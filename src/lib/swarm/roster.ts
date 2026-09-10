@@ -18,6 +18,10 @@ export const DEFAULT_SETTINGS: Settings = {
   /* Claim path is built and simulation-verified, but sending stays off until
      on-chain ownership frees up. Flip to true to activate autonomous claims. */
   autoClaimEarnings: false,
+  /* Operator-requested (2026-09-10): the wallet is an influence tool, not just
+     a gas tank. Capped $STONKBROKER accumulation runs by default inside the
+     TREASURY_CAPS hard rails (treasury.ts). */
+  autoTreasuryOps: true,
 };
 
 /**

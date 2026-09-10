@@ -270,6 +270,14 @@ export interface Settings {
    * on-chain transaction ownership sits with the launch executor work.
    */
   autoClaimEarnings: boolean;
+  /**
+   * Treasury operations: periodic capped $STONKBROKER accumulation buys with
+   * treasury ETH (the wallet as a mission-influence tool). Hard code-level
+   * caps in TREASURY_CAPS (per-buy, per-24h, buy gap, treasury floor) apply
+   * regardless of this flag; the mission-token allowlist blocks every other
+   * token, including LAURA's own launches (wash-trade guard).
+   */
+  autoTreasuryOps: boolean;
 }
 
 export type SwarmEventKind =
@@ -301,6 +309,7 @@ export type SwarmEventKind =
   | "launch.failed"
   | "earnings.accrued"
   | "earnings.claimed"
+  | "treasury.buy"
   | "tuner.adjusted"
   | "skill.updated"
   | "swarm.health"
@@ -422,6 +431,20 @@ export interface LaunchEarnings {
   scannedToBlock: number;
 }
 
+/** One executed mission-token accumulation buy (treasury ETH → $STONKBROKER). */
+export interface TreasuryBuy {
+  id: string;
+  ts: number;
+  /** Native ETH spent (the router wraps it); excludes gas */
+  ethIn: number;
+  /** $STONKBROKER received (wallet balance delta) */
+  tokensOut: number;
+  txHash: string;
+  /** v3 fee tier the swap routed through (10000 = 1%, 3000 = 0.3%) */
+  feeTier: number;
+  router: string;
+}
+
 /** Periodic on-chain snapshot of LAURA's treasury and launch earnings. */
 export interface TreasurySnapshot {
   updatedAt: number;
@@ -454,6 +477,8 @@ export interface SwarmState {
   launches: LaunchProposal[];
   /** Latest treasury/earnings snapshot; absent until the first refresh. */
   treasury?: TreasurySnapshot | null;
+  /** Ledger of mission-token accumulation buys (caps are computed from this). */
+  treasuryBuys?: TreasuryBuy[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
 }

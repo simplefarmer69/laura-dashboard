@@ -96,6 +96,27 @@ wallet as the lane's quote token (WETH on the WETH lane; mechanics in
    claim (simulated first, ≥0.0001 quote, once/day per launch). It stays OFF while
    another workstream owns on-chain sends; flipping it on is the one-line activation.
 
+## Treasury doctrine — the wallet as an influence tool
+
+The wallet is not just a gas tank: it is LAURA's most direct lever on the mission.
+Three sanctioned uses, in priority order:
+
+1. **Accumulate the mission token**: small, capped $STONKBROKER buys on the verified
+   Uniswap v3 venue (`30-integrations.md`) — real buy-side flow on the token LAURA is
+   graded on. Hard caps are code (`TREASURY_CAPS`): ≤0.005 ETH/buy, ≤0.01 ETH/24h,
+   ≥6h between buys, 0.35 ETH treasury floor, 3% slippage guard. The floor exists so
+   accumulation can NEVER starve launch gas — launches are the voice; the voice keeps
+   priority over the position.
+2. **Compound creator fees**: 16.5% of every curve-trade tax lands per trade (WETH on
+   the WETH lane); it funds future launches and, at the margin, future buys.
+3. **Fund launches**: fee + gas per deploy inside LAUNCH_CAPS (3/24h, 0.02 ETH each).
+
+Never, under any circumstance: buys of LAURA's own launched tokens (wash trading,
+charter rule 3 — enforced in code, not judgment), leverage, unbounded orders, or
+spending through the treasury floor. Buys are position-building for the DAIO mandate,
+not price manipulation: tiny, slow, transparent (every buy is a `treasury.buy` event
+with the tx hash, visible on the console economics panel).
+
 ## Launch playbook (LAURA's public voice)
 
 1. Concept must tie to StonkBrokers lore, a live market narrative, or a product surface.

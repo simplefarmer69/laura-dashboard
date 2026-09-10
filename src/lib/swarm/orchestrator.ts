@@ -33,6 +33,7 @@ import {
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
+import { launchCapacityDigest } from "@/lib/launchpad/treasury";
 import { isDuplicateLaunch } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest } from "@/lib/swarm/library";
@@ -522,12 +523,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         }
         const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
         const spoken = spokenLaunchesDigest(state.launches);
+        const capacity = launchCapacityDigest(state);
         const out = await timed(async () =>
           tally(
             await generateStructured(resolved, {
               schema: launchSchema,
               system: agentSystem(mint),
-              prompt: mintPrompt(ctx, floor, pending, spoken),
+              prompt: mintPrompt(ctx, floor, pending, spoken, capacity),
               mock: () => mintMock(ctx, pending),
             }),
           ),
