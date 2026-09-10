@@ -3,6 +3,7 @@ import { loadState } from "@/lib/store";
 import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy";
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
+import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { utcDate } from "@/lib/grader/score";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
 
@@ -92,6 +93,11 @@ async function tick(): Promise<void> {
   if (state.settings.autoExecuteLaunches && launchWork) {
     await runLaunchExecutor();
   }
+
+  /* Earnings watch: cheap on-chain snapshot every ~10 min (interval guard and
+     error handling live inside; never throws). Claims send only when
+     settings.autoClaimEarnings is true. */
+  await runEarningsMaintenance(state);
 
   const sinceLastCycle = Date.now() - s.lastCycleAt;
   const due = sinceLastCycle >= intervalMs;

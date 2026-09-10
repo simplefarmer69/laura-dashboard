@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { patchJson, type ConsoleState } from "@/components/console/use-swarm-state";
+import { EarningsPanel } from "@/components/console/earnings";
 import { ago, usd } from "@/components/console/format";
 import type { LaunchProposal, LaunchStatus } from "@/lib/types";
 
@@ -148,6 +149,8 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
           </CardContent>
         </Card>
       </div>
+
+      <EarningsPanel state={state} />
 
       <div className="flex items-center gap-2">
         <h2 className="sb-ticker text-xs text-muted-foreground">LAUNCH QUEUE ({pending.length} awaiting action)</h2>

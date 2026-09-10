@@ -15,6 +15,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autoTune: true,
   autoExecuteLaunches: true,
   autoApproveProposals: true,
+  /* Claim path is built and simulation-verified, but sending stays off until
+     on-chain ownership frees up. Flip to true to activate autonomous claims. */
+  autoClaimEarnings: false,
 };
 
 /**

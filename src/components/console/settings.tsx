@@ -134,6 +134,19 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               onCheckedChange={(v) => set("autoApproveProposals", Boolean(v))}
             />
           </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Auto-claim creator earnings</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Claims the flushCreatorQuote fallback ledger autonomously (simulated first, ≥0.0001 quote,
+                max once/day per launch). Fees are normally push-paid per trade, so this usually stays idle.
+              </p>
+            </div>
+            <Switch
+              checked={form.autoClaimEarnings}
+              onCheckedChange={(v) => set("autoClaimEarnings", Boolean(v))}
+            />
+          </div>
           <Button className="w-full" disabled={busy} onClick={() => void save()}>
             <Save className="size-3.5" /> Save settings
           </Button>

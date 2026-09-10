@@ -19,6 +19,7 @@ const settingsSchema = z
     llmModel: z.string().max(80),
     autoTune: z.boolean(),
     autoApproveProposals: z.boolean(),
+    autoClaimEarnings: z.boolean(),
   })
   .partial();
 

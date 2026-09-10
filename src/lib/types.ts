@@ -215,6 +215,13 @@ export interface Settings {
    * (deploys/day, spend/deploy, pad bounds) remain gated.
    */
   autoApproveProposals: boolean;
+  /**
+   * Autonomous claiming of creator-fee fallback ledgers (flushCreatorQuote).
+   * Creator fees are normally push-paid per trade; this only fires when a
+   * push failed and value sits in creatorQuoteOwed. OFF by default while
+   * on-chain transaction ownership sits with the launch executor work.
+   */
+  autoClaimEarnings: boolean;
 }
 
 export type SwarmEventKind =
@@ -244,6 +251,8 @@ export type SwarmEventKind =
   | "launch.armed"
   | "launch.verified"
   | "launch.failed"
+  | "earnings.accrued"
+  | "earnings.claimed"
   | "tuner.adjusted"
   | "error";
 
@@ -335,6 +344,48 @@ export interface LaunchProposal {
   verifiedAt?: number | null;
 }
 
+/** Creator-fee economics for one deployed launch (Smart Launch V2 pad). */
+export interface LaunchEarnings {
+  /** Local proposal id this entry tracks (state.launches[].id) */
+  proposalId: string;
+  /** On-chain launch id (per pad) */
+  launchId: string;
+  symbol: string;
+  lane: "weth" | "stonk";
+  /**
+   * Lifetime creator-fee income from this launch's curve trades, in the
+   * lane's quote token (WETH-lane units ≈ ETH). Push-paid to the wallet on
+   * every taxed trade: tax × creatorFeeBpsSnap / 10000.
+   */
+  earnedQuote: number;
+  /** Fallback ledger claimable via flushCreatorQuote (fills only when a push transfer failed) */
+  claimableQuote: number;
+  /** Curve trades seen (buys + sells) */
+  tradeCount: number;
+  graduated: boolean;
+  bonded: boolean;
+  /** Total flushed by our own claims */
+  claimedQuote: number;
+  lastClaimAt: number | null;
+  /** Log-scan cursor: block the launch deployed at and last block scanned */
+  deployBlock: number;
+  scannedToBlock: number;
+}
+
+/** Periodic on-chain snapshot of LAURA's treasury and launch earnings. */
+export interface TreasurySnapshot {
+  updatedAt: number;
+  walletAddress: string | null;
+  ethBalance: number;
+  /** WETH-lane creator fees land here; unwrap to spend as ETH */
+  wethBalance: number;
+  /** STONK-lane creator fees land here */
+  stonkBalance: number;
+  totalEarnedQuote: number;
+  totalClaimableQuote: number;
+  launches: LaunchEarnings[];
+}
+
 export interface SwarmState {
   version: 1;
   settings: Settings;
@@ -349,6 +400,8 @@ export interface SwarmState {
   lessons: Lesson[];
   milestones: MilestoneRecord[];
   launches: LaunchProposal[];
+  /** Latest treasury/earnings snapshot; absent until the first refresh. */
+  treasury?: TreasurySnapshot | null;
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
 }
