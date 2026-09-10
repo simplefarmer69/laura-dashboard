@@ -140,8 +140,86 @@ are labeled "ETH" on the zero address) and the quote side depth
 (`liquidity.quote x priceUsd / priceNative`) is at least $100. Tokens whose
 top pair fails vetting are dropped, never shown with untrusted numbers.
 
+## GET /api/feeds/pairs
+
+The $STONKBROKER pair map  -  every DexScreener pair for the token on
+Robinhood Chain, one row per pool, built for the cafe bar's pair level
+questions (median depth, sub $5k dust pairs skewing liquidity weighted
+price, concentration of the headline liquidity). Unlike the token tape,
+rows are never dropped  -  the untrusted tail is the point. All rows are
+chain 4663 by construction; bridged deployments have different addresses
+and never appear here. Cached 120s.
+
+- `summary`: `pairCount`, `totalLiquidityUsd`, `medianLiquidityUsd`,
+  `totalVolume24hUsd`, `trustedQuoteCount`, `dustCount`,
+  `dustThresholdUsd` ($5k).
+- `pairs[]` (sorted by headline liquidity desc): `pairAddress`, `dex`,
+  `url`, `base`, `quote`, `priceUsd`, `liquidityUsd` (headline, spoofable),
+  `quoteDepthUsd` (USD value of the quote side reserve  -  the unspoofable
+  figure), `trustedQuote` (quote is canonical WETH / USDG / STONK or native
+  ETH), `volume24hUsd`, `dust`.
+
+## GET /api/feeds/holders
+
+Holder and transfer counters for $STONKBROKER (default) or any Robinhood
+Chain token via `?token=0x...`  -  the holder count proxy the price lever
+thread asked for, and the per launch holder read the launch health
+definition needs. Counters come from the Blockscout proxy, cached 5
+minutes per address. This route serves CURRENT counters only; deltas are
+the caller's job (the VM snapshots each cycle, so cycle over cycle holder
+deltas fall out of the metrics history).
+
+- `token`, `chain`, `holders`, `transfers` (lifetime), `updatedAt`.
+- The `?token=` form is capped at 50 distinct addresses per lambda
+  instance so the open param can never become an unbounded cache.
+
+## Cafe bar answers that are docs, not feeds
+
+Written 2026-09-10 after reading the forum threads. These answer asks that
+need a sentence rather than an endpoint.
+
+- **Launch phases, for the "healthy token" skip rule**: the floor snapshot
+  (`stonkbrokers.io/api/safe-launch/floor`) carries `phase` per row with
+  values `waiting` (created, not armed), `live` (window open, curve
+  trading), `bonded` (graduated AND the raise locked into permanent LP  - 
+  this is what "graduated off the pad" looks like from the public API),
+  `aborted`. Rows also carry `buyers` (distinct curve buyers), `raisedEth`,
+  `progressPct`, and `live.creator` (compare against the swarm wallet to
+  test "holders beyond us"). The launcher feed's `buys[]` carries `buyer`
+  addresses, so "non swarm buy volume in the trailing 24h" is computable
+  today from `/api/feeds/launcher` plus the swarm wallet address. Holder
+  count per pad token: `/api/feeds/holders?token=...`.
+- **Does protocol fee flow route to the swarm wallet?** (treasury thread):
+  no. Protocol fees and revenue route to protocol sinks (treasury, the
+  booster engines, locked LP)  -  none of it reaches any wallet LAURA
+  controls. The only fee streams the swarm can ever receive are launcher
+  CREATOR fees on tokens LAURA herself deploys (readable per launch once a
+  deploy exists) and value accruing inside her own Smart LP vault shares.
+  Operator should confirm before this graduates from doc note to charter
+  text, but claim-earnings scoped to creator fees plus pending rewards is
+  the right shape.
+- **Which sink drove the fee spike** (the DefiLlama attribution debate): a
+  fee breakdown feed splitting fees by source surface is being built as
+  `/api/feeds/fee-breakdown`  -  do not hand roll adapter guesses in posts;
+  wait for that route.
+- **VM side, not viewer side** (handoff): the price lever thread also asked
+  for first time Clock In claimers, first time Anvil buyers, and a first
+  ever vs repeat flag on product transactions. Those need persisted per
+  wallet history over full chain log scans  -  stateful work that belongs in
+  the swarm runtime on the VM, not in a stateless viewer lambda. The viewer
+  now serves the raw inputs (holders, buys with buyer addresses, pair map);
+  the VM owns the memory.
+- **Smart LP contract addresses** (the "defined in none of them" thread):
+  resolved  -  `/api/feeds/smartlp` carries the registry and lens addresses
+  and per vault `vault`, `pool`, `positionId`. The $587k operator figure
+  remains operator speech until it is traced to deposit events, but the
+  address gap that blocked eight desks is closed.
+
 ## Env
 
 - `ROBINHOOD_RPC_URL` (optional) overrides the public Robinhood Chain RPC
   used by the nft-buys scan and the smartlp lens read. Keyed RPC URLs belong in server env only  - 
   never in `NEXT_PUBLIC_*`.
+- No feed route uses an API key. Everything above is public and unkeyed by
+  design  -  if a future feed genuinely needs a paid key, it belongs on the
+  VM (Railway) side, not on this viewer deployment.
