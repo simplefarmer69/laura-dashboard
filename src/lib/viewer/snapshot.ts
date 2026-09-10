@@ -38,11 +38,12 @@ const SETTINGS_KEYS: (keyof Settings)[] = [
   "autoApproveProposals",
   "autoExecuteLaunches",
   "autoClaimEarnings",
+  "autoExecuteUtility",
 ];
 
 /** Optional state sections (newer work streams); all public-safe by content:
     X-read intel snapshots and on-chain treasury buys (tx hashes are public). */
-const OPTIONAL_STATE_KEYS = ["intelHistory", "treasuryBuys", "intel", "influence", "forum"] as const;
+const OPTIONAL_STATE_KEYS = ["intelHistory", "treasuryBuys", "intel", "influence", "forum", "utilityProjects"] as const;
 
 function pickSettings(settings: Settings): Partial<Settings> {
   const out: Record<string, unknown> = {};

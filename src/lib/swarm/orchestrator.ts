@@ -16,6 +16,9 @@ import { checkNovelty } from "@/lib/swarm/novelty";
 import {
   agentSystem,
   briefSchema,
+  builderMock,
+  builderPrompt,
+  builderSchema,
   chainReadSchema,
   coachMock,
   coachPrompt,
@@ -51,6 +54,13 @@ import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
+import { builderGate } from "@/lib/builder/caps";
+import {
+  builderCandidates,
+  builderCandidatesDigest,
+  builderCapacityDigest,
+  utilityProjectsDigest,
+} from "@/lib/builder/executor";
 import { utcDate } from "@/lib/grader/score";
 import type {
   Agent,
@@ -62,6 +72,7 @@ import type {
   RunStep,
   StrategyProposal,
   SwarmState,
+  UtilityProject,
 } from "@/lib/types";
 
 let cycleInFlight: Promise<CycleRun> | null = null;
@@ -838,6 +849,125 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         mint.lastError = String(err);
         step({ agentId: "mint", label: "Launch spec", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "mint", title: "Mint failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 4b. Builder: utility projects for LAURA's launched tokens (strided;
+       runs about every third cycle so builds stay curated, never automatic). */
+    const builder = agentById(state, "builder");
+    const builderStrideMs = 3 * Math.max(30, state.settings.cycleIntervalMinutes) * 60_000;
+    const builderDue = (builder.lastRunAt ?? 0) <= Date.now() - builderStrideMs;
+    const builderBlocked = builderGate(state);
+    if (builder.status === "paused") {
+      step({ agentId: "builder", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (!builderDue) {
+      step({
+        agentId: "builder",
+        label: "Utility build",
+        status: "skipped",
+        summary: "Strided: the builder designs at most one project about every third cycle",
+        durationMs: 0,
+      });
+    } else if (builderBlocked.blocked) {
+      step({ agentId: "builder", label: "Utility build", status: "skipped", summary: builderBlocked.reason, durationMs: 0 });
+    } else {
+      try {
+        const candidates = builderCandidates(state);
+        if (candidates.length === 0) {
+          markRan(builder);
+          step({
+            agentId: "builder",
+            label: "Utility build",
+            status: "skipped",
+            summary: "No eligible tokens yet (deployed, 24h+ old, not already served)",
+            durationMs: 0,
+          });
+        } else {
+          const out = await timed(async () =>
+            tally(
+              await generateStructured(resolved, {
+                schema: builderSchema,
+                system: agentSystem(builder),
+                prompt: builderPrompt(
+                  ctx,
+                  builderCandidatesDigest(state),
+                  utilityProjectsDigest(state),
+                  builderCapacityDigest(state),
+                ),
+                mock: () => builderMock(),
+              }),
+            ),
+          );
+          const projOut = out.value.value.project;
+          let skipReason = out.value.value.skipReason ?? "No utility build this cycle";
+          const tokenAddr = projOut ? projOut.tokenAddress.toLowerCase() : null;
+          const match = tokenAddr ? candidates.find((c) => c.tokenAddress === tokenAddr) : undefined;
+          if (projOut && !match) {
+            skipReason = `Dropped: ${projOut.tokenAddress} is not an eligible LAURA-launched token`;
+          }
+          if (projOut && match) {
+            const autonomous = state.settings.autoApproveProposals;
+            const project: UtilityProject = {
+              id: newId("utility"),
+              cycleId: run.id,
+              createdAt: Date.now(),
+              tokenAddress: match.tokenAddress,
+              tokenSymbol: match.symbol,
+              launchProposalId: match.proposal.id,
+              kind: projOut.kind,
+              title: projOut.title,
+              concept: projOut.concept,
+              utility: projOut.utility,
+              rationale: projOut.rationale,
+              /* Faucets cannot ship without a bag; force the flag on for them. */
+              wantsAcquisition: projOut.kind === "faucet-drip" ? true : projOut.wantsAcquisition,
+              faucetClaimTokens: projOut.faucetClaimTokens,
+              faucetIntervalHours: projOut.faucetIntervalHours,
+              status: autonomous ? "approved" : "pending",
+              reviewedAt: autonomous ? Date.now() : null,
+              reviewerNote: autonomous ? AUTO_APPROVE_NOTE : null,
+              acquisition: null,
+              deploy: null,
+              shippedAt: null,
+              error: null,
+            };
+            state.utilityProjects = [...(state.utilityProjects ?? []), project];
+            builder.stats.drafts += 1;
+            if (autonomous) builder.stats.approved += 1;
+            pushEvent(state, {
+              kind: "utility.proposed",
+              agentId: "builder",
+              title: `Builder designed ${projOut.kind} for $${match.symbol}: ${projOut.title}`,
+              detail: `${projOut.utility} ${projOut.concept}`,
+              refId: project.id,
+            });
+            if (autonomous) {
+              pushEvent(state, {
+                kind: "utility.approved",
+                agentId: "system",
+                title: `Auto-approved utility build for $${match.symbol}`,
+                detail: `${AUTO_APPROVE_NOTE}; executes only while autoExecuteUtility is on, within BUILDER_CAPS.`,
+                refId: project.id,
+              });
+            }
+            step({
+              agentId: "builder",
+              label: "Utility build",
+              status: "ok",
+              summary: `${projOut.kind} for $${match.symbol}: ${projOut.title}${out.value.usedMock ? " (fallback)" : ""}`,
+              durationMs: out.ms,
+            });
+          } else {
+            step({ agentId: "builder", label: "Utility build", status: "skipped", summary: skipReason, durationMs: out.ms });
+          }
+          markRan(builder);
+        }
+      } catch (err) {
+        builder.status = "error";
+        builder.lastError = String(err);
+        step({ agentId: "builder", label: "Utility build", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "builder", title: "Builder failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }

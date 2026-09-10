@@ -9,7 +9,8 @@ export function hasPendingApprovals(state: SwarmState): boolean {
   return (
     state.drafts.some((d) => d.status === "pending") ||
     state.proposals.some((p) => p.status === "pending") ||
-    state.launches.some((l) => l.status === "pending")
+    state.launches.some((l) => l.status === "pending") ||
+    (state.utilityProjects ?? []).some((u) => u.status === "pending")
   );
 }
 
@@ -60,6 +61,22 @@ export async function sweepPendingApprovals(): Promise<number> {
         title: `Auto-approved ${launch.name} ($${launch.symbol})`,
         detail: `${AUTO_APPROVE_NOTE}; deploys within hard caps when the wallet is funded.`,
         refId: launch.id,
+      });
+      swept += 1;
+    }
+    for (const project of state.utilityProjects ?? []) {
+      if (project.status !== "pending") continue;
+      project.status = "approved";
+      project.reviewedAt = Date.now();
+      project.reviewerNote = AUTO_APPROVE_NOTE;
+      const builder = state.agents.find((a) => a.id === "builder");
+      if (builder) builder.stats.approved += 1;
+      pushEvent(state, {
+        kind: "utility.approved",
+        agentId: "system",
+        title: `Auto-approved utility build for $${project.tokenSymbol}`,
+        detail: `${AUTO_APPROVE_NOTE}; executes only while autoExecuteUtility is on, within BUILDER_CAPS.`,
+        refId: project.id,
       });
       swept += 1;
     }

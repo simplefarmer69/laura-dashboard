@@ -23,6 +23,7 @@ import {
   TokenTapePanel,
   useIntelFeeds,
 } from "@/components/console/laura-feeds";
+import { FeeBreakdownPanel, useFeeBreakdown } from "@/components/console/fee-breakdown";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 
 export function Overview({
@@ -41,6 +42,7 @@ export function Overview({
   const gradeSeries = state.grades.map((g) => g.score);
   const feeds = useFeeds();
   const intel = useIntelFeeds();
+  const feeBreakdown = useFeeBreakdown();
 
   if (!grade || !metrics) {
     return (
@@ -232,6 +234,10 @@ export function Overview({
 
       <div className="lg:col-span-3">
         <DefillamaPanel data={feeds.defillama} />
+      </div>
+
+      <div className="lg:col-span-3">
+        <FeeBreakdownPanel data={feeBreakdown} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-4">

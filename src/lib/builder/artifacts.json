@@ -1,0 +1,335 @@
+{
+  "BurnPledge": {
+    "source": "BurnPledge.sol",
+    "compiler": "solc 0.8.28+commit.7893614a.Emscripten.clang",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "abi": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "token_",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "inputs": [],
+        "name": "MessageTooLong",
+        "type": "error"
+      },
+      {
+        "inputs": [],
+        "name": "TransferFailed",
+        "type": "error"
+      },
+      {
+        "inputs": [],
+        "name": "ZeroAmount",
+        "type": "error"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "pledger",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "indexed": false,
+            "internalType": "string",
+            "name": "message",
+            "type": "string"
+          }
+        ],
+        "name": "Pledged",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "BURN_SINK",
+        "outputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "burnedBy",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "string",
+            "name": "message",
+            "type": "string"
+          }
+        ],
+        "name": "pledge",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "pledgeCount",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "token",
+        "outputs": [
+          {
+            "internalType": "contract IERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "totalBurned",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "bytecode": "0x60a060405234801561000f575f5ffd5b506040516104b63803806104b683398101604081905261002e91610086565b6001600160a01b0381166100755760405162461bcd60e51b815260206004820152600a6024820152693d32b937903a37b5b2b760b11b604482015260640160405180910390fd5b6001600160a01b03166080526100b3565b5f60208284031215610096575f5ffd5b81516001600160a01b03811681146100ac575f5ffd5b9392505050565b6080516103e56100d15f395f818160e3015261016c01526103e55ff3fe608060405234801561000f575f5ffd5b5060043610610060575f3560e01c80630da1cdf3146100645780632c23a9e5146100795780635e4807f2146100ab578063c6d6c183146100cc578063d89135cd146100d5578063fc0c546a146100de575b5f5ffd5b610077610072366004610292565b610105565b005b610098610087366004610309565b5f6020819052908152604090205481565b6040519081526020015b60405180910390f35b6100b461dead81565b6040516001600160a01b0390911681526020016100a2565b61009860025481565b61009860015481565b6100b47f000000000000000000000000000000000000000000000000000000000000000081565b825f0361012557604051631f2a200560e01b815260040160405180910390fd5b610118811115610148576040516347e8b47560e11b815260040160405180910390fd5b6040516323b872dd60e01b815233600482015261dead6024820152604481018490527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316906323b872dd906064016020604051808303815f875af11580156101ba573d5f5f3e3d5ffd5b505050506040513d601f19601f820116820180604052508101906101de9190610336565b6101fb576040516312171d8360e31b815260040160405180910390fd5b335f9081526020819052604081208054859290610219908490610355565b925050819055508260015f8282546102319190610355565b92505081905550600160025f82825461024a9190610355565b909155505060405133907f35cf19b353b599b863cff7b01c8d58bb6451d9e1e8682469a556d752939b32df906102859086908690869061037a565b60405180910390a2505050565b5f5f5f604084860312156102a4575f5ffd5b83359250602084013567ffffffffffffffff8111156102c1575f5ffd5b8401601f810186136102d1575f5ffd5b803567ffffffffffffffff8111156102e7575f5ffd5b8660208284010111156102f8575f5ffd5b939660209190910195509293505050565b5f60208284031215610319575f5ffd5b81356001600160a01b038116811461032f575f5ffd5b9392505050565b5f60208284031215610346575f5ffd5b8151801515811461032f575f5ffd5b8082018082111561037457634e487b7160e01b5f52601160045260245ffd5b92915050565b83815260406020820152816040820152818360608301375f818301606090810191909152601f909201601f191601019291505056fea2646970667358221220d5827fb069564bfdf791a2962b8d60ba999f1af2426452a97d3b20dc7915ab0064736f6c634300081c0033"
+  },
+  "FaucetDrip": {
+    "source": "FaucetDrip.sol",
+    "compiler": "solc 0.8.28+commit.7893614a.Emscripten.clang",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "abi": [
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "token_",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "claimAmount_",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "claimIntervalSecs_",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
+        "inputs": [],
+        "name": "Empty",
+        "type": "error"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "nextClaimAt",
+            "type": "uint256"
+          }
+        ],
+        "name": "TooSoon",
+        "type": "error"
+      },
+      {
+        "inputs": [],
+        "name": "TransferFailed",
+        "type": "error"
+      },
+      {
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "internalType": "address",
+            "name": "claimer",
+            "type": "address"
+          },
+          {
+            "indexed": false,
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "name": "Claimed",
+        "type": "event"
+      },
+      {
+        "inputs": [],
+        "name": "claim",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "claimAmount",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "claimIntervalSecs",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "name": "lastClaimAt",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "address",
+            "name": "who",
+            "type": "address"
+          }
+        ],
+        "name": "nextClaimAt",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "token",
+        "outputs": [
+          {
+            "internalType": "contract IERC20",
+            "name": "",
+            "type": "address"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "totalClaims",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [],
+        "name": "totalDripped",
+        "outputs": [
+          {
+            "internalType": "uint256",
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    "bytecode": "0x60e060405234801561000f575f5ffd5b5060405161075f38038061075f83398101604081905261002e91610113565b6001600160a01b0383166100765760405162461bcd60e51b815260206004820152600a6024820152693d32b937903a37b5b2b760b11b60448201526064015b60405180910390fd5b5f82116100b35760405162461bcd60e51b815260206004820152600b60248201526a1e995c9bc8185b5bdd5b9d60aa1b604482015260640161006d565b610e108110156100fa5760405162461bcd60e51b81526020600482015260126024820152711a5b9d195c9d985b081d1bdbc81cda1bdc9d60721b604482015260640161006d565b6001600160a01b0390921660805260a05260c052610152565b5f5f5f60608486031215610125575f5ffd5b83516001600160a01b038116811461013b575f5ffd5b602085015160409095015190969495509392505050565b60805160a05160c05161059e6101c15f395f81816101160152818161019c015281816101d701528181610221015261025301525f818160e6015281816102b201528181610391015281816103da015261049401525f818161013d015281816102d40152610400015261059e5ff3fe608060405234801561000f575f5ffd5b5060043610610085575f3560e01c8063830953ab11610058578063830953ab146100e1578063c7274f3a14610108578063c94b8da414610111578063fc0c546a14610138575f5ffd5b806303822d3b1461008957806311a163e9146100bb57806341c61383146100ce5780634e71d92d146100d7575b5f5ffd5b6100a86100973660046104e7565b5f6020819052908152604090205481565b6040519081526020015b60405180910390f35b6100a86100c93660046104e7565b610177565b6100a860015481565b6100df610203565b005b6100a87f000000000000000000000000000000000000000000000000000000000000000081565b6100a860025481565b6100a87f000000000000000000000000000000000000000000000000000000000000000081565b61015f7f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020016100b2565b6001600160a01b0381165f908152602081905260408120548015806101c557506101c17f00000000000000000000000000000000000000000000000000000000000000008261050d565b4210155b156101d257505f92915050565b6101fc7f00000000000000000000000000000000000000000000000000000000000000008261050d565b9392505050565b335f90815260208190526040902054801580159061024957506102467f00000000000000000000000000000000000000000000000000000000000000008261050d565b42105b1561029d576102787f00000000000000000000000000000000000000000000000000000000000000008261050d565b604051637437acf560e11b815260040161029491815260200190565b60405180910390fd5b6040516370a0823160e01b81523060048201527f0000000000000000000000000000000000000000000000000000000000000000907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316906370a0823190602401602060405180830381865afa158015610321573d5f5f3e3d5ffd5b505050506040513d601f19601f820116820180604052508101906103459190610532565b101561036457604051631ed9509560e11b815260040160405180910390fd5b335f908152602081905260408120429055600180549091829161038890839061050d565b925050819055507f000000000000000000000000000000000000000000000000000000000000000060025f8282546103c0919061050d565b909155505060405163a9059cbb60e01b81523360048201527f000000000000000000000000000000000000000000000000000000000000000060248201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03169063a9059cbb906044016020604051808303815f875af115801561044e573d5f5f3e3d5ffd5b505050506040513d601f19601f820116820180604052508101906104729190610549565b61048f576040516312171d8360e31b815260040160405180910390fd5b6040517f0000000000000000000000000000000000000000000000000000000000000000815233907fd8138f8a3f377c5259ca548e70e4c2de94f129f5a11036a15b69513cba2b426a9060200160405180910390a250565b5f602082840312156104f7575f5ffd5b81356001600160a01b03811681146101fc575f5ffd5b8082018082111561052c57634e487b7160e01b5f52601160045260245ffd5b92915050565b5f60208284031215610542575f5ffd5b5051919050565b5f60208284031215610559575f5ffd5b815180151581146101fc575f5ffdfea26469706673582212200e83226b73ea915de84676375dd1c342a41cf437187f260d3e89c3daa1e2de6d64736f6c634300081c0033"
+  }
+}

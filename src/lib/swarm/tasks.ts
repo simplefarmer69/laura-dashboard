@@ -66,7 +66,7 @@ export const proposalsSchema = z.object({
   proposals: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint"]),
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder"]),
         proposedStrategy: z.string().min(80).max(4000),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
@@ -97,11 +97,12 @@ export const proposalsSchema = z.object({
             "vault",
             "critic",
             "mint",
+            "builder",
             "coach",
           ]),
         )
         .min(1)
-        .max(12),
+        .max(13),
       body: z.string().min(50).max(5000),
       rationale: z.string().min(10).max(500),
     })
@@ -636,6 +637,59 @@ export function mintMock(ctx: CycleContext, pendingLaunches: number): LaunchOut 
       artPalette: "gold",
     },
     skipReason: null,
+  };
+}
+
+/* --------------------------------- Builder --------------------------------- */
+
+export const builderSchema = z.object({
+  /** At most ONE utility project per stride, or null with a skipReason. */
+  project: z
+    .object({
+      /** Must be one of the candidate token addresses shown in the prompt. */
+      tokenAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+      kind: z.enum(["faucet-drip", "burn-pledge", "holder-leaderboard", "gated-lore"]),
+      title: z.string().min(5).max(120),
+      concept: z.string().min(40).max(1200),
+      /** One sentence a holder reads: what this gives the token. */
+      utility: z.string().min(20).max(600),
+      rationale: z.string().max(1200),
+      /** True only when the build needs a bag (faucet). Burn/dashboard kinds do not. */
+      wantsAcquisition: z.boolean(),
+      /** Faucet only: suggested tokens per claim (the executor clamps it to the bag). */
+      faucetClaimTokens: z.number().positive().nullable(),
+      /** Faucet only: hours between claims per wallet (1 to 168). */
+      faucetIntervalHours: z.number().min(1).max(168).nullable(),
+    })
+    .nullable(),
+  skipReason: z.string().max(300).nullable(),
+});
+
+export type BuilderOut = z.infer<typeof builderSchema>;
+
+export function builderPrompt(
+  ctx: CycleContext,
+  candidates: string,
+  projects: string,
+  capacity: string,
+): string {
+  return [
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `METRICS\n${metricsDigest(ctx.metrics)}`,
+    `LAURA'S LAUNCHED TOKENS ELIGIBLE FOR A UTILITY BUILD (the ONLY tokens you may pick; address must match exactly)\n${candidates}`,
+    `EXISTING UTILITY PROJECTS (never build twice for the same token; learn from what shipped)\n${projects}`,
+    `BUILD CAPACITY (real numbers; ground your skip/propose reasoning in these)\n${capacity}`,
+    `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.builder ?? "None."}`,
+    `LIBRARY (durable build knowledge; the builder playbook lives here)\n${ctx.library}`,
+    `Design at most ONE utility project for one of the eligible tokens above, or return project: null with a skipReason. You give LAURA's launched tokens real function using ONLY the four allowlisted builds:\n- faucet-drip: deploys the audited ownerless FaucetDrip template and funds it with a tiny acquired bag; anyone claims a capped drip on an interval. Needs wantsAcquisition: true.\n- burn-pledge: deploys the audited ownerless BurnPledge template; holders burn tokens to write a permanent on-chain pledge line. No acquisition needed.\n- holder-leaderboard: a dashboard surface ranking holders; no chain action, ships from swarm state.\n- gated-lore: a dashboard lore page whose full text renders only for holders (viewer-side balance check); no chain action.\n\nSELECTION DISCIPLINE: prefer tokens with real traction (trades, a bonded pool) where a utility rewards actual holders; skipping is the right call when no token has earned a build yet. Never pick a token already served. Acquisitions are capped in code (per buy, per day, cooldown) and exist ONLY to fund the utility (charter rule 8); never frame them as price support. Custom contracts are impossible: the executor refuses anything outside the two shipped templates.`,
+  ].join("\n\n");
+}
+
+export function builderMock(): BuilderOut {
+  return {
+    project: null,
+    skipReason: "Deterministic fallback (no LLM key): utility builds are curated, not automatic; waiting for a token with real traction.",
   };
 }
 

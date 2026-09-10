@@ -162,6 +162,7 @@ export type AgentId =
   | "vault"
   | "critic"
   | "mint"
+  | "builder"
   | "coach"
   | "smartlp"
   | "nftintel"
@@ -324,6 +325,15 @@ export interface Settings {
    * token, including LAURA's own launches (wash-trade guard).
    */
   autoTreasuryOps: boolean;
+  /**
+   * Utility-build execution: lets the builder agent spend tiny capped
+   * amounts acquiring supply of LAURA's own launched tokens and deploy
+   * audited utility contract templates for them. OFF by default -- the
+   * builder still proposes projects (visible in state + dashboard), but
+   * nothing spends or deploys until the VM operator flips this on. Hard
+   * code-level caps in BUILDER_CAPS apply regardless of this flag.
+   */
+  autoExecuteUtility: boolean;
 }
 
 export type SwarmEventKind =
@@ -369,6 +379,15 @@ export type SwarmEventKind =
   | "treasury.lp"
   | "treasury.stake"
   | "treasury.exit"
+  /** Builder designed a utility project for one of LAURA's launched tokens. */
+  | "utility.proposed"
+  | "utility.approved"
+  | "utility.rejected"
+  /** Builder acquired a small capped bag of the target token to fund the utility. */
+  | "utility.acquired"
+  /** Utility contract deployed (and funded, for faucet kinds) or dashboard surface shipped. */
+  | "utility.shipped"
+  | "utility.failed"
   | "tuner.adjusted"
   | "skill.updated"
   | "swarm.health"
@@ -536,6 +555,84 @@ export interface TreasuryLpPosition {
   exitTxHash?: string | null;
 }
 
+/* ------------------------------ Utility builds ----------------------------- */
+
+/**
+ * What the builder is allowed to ship. Contract kinds map 1:1 to audited,
+ * ownerless Solidity templates precompiled into the repo (src/lib/builder/
+ * artifacts.json); dashboard kinds ship as snapshot data only.
+ */
+export type UtilityKind =
+  /** Ownerless FaucetDrip contract funded with LAURA's acquired bag */
+  | "faucet-drip"
+  /** Ownerless BurnPledge contract: burn-to-signal leaderboard, no custody */
+  | "burn-pledge"
+  /** Dashboard-rendered holder leaderboard concept (no chain action) */
+  | "holder-leaderboard"
+  /** Dashboard-rendered token lore/quest page concept (no chain action) */
+  | "gated-lore";
+
+export type UtilityStatus = "pending" | "approved" | "rejected" | "shipped" | "failed";
+
+/** One executed supply acquisition for a utility project (tiny, hard-capped). */
+export interface UtilityAcquisition {
+  ts: number;
+  /** Native ETH spent on the bonded-pool path (0 when bought on the curve) */
+  ethIn: number;
+  /** WETH spent on the curve path via pad.buy (0 on the pool path) */
+  wethIn: number;
+  /** Tokens received (wallet balance delta, 18 decimals assumed) */
+  tokensOut: number;
+  txHash: string;
+  venue: "curve" | "pool";
+}
+
+/** Deployment record for contract-kind utility projects. */
+export interface UtilityDeploy {
+  ts: number;
+  contractAddress: string;
+  txHash: string;
+  /** Funding transfer for faucet kinds; null for non-custodial templates */
+  fundTxHash: string | null;
+  /** Tokens moved into the contract at funding time */
+  fundedTokens: number;
+}
+
+/**
+ * A builder utility project: give one of LAURA's own launched tokens a real
+ * function (faucet, burn game, leaderboard...). Flows through the same
+ * pending -> approved queue as launches; execution additionally gates on
+ * settings.autoExecuteUtility plus BUILDER_CAPS.
+ */
+export interface UtilityProject {
+  id: string;
+  cycleId: string;
+  createdAt: number;
+  /** Target token: must be one of LAURA's own deployed launches */
+  tokenAddress: string;
+  tokenSymbol: string;
+  /** state.launches[].id this project targets (null if matched by address only) */
+  launchProposalId: string | null;
+  kind: UtilityKind;
+  title: string;
+  concept: string;
+  /** The concrete function this gives holders, in plain words */
+  utility: string;
+  rationale: string;
+  /** Whether the plan includes acquiring a small bag first (required for faucet-drip) */
+  wantsAcquisition: boolean;
+  /** Faucet template params (faucet-drip only); clamped by the executor */
+  faucetClaimTokens: number | null;
+  faucetIntervalHours: number | null;
+  status: UtilityStatus;
+  reviewedAt: number | null;
+  reviewerNote: string | null;
+  acquisition: UtilityAcquisition | null;
+  deploy: UtilityDeploy | null;
+  shippedAt: number | null;
+  error: string | null;
+}
+
 /** Periodic on-chain snapshot of LAURA's treasury and launch earnings. */
 export interface TreasurySnapshot {
   updatedAt: number;
@@ -572,6 +669,8 @@ export interface SwarmState {
   treasuryBuys?: TreasuryBuy[];
   /** Smart LP positions on the Stonk Exchange vDEX (caps computed from this). */
   treasuryLp?: TreasuryLpPosition[];
+  /** Builder utility projects for LAURA's launched tokens (caps computed from this). */
+  utilityProjects?: UtilityProject[];
   /** The Cafe Bar — the swarm's open forum. Absent before the venue existed. */
   forum?: ForumThread[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
