@@ -147,6 +147,20 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               onCheckedChange={(v) => set("autoClaimEarnings", Boolean(v))}
             />
           </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Mint freedom</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Wide launch mandate: a short cooldown between launches and a deeper launch queue, so
+                justified launches flow at the daily deploy cap. Hard caps still bound deploys per day
+                and spend per deploy. Off returns Mint to the slow pace.
+              </p>
+            </div>
+            <Switch
+              checked={form.mintFreedom}
+              onCheckedChange={(v) => set("mintFreedom", Boolean(v))}
+            />
+          </div>
           <Button className="w-full" disabled={busy} onClick={() => void save()}>
             <Save className="size-3.5" /> Save settings
           </Button>

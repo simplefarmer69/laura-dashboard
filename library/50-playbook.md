@@ -14,6 +14,11 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
   through the console and event log instead of approving.
 - **Full launch autonomy**: Mint's specs auto-approve; the executor deploys the queue
   whenever the wallet is funded. No per-launch human review.
+- **Mint freedom (default ON, 2026-09-10)**: the speech gate runs at the freedom pace —
+  2h cooldown after a deploy and up to 4 queued specs — so justified launches flow at
+  the daily deploy cap instead of ~2/day. Kill switch: the Mint freedom toggle in
+  Settings (or env `MINT_COOLDOWN_HOURS` / `MINT_QUEUE_LIMIT` on the VM). Operator
+  reference: `MINT.md`.
 - **Strategy self-evolution**: the coach's proposals auto-apply; auto-tune adjusts
   cadence and draft budgets daily inside hard rails.
 - Content publishing to external channels is a missing-rails constraint, not an
@@ -22,9 +27,12 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
 
 ## Hard caps that never bend (code, not judgment)
 
-- 3 deploys per 24h · 0.02 ETH max per deploy (fee + 2x gas) · live pad-bounds
-  re-validation · designated funded wallet only · one deploy per tick · 15-min failure
-  backoff. Charter rules 1–7 apply under every grant.
+- 8 deploys per 24h by default (operator tunable via `LAUNCH_MAX_DEPLOYS_PER_DAY`,
+  clamped 1–24) · 0.02 ETH max per deploy (fee + 2x gas; `LAUNCH_MAX_SPEND_ETH_PER_DEPLOY`,
+  clamped 0.005–0.05) · live pad-bounds re-validation · designated funded wallet only ·
+  one deploy per tick · 15-min failure backoff · weekend stock-lane gate (closed lanes
+  queue for Monday) · duplicate name/symbol dedupe. Charter rules 1–7 apply under every
+  grant.
 
 ## Levers by grade component
 

@@ -53,7 +53,7 @@ import { libraryDigest } from "@/lib/swarm/library";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
-import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
+import { coachProposalBudget, mintGate, mintQueueLimit, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { builderGate } from "@/lib/builder/caps";
 import {
   builderCandidates,
@@ -745,13 +745,14 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         const spoken = spokenLaunchesDigest(state.launches);
         const capacity = launchCapacityDigest(state);
         const laneMenu = laneMenuDigest(new Date(), state.runs.length, recentLaunchLanes(state.launches));
+        const queueLimit = mintQueueLimit(state.settings);
         const out = await timed(async () =>
           tally(
             await generateStructured(resolved, {
               schema: launchSchema,
               system: agentSystem(mint),
-              prompt: mintPrompt(ctx, floor, pending, spoken, capacity, laneMenu),
-              mock: () => mintMock(ctx, pending),
+              prompt: mintPrompt(ctx, floor, pending, spoken, capacity, laneMenu, queueLimit),
+              mock: () => mintMock(ctx, pending, queueLimit),
             }),
           ),
         );

@@ -334,6 +334,16 @@ export interface Settings {
    * code-level caps in BUILDER_CAPS apply regardless of this flag.
    */
   autoExecuteUtility: boolean;
+  /**
+   * Mint freedom: the wide launch mandate. When true the speech gate runs at
+   * the freedom pace (2h cooldown after a deploy, up to 4 open specs) so
+   * approved launches flow at the daily deploy cap instead of ~2/day. The
+   * hard LAUNCH_CAPS (deploys/day, spend/deploy), live pad-bounds
+   * revalidation, weekend stock-lane gate, duplicate dedupe and the funded
+   * wallet floor all still apply and fail closed. Kill switch: flip off to
+   * return to the legacy pace (12h cooldown, 2 open specs).
+   */
+  mintFreedom: boolean;
 }
 
 export type SwarmEventKind =

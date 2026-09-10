@@ -1,5 +1,5 @@
 import { pushEvent } from "@/lib/store";
-import type { AgentId, GradeComponent, SwarmState } from "@/lib/types";
+import type { AgentId, GradeComponent, Settings, SwarmState } from "@/lib/types";
 
 const DAY_MS = 86_400_000;
 
@@ -168,24 +168,54 @@ export function coachProposalBudget(state: SwarmState): number {
 
 /**
  * Speaking cadence: launches are LAURA's voice, so the gate paces speech, not
- * just deploys. At most ~2 speech launches/day (12h cooldown after the last
- * deploy), never a stacked queue. This sits inside the executor's inviolable
- * hard caps (3 deploys/24h, 0.02 ETH/deploy) — it shapes cadence, they stop
- * runaways.
+ * just deploys. Two paces, picked by settings.mintFreedom:
+ *   freedom ON (default): 2h cooldown after the last deploy, up to 4 open
+ *     specs. The gate only prevents a runaway queue; the LAUNCH_CAPS daily
+ *     deploy ceiling does the real bounding.
+ *   freedom OFF (kill switch): the legacy pace. 12h cooldown, 2 open specs,
+ *     roughly 2 speech launches/day.
+ * Env overrides (checked on every call, clamped): MINT_COOLDOWN_HOURS,
+ * MINT_QUEUE_LIMIT. This gate sits inside the executor's inviolable hard
+ * caps (LAUNCH_CAPS deploys/day + spend/deploy); it shapes cadence, they
+ * stop runaways.
  */
 const SPEECH_COOLDOWN_HOURS = 12;
+const FREEDOM_COOLDOWN_HOURS = 2;
+const OPEN_QUEUE_LIMIT = 2;
+const FREEDOM_QUEUE_LIMIT = 4;
+
+function gateEnv(name: string): number | null {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw >= 0 ? raw : null;
+}
+
+/** Open-spec (pending + approved) ceiling before the gate blocks new designs. */
+export function mintQueueLimit(settings: Settings): number {
+  const def = settings.mintFreedom ? FREEDOM_QUEUE_LIMIT : OPEN_QUEUE_LIMIT;
+  return Math.min(12, Math.max(1, Math.round(gateEnv("MINT_QUEUE_LIMIT") ?? def)));
+}
+
+/** Hours after the last deploy before the next spec may be designed. */
+export function mintCooldownHours(settings: Settings): number {
+  const def = settings.mintFreedom ? FREEDOM_COOLDOWN_HOURS : SPEECH_COOLDOWN_HOURS;
+  return Math.min(48, gateEnv("MINT_COOLDOWN_HOURS") ?? def);
+}
 
 export function mintGate(state: SwarmState): { blocked: boolean; reason: string } {
+  const queueLimit = mintQueueLimit(state.settings);
+  const cooldownH = mintCooldownHours(state.settings);
   const open = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
-  if (open >= 2) return { blocked: true, reason: `${open} launch specs already await review or deploy` };
+  if (open >= queueLimit) {
+    return { blocked: true, reason: `${open} launch specs already await review or deploy (queue limit ${queueLimit})` };
+  }
   const lastDeploy = state.launches
     .filter((l) => l.status === "deployed" && l.deployedAt !== null)
     .reduce<number>((max, l) => Math.max(max, l.deployedAt ?? 0), 0);
   const sinceH = (Date.now() - lastDeploy) / 3_600_000;
-  if (lastDeploy > 0 && sinceH < SPEECH_COOLDOWN_HOURS) {
+  if (lastDeploy > 0 && cooldownH > 0 && sinceH < cooldownH) {
     return {
       blocked: true,
-      reason: `Last launch spoke ${sinceH.toFixed(0)}h ago — letting it work the curve before LAURA says the next thing`,
+      reason: `Last launch spoke ${sinceH.toFixed(1)}h ago (cooldown ${cooldownH}h). Letting it work the curve before LAURA says the next thing`,
     };
   }
   return { blocked: false, reason: "" };
