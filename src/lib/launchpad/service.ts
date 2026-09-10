@@ -7,8 +7,12 @@ import {
   parseEventLogs,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { LAUNCHPAD, PAD_ABI, ROBINHOOD_CHAIN, type PadLane } from "@/lib/launchpad/contracts";
+import { ERC20_MIN_ABI, LAUNCHPAD, PAD_ABI, ROBINHOOD_CHAIN, type PadLane } from "@/lib/launchpad/contracts";
+import PAD_FULL_ABI_JSON from "@/lib/launchpad/StonkSafeLaunchpadV2.abi.json";
+import type { Abi } from "viem";
 import type { LaunchProposal } from "@/lib/types";
+
+const PAD_FULL_ABI = PAD_FULL_ABI_JSON as Abi;
 
 const publicClient = createPublicClient({ chain: ROBINHOOD_CHAIN, transport: http() });
 
@@ -184,6 +188,71 @@ export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
     tokenAddress = logs[0].args.token;
   }
   return { txHash, launchId, tokenAddress, feePaidEth: Number(formatEther(fee)) };
+}
+
+/** True when the pad reports the launch's supply loaded and clock started. */
+export async function isLaunchArmed(lane: PadLane, launchId: string): Promise<boolean> {
+  const address = LAUNCHPAD.pads[lane] as `0x${string}`;
+  const launch = (await publicClient.readContract({
+    address,
+    abi: PAD_FULL_ABI,
+    functionName: "getLaunch",
+    args: [BigInt(launchId)],
+  })) as { armed: boolean };
+  return launch.armed;
+}
+
+export interface ArmResult {
+  armTxHash: string;
+  alreadyArmed: boolean;
+}
+
+/**
+ * Loads the token supply into the pad and starts the sale clock.
+ * createLaunch only registers a launch (phase "waiting", startTime 0);
+ * without this step the token never goes live. Idempotent: checks the
+ * pad's `armed` flag first, and only approves when allowance is short.
+ */
+export async function armLaunch(p: LaunchProposal): Promise<ArmResult> {
+  const account = getAccount();
+  if (!account) throw new Error("No wallet configured (set SWARM_WALLET_PRIVATE_KEY)");
+  if (!p.launchId || !p.tokenAddress) throw new Error("Launch has no on-chain id/token yet");
+
+  const pad = LAUNCHPAD.pads[p.lane] as `0x${string}`;
+  const token = p.tokenAddress as `0x${string}`;
+  if (await isLaunchArmed(p.lane, p.launchId)) return { armTxHash: "", alreadyArmed: true };
+
+  const supplyWei = parseEther(String(p.supplyTokens));
+  const walletClient = createWalletClient({ account, chain: ROBINHOOD_CHAIN, transport: http() });
+
+  const allowance = (await publicClient.readContract({
+    address: token,
+    abi: ERC20_MIN_ABI,
+    functionName: "allowance",
+    args: [account.address, pad],
+  })) as bigint;
+  if (allowance < supplyWei) {
+    const approveTx = await walletClient.writeContract({
+      address: token,
+      abi: ERC20_MIN_ABI,
+      functionName: "approve",
+      args: [pad, supplyWei],
+    });
+    const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTx, timeout: 120_000 });
+    if (approveReceipt.status !== "success") throw new Error(`Supply approve reverted: ${approveTx}`);
+  }
+
+  const { request } = await publicClient.simulateContract({
+    account,
+    address: pad,
+    abi: PAD_ABI,
+    functionName: "arm",
+    args: [BigInt(p.launchId), supplyWei],
+  });
+  const armTxHash = await walletClient.writeContract(request);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: armTxHash, timeout: 120_000 });
+  if (receipt.status !== "success") throw new Error(`Arm reverted: ${armTxHash}`);
+  return { armTxHash, alreadyArmed: false };
 }
 
 export interface GridToken {

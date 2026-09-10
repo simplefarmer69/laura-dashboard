@@ -285,6 +285,11 @@ function LaunchCard({
         </div>
         <p className="text-xs text-muted-foreground">{l.rationale}</p>
         {l.error && <p className="border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">{l.error}</p>}
+        {l.status === "deployed" && !l.armedAt && (
+          <p className="border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-400">
+            Supply not loaded yet — the executor arms it automatically (registered, not live).
+          </p>
+        )}
         {l.status === "deployed" && l.txHash && (
           <div className="space-y-1 text-xs">
             {l.tokenAddress && (

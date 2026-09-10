@@ -219,6 +219,7 @@ export type SwarmEventKind =
   | "launch.approved"
   | "launch.rejected"
   | "launch.deployed"
+  | "launch.armed"
   | "launch.failed"
   | "tuner.adjusted"
   | "error";
@@ -294,6 +295,10 @@ export interface LaunchProposal {
   error: string | null;
   /** Launcher content hash once the logo is uploaded and attached */
   imageHash?: string | null;
+  /** Set when the supply is loaded (`arm`) and the sale clock started; a deployed
+   *  launch without this is registered but NOT live on the floor. */
+  armedAt?: number | null;
+  armTxHash?: string | null;
 }
 
 export interface SwarmState {

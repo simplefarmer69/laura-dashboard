@@ -4,10 +4,16 @@ Every format here was verified live during the build. Do not guess variants; the
 
 ## Smart Launch V2 deploys (chain 4663)
 
-- `createLaunch(tuple)` payable on the pad (WETH lane `0xFCd6…EC9f` — use
-  `LAUNCHPAD.pads.weth` in code, never retype addresses). Fee from `launchFeeWei()`
-  (currently 0 — deploys cost gas only, ~0.0001 ETH). Live `bounds()`: start mcap
-  $1k–$1M, graduation $50k–$10M (≥2x start), buffer ≥600s, max start tax 9900 bps.
+- Deploying is **THREE calls, not one**: (1) `createLaunch(tuple)` payable — registers
+  the launch and mints supply **to the creator wallet**; (2) ERC-20 `approve(pad,
+  supplyWei)` on the new token; (3) `arm(id, supplyWei)` on the pad — loads the supply
+  and **starts the sale clock**. A launch that is created but not armed sits on the
+  floor as "waiting" with `startTime 0` forever and never goes live. Check
+  `getLaunch(id).armed` before arming (idempotent).
+- WETH lane `0xFCd6…EC9f` — use `LAUNCHPAD.pads.weth` in code, never retype addresses.
+  Fee from `launchFeeWei()` (currently 0 — a full create+approve+arm costs gas only,
+  well under 0.001 ETH). Live `bounds()`: start mcap $1k–$1M, graduation $50k–$10M
+  (≥2x start), buffer ≥600s, max start tax 9900 bps.
 - Always simulate before send; parse the `LaunchCreated` event for launch id + token.
 - Vanity salt zero, `unsoldMode` 0, `openEnded` true, `bondVenue` 0 are the proven params.
 

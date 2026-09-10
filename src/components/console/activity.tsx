@@ -46,6 +46,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "launch.approved":
     case "launch.rejected":
     case "launch.deployed":
+    case "launch.armed":
     case "launch.failed":
       return "operator";
     default: {
@@ -71,6 +72,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "draft.published":
     case "launch.approved":
     case "launch.deployed":
+    case "launch.armed":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.rejected":
     case "proposal.rejected":

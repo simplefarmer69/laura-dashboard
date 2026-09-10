@@ -1,6 +1,6 @@
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
 import type { LaunchProposal } from "@/lib/types";
-import { LAUNCH_CAPS, deployLaunch, getAccount, walletStatus } from "@/lib/launchpad/service";
+import { LAUNCH_CAPS, armLaunch, deployLaunch, getAccount, walletStatus } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import {
   attachTokenLogo,
@@ -64,6 +64,26 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
   try {
     const result = await deployLaunch(launch);
 
+    /* Arm immediately: load the supply and start the sale clock. Without this
+       the launch sits registered-but-dead ("waiting", startTime 0) forever —
+       learned the hard way with launches #276/#277. Non-fatal on failure: the
+       executor's repair pass re-arms deployed-but-unarmed launches each tick. */
+    let armedAt: number | null = null;
+    let armTxHash: string | null = null;
+    let armNote = "";
+    try {
+      const arm = await armLaunch({
+        ...launch,
+        launchId: result.launchId,
+        tokenAddress: result.tokenAddress,
+      });
+      armedAt = Date.now();
+      armTxHash = arm.armTxHash || null;
+    } catch (err) {
+      armNote = `Created but NOT armed yet (supply not loaded): ${String(err)}`;
+      log(`arm failed for ${launch.symbol}: ${String(err)}`);
+    }
+
     /* Brand the token: procedural logo + community links. Non-fatal if the
        launcher API hiccups — the deploy already stands on-chain. */
     let imageHash: string | null = null;
@@ -96,15 +116,18 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       l.tokenAddress = result.tokenAddress;
       l.launchId = result.launchId;
       l.deployedAt = Date.now();
+      l.armedAt = armedAt;
+      l.armTxHash = armTxHash;
       l.imageHash = imageHash;
-      l.error = brandingNote ? brandingNote.slice(3) : null;
+      const notes = [armNote, brandingNote ? brandingNote.slice(3) : ""].filter(Boolean);
+      l.error = notes.length ? notes.join(" · ") : null;
       const agent = s.agents.find((a) => a.id === "mint");
       if (agent) agent.stats.published += 1;
       pushEvent(s, {
         kind: "launch.deployed",
         agentId: s.settings.autoExecuteLaunches ? "system" : "operator",
         title: `Deployed ${l.name} ($${l.symbol}) on Smart Launch V2`,
-        detail: `token ${result.tokenAddress ?? "?"} · launch #${result.launchId ?? "?"} · tx ${result.txHash}${imageHash ? " · logo attached" : brandingNote}`,
+        detail: `token ${result.tokenAddress ?? "?"} · launch #${result.launchId ?? "?"} · tx ${result.txHash}${armedAt ? " · armed (sale clock running)" : " · ARM PENDING"}${imageHash ? " · logo attached" : brandingNote}`,
         refId: l.id,
       });
       return l;
@@ -144,11 +167,34 @@ function execState() {
 
 const RETRY_BACKOFF_MS = 15 * 60_000;
 
+/** Arms one deployed-but-unarmed launch: loads supply, starts the clock, records it. */
+async function repairUnarmedLaunch(launch: LaunchProposal): Promise<void> {
+  log(`repair: arming ${launch.name} ($${launch.symbol}) — launch #${launch.launchId}`);
+  const arm = await armLaunch(launch);
+  await updateState((s) => {
+    const l = s.launches.find((x) => x.id === launch.id);
+    if (!l) return;
+    l.armedAt = Date.now();
+    l.armTxHash = arm.armTxHash || null;
+    l.error = null;
+    pushEvent(s, {
+      kind: "launch.armed",
+      agentId: "system",
+      title: `Armed ${l.name} ($${l.symbol}) — supply loaded, sale clock running`,
+      detail: arm.alreadyArmed
+        ? "Pad already reported the launch armed; recorded it."
+        : `arm tx ${arm.armTxHash}`,
+      refId: l.id,
+    });
+  });
+  log(`repair: armed ${launch.symbol}${arm.alreadyArmed ? " (was already armed on pad)" : ""}`);
+}
+
 /**
- * Runs the approved-launch queue when full autonomy is on. Called by the
- * scheduler every tick; deploys at most one launch per invocation so a
- * bad spec can never drain the wallet in a burst. Failed deploys back
- * off 15 minutes before retrying.
+ * Runs the launch queue when full autonomy is on. Called by the scheduler
+ * every tick. Order of work: (1) repair pass — arm any deployed launch whose
+ * supply never loaded, (2) deploy at most one approved spec, so a bad spec
+ * can never drain the wallet in a burst. Failures back off 15 minutes.
  */
 export async function runLaunchExecutor(): Promise<void> {
   const es = execState();
@@ -159,14 +205,34 @@ export async function runLaunchExecutor(): Promise<void> {
     if (!state.settings.autoExecuteLaunches) return;
 
     const now = Date.now();
+    const unarmed = state.launches.filter(
+      (l) =>
+        l.status === "deployed" &&
+        l.tokenAddress &&
+        l.launchId &&
+        !l.armedAt &&
+        (es.nextAttemptAt[`arm:${l.id}`] ?? 0) <= now,
+    );
     const queue = state.launches
       .filter((l) => l.status === "approved" && (es.nextAttemptAt[l.id] ?? 0) <= now)
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.createdAt - b.createdAt);
-    if (queue.length === 0) return;
-    if (deploysInLast24h(state.launches) >= LAUNCH_CAPS.maxDeploysPerDay) return;
+    if (unarmed.length === 0 && queue.length === 0) return;
 
     const wallet = await walletStatus();
     if (!wallet.configured || !wallet.funded) return; // queue holds until funding lands
+
+    for (const launch of unarmed) {
+      try {
+        await repairUnarmedLaunch(launch);
+        delete es.nextAttemptAt[`arm:${launch.id}`];
+      } catch (err) {
+        es.nextAttemptAt[`arm:${launch.id}`] = now + RETRY_BACKOFF_MS;
+        log(`repair: arm of ${launch.symbol} failed (${String(err)}); retrying in 15m`);
+      }
+    }
+
+    if (queue.length === 0) return;
+    if (deploysInLast24h(state.launches) >= LAUNCH_CAPS.maxDeploysPerDay) return;
 
     const next = queue[0];
     log(`autonomy: deploying ${next.name} ($${next.symbol})`);

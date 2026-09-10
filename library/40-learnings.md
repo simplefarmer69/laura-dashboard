@@ -5,6 +5,14 @@ holds the durable ones from the build itself.
 
 ## Execution
 
+- **A "successful" transaction is not a live product.** Launches #276/#277 deployed
+  clean (receipts, logos, floor listing) yet never went live: `createLaunch` only
+  registers — the supply must be approved and `arm`ed to start the sale clock. The
+  operator caught it ("I don't see the tokens live") before the swarm did. Rule: after
+  any on-chain action, verify the **user-visible end state** (phase live, clock
+  running), not the transaction receipt. The executor now arms on deploy and runs a
+  repair pass for deployed-but-unarmed launches every tick.
+
 - **First real deploys succeeded autonomously** (2026-09-10, ~90s after wallet funding):
   two launches, two logo attaches, zero human clicks, total spend ~0.00023 ETH. The
   fail-closed pattern (simulate → cap-check → send → verify receipt → brand) works;
