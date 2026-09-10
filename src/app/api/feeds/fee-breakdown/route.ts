@@ -249,6 +249,7 @@ const MAX_FWD_CHUNKS = 6;
 // The PASS_BUDGET_MS gate below still bounds worst case latency; a pass that runs
 // out of budget keeps honest partial coverage flags.
 const MAX_BACK_CHUNKS = 100;
+const BACK_CONCURRENCY = 4;
 const PASS_BUDGET_MS = 38_000;
 const HOUR_MS = 3_600_000;
 const D7_MS = 7 * 24 * HOUR_MS;
@@ -391,6 +392,41 @@ function applyLog(
   }
 }
 
+async function fetchRange(fromBlock: bigint, toBlock: bigint): Promise<ScanLog[] | null> {
+  // Two tries with a short backoff: parallel getLogs batches occasionally trip
+  // the public RPC's rate limit, and a single transient failure should not end
+  // the whole backfill pass.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const logs = await client.getLogs({
+        events: EVENTS,
+        fromBlock,
+        toBlock,
+        strict: false,
+      });
+      return logs as unknown as ScanLog[];
+    } catch {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 700));
+    }
+  }
+  return null; // caller keeps its bound - the range replays next pass
+}
+
+function applyLogs(
+  logs: ScanLog[],
+  pads: Map<string, PadMeta>,
+  vaults: Map<string, VaultMeta>,
+  ethUsd: number | null,
+): void {
+  for (const log of logs) {
+    try {
+      if (log.eventName) applyLog(log, pads, vaults, ethUsd);
+    } catch {
+      /* one undecodable log never kills the pass */
+    }
+  }
+}
+
 async function scanRange(
   fromBlock: bigint,
   toBlock: bigint,
@@ -398,24 +434,9 @@ async function scanRange(
   vaults: Map<string, VaultMeta>,
   ethUsd: number | null,
 ): Promise<boolean> {
-  let logs;
-  try {
-    logs = await client.getLogs({
-      events: EVENTS,
-      fromBlock,
-      toBlock,
-      strict: false,
-    });
-  } catch {
-    return false; // caller keeps its bound - the range replays next pass
-  }
-  for (const log of logs) {
-    try {
-      if (log.eventName) applyLog(log as unknown as ScanLog, pads, vaults, ethUsd);
-    } catch {
-      /* one undecodable log never kills the pass */
-    }
-  }
+  const logs = await fetchRange(fromBlock, toBlock);
+  if (logs === null) return false;
+  applyLogs(logs, pads, vaults, ethUsd);
   return true;
 }
 
@@ -441,14 +462,49 @@ async function scanPass(
     state.high = end;
   }
 
-  // 2) Backward seed toward the 7d floor (bounded chunks per request).
+  // 2) Backward seed toward the 7d floor. Chunks are FETCHED with a small
+  // parallel pool (a getLogs against the public RPC costs seconds from the
+  // lambda, so sequential scanning can never reach 7d inside the budget),
+  // then APPLIED strictly in order: only the contiguous prefix of successful
+  // chunks advances state.low, so a failed chunk never leaves a hole.
   const floor = blockAtTs(Date.now() - BACKFILL_MS);
-  for (let i = 0; i < MAX_BACK_CHUNKS && state.low > floor + 1n; i++) {
-    if (Date.now() - started > PASS_BUDGET_MS) return;
-    const end = state.low - 1n;
-    const start = end - CHUNK + 1n > floor ? end - CHUNK + 1n : floor;
-    if (!(await scanRange(start, end, pads, vaults, ethUsd))) return;
-    state.low = start;
+  let backDone = 0;
+  let failStreak = 0;
+  while (backDone < MAX_BACK_CHUNKS && state.low > floor + 1n) {
+    if (Date.now() - started > PASS_BUDGET_MS) break;
+    const ranges: Array<{ start: bigint; end: bigint }> = [];
+    let cursor = state.low;
+    while (
+      ranges.length < BACK_CONCURRENCY &&
+      backDone + ranges.length < MAX_BACK_CHUNKS &&
+      cursor > floor + 1n
+    ) {
+      const end = cursor - 1n;
+      const start = end - CHUNK + 1n > floor ? end - CHUNK + 1n : floor;
+      ranges.push({ start, end });
+      cursor = start;
+    }
+    const results = await Promise.all(ranges.map((r) => fetchRange(r.start, r.end)));
+    let advanced = false;
+    for (let i = 0; i < ranges.length; i++) {
+      const logs = results[i];
+      if (logs === null) break; // hole: stop before it, the range replays this pass
+      applyLogs(logs, pads, vaults, ethUsd);
+      state.low = ranges[i].start;
+      backDone += 1;
+      advanced = true;
+    }
+    if (advanced) {
+      failStreak = 0;
+      // Gentle pacing between batches keeps the public RPC's rate limiter calm.
+      await new Promise((r) => setTimeout(r, 250));
+    } else {
+      // The first chunk of the batch failed twice - back off and retry the same
+      // window a couple of times before giving up until the next pass.
+      failStreak += 1;
+      if (failStreak >= 3) break;
+      await new Promise((r) => setTimeout(r, 1_500));
+    }
   }
   pruneBuckets();
 }
