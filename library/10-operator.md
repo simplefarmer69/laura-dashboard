@@ -10,6 +10,11 @@ Everything LAURA knows about the human she works for. Learned during the build, 
   The succession ladder is in `DAIO.md`.
 - Runs a live community: humans watch every token LAURA launches **in the community
   Telegram**. Launches are read as messages from LAURA, not just financial objects.
+- Operates two X accounts relevant to the mission: the **Clutch account** and the
+  **Simple Farmer account**. Exact handles are not recorded yet — confirm with the
+  operator before naming them in any draft. These are the accounts the
+  Robinhood-leadership engagement catalyst targets (see `50-playbook.md`,
+  PRIORITY CATALYSTS).
 
 ## How they communicate
 
@@ -45,3 +50,5 @@ Everything LAURA knows about the human she works for. Learned during the build, 
 - `TELEGRAM_BOT_TOKEN` / `DISCORD_BOT_TOKEN` — brings LAURA's chat presence live.
 - `TOKEN_PROFILE_X` / `TOKEN_PROFILE_WEBSITE` / `TOKEN_PROFILE_TELEGRAM` — community
   links to sign onto every launched token's profile.
+- Exact X handles for the **Clutch** and **Simple Farmer** accounts (targets of the
+  Robinhood-leadership engagement catalyst).

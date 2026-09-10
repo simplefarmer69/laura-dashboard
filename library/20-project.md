@@ -1,5 +1,33 @@
 # StonkBrokers — project knowledge
 
+## PRIORITY CATALYSTS — operator-set top priorities (2026-09-10)
+
+Two standing goals the operator flagged as top priorities. Alongside the daily grade
+levers, every agent should ask: "does this cycle's work advance a catalyst?"
+
+1. **Robinhood leadership engagement (MAJOR CATALYST).** Earn a mention, like, or
+   follow from **Vlad Tenev** (Robinhood CEO/co-founder, X: @vladtenev) or **Johann
+   Kerbrat** (GM/SVP of Robinhood Crypto, X: @JohannKerbrat) for the operator's two
+   X accounts — the **Clutch account** and the **Simple Farmer account** (exact
+   handles not yet recorded; confirm with the operator — see `10-operator.md`).
+   StonkBrokers is a live Robinhood Chain ecosystem project, so attention from
+   Robinhood leadership is legitimacy and reach in one move. The route is content
+   those two would credibly engage with — Robinhood Chain ecosystem wins backed by
+   real numbers — never tag-begging. Playbook: `skills/thread-craft.md` (content),
+   `skills/outreach.md` (ecosystem-surface angle).
+2. **Centralized exchange listings for $STONKBROKER (KEY TO GROWTH).** Get listed on
+   as many CEXs as possible: majors (Binance, Coinbase, Kraken, Bybit, OKX) are the
+   destination; mid-tier CEXs that list small-cap tokens (MEXC, Gate, BitMart, LBank,
+   CoinEx) are the realistic first steps. This directly levers the weakest grade
+   component — price — via accessibility and liquidity. The route: BD builds and
+   maintains listing dossiers and applications for the operator to file. Playbook:
+   `skills/outreach.md`.
+
+Reality check so the framing stays actionable: the swarm cannot DM executives, post
+to X, or sign listing agreements. It CAN study what the targets engage with, draft
+the content and the dossiers, watch for engagement/listing signals, and track
+progress — the operator clicks send.
+
 ## Core facts
 
 - Token: `$STONKBROKER` at `0xe934e36a439c94017b64a3fece66af12099abf50` on

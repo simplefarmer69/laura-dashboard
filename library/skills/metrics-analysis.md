@@ -28,6 +28,15 @@ and smooth over data caveats — both were observed and both corrupt downstream 
 - Watch LAURA's own launches on `/api/safe-launch/floor` (phase, buyers, progress):
   curve fees are the swarm's most direct revenue contribution.
 
+## Catalyst signals to watch (operator priorities — see 50-playbook.md)
+
+- Any engagement from @vladtenev or @JohannKerbrat (like, reply, repost, follow, or
+  mention) touching StonkBrokers, Robinhood Chain ecosystem posts, or the operator's
+  Clutch / Simple Farmer accounts → report immediately as a catalyst event.
+- CEX listing signals: a new $STONKBROKER market appearing on an exchange or
+  aggregator, or an exchange announcement → verify against the exchange's own
+  announcement page or API before reporting; listing rumors are a known scam vector.
+
 ## Report shape
 
 Table of raw numbers with sources → interpretation (what moved, best guess why, stated
