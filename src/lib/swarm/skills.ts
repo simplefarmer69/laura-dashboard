@@ -78,8 +78,10 @@ export async function skillsIndex(): Promise<string> {
 
 /* ------------------------- Self-editing (coach) ---------------------------- */
 
-/** Hard cap on skill files so self-editing can grow the library but never flood it. */
-const MAX_SKILL_FILES = 16;
+/** Hard cap on skill files so self-editing can grow the library but never flood it.
+ * Raised 16 → 18 when the two ape-claw ports (slop-free-writing,
+ * execution-readback) landed, so the coach keeps the same self-edit headroom. */
+const MAX_SKILL_FILES = 18;
 
 export interface SkillEdit {
   name: string;
