@@ -7,15 +7,26 @@ import sharp from "sharp";
  * Mint picks a motif + palette; this renders a 256px WebP in the
  * StonkBrokers terminal aesthetic, under the launcher's 48KB logo cap.
  * No external image API needed — fully deterministic from the spec.
+ *
+ * V2 art direction ("sentinel era"): deep space-dark grounds, neon accents,
+ * orbital framing and a restyled LAURA signature — futuristic guardianship,
+ * the future of humanity and security. Stored art is versioned: launches
+ * rendered before V2 keep their original files untouched.
  */
 
+/** Bump when the composition changes so old launches keep their stored art. */
+export const ART_VERSION = 2;
+
 export const ART_PALETTES = {
-  emerald: { glow: "#34d399", accent: "#d1fae5", dim: "#064e3b" },
-  amber: { glow: "#fbbf24", accent: "#fef3c7", dim: "#78350f" },
-  crimson: { glow: "#f87171", accent: "#fee2e2", dim: "#7f1d1d" },
-  violet: { glow: "#a78bfa", accent: "#ede9fe", dim: "#4c1d95" },
-  cyan: { glow: "#22d3ee", accent: "#cffafe", dim: "#155e75" },
-  gold: { glow: "#facc15", accent: "#fef9c3", dim: "#713f12" },
+  emerald: { glow: "#34d399", accent: "#d1fae5", dim: "#053f31" },
+  amber: { glow: "#fbbf24", accent: "#fef3c7", dim: "#4a2a08" },
+  crimson: { glow: "#f87171", accent: "#fee2e2", dim: "#4c1212" },
+  violet: { glow: "#a78bfa", accent: "#ede9fe", dim: "#331a63" },
+  cyan: { glow: "#22d3ee", accent: "#cffafe", dim: "#0c3d4d" },
+  gold: { glow: "#facc15", accent: "#fef9c3", dim: "#48310c" },
+  /* Sentinel-era additions: colder, more futuristic grounds */
+  ion: { glow: "#60a5fa", accent: "#dbeafe", dim: "#12295a" },
+  aurora: { glow: "#2dd4bf", accent: "#ccfbf1", dim: "#0a3d38" },
 } as const;
 
 export type ArtPalette = keyof typeof ART_PALETTES;
@@ -38,9 +49,13 @@ export const ART_MOTIFS = [
   "key",
   "globe",
   "robot",
+  "sentinel",
+  "orbit",
+  "neural",
+  "beacon",
 ] as const;
 
-function hashSeed(s: string): number {
+export function hashSeed(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -49,7 +64,7 @@ function hashSeed(s: string): number {
   return h >>> 0;
 }
 
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed;
   return () => {
     a |= 0;
@@ -65,6 +80,34 @@ function motifGlyph(motif: string, c: { glow: string; accent: string }): string 
   const m = motif.toLowerCase();
   const has = (...keys: string[]) => keys.some((k) => m.includes(k));
   const S = `stroke="${c.glow}" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+
+  /* Sentinel-era motifs (checked first so "guardian" doesn't fall through to plain shield) */
+  if (has("sentinel", "guardian", "protector"))
+    return `<path d="M50 6 L86 18 C86 50 76 76 50 94 C24 76 14 50 14 18 Z" ${S}/>
+      <circle cx="50" cy="38" r="12" ${S}/>
+      <circle cx="50" cy="38" r="4" fill="${c.accent}"/>
+      <path d="M50 52 L50 66 M50 58 L38 58 L38 68 M50 58 L62 58 L62 68" stroke="${c.glow}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <circle cx="50" cy="70" r="3" fill="${c.glow}"/><circle cx="38" cy="71" r="2.5" fill="${c.glow}"/><circle cx="62" cy="71" r="2.5" fill="${c.glow}"/>`;
+  if (has("orbit", "satellite", "ring-world"))
+    return `<circle cx="50" cy="50" r="19" ${S}/>
+      <path d="M40 44 C46 40 56 42 60 48 M38 56 L48 56" stroke="${c.glow}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <g transform="rotate(-20 50 50)">
+        <ellipse cx="50" cy="50" rx="42" ry="14" stroke="${c.glow}" stroke-width="3" fill="none"/>
+        <circle cx="8" cy="50" r="4" fill="${c.accent}"/>
+      </g>`;
+  if (has("neural", "bloom", "network", "synapse", "mind"))
+    return `<circle cx="50" cy="50" r="8" ${S}/>
+      <path d="M50 42 L50 18 M57 46 L78 32 M58 53 L82 62 M50 58 L50 82 M43 53 L18 62 M43 46 L22 32" stroke="${c.glow}" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="50" cy="14" r="4.5" fill="${c.glow}"/><circle cx="82" cy="30" r="4.5" fill="${c.glow}"/>
+      <circle cx="86" cy="63" r="4.5" fill="${c.glow}"/><circle cx="50" cy="86" r="4.5" fill="${c.glow}"/>
+      <circle cx="14" cy="63" r="4.5" fill="${c.glow}"/><circle cx="18" cy="30" r="4.5" fill="${c.glow}"/>
+      <circle cx="50" cy="50" r="3" fill="${c.accent}"/>`;
+  if (has("beacon", "lighthouse", "tower"))
+    return `<path d="M42 40 L58 40 L54 84 L46 84 Z" ${S}/>
+      <circle cx="50" cy="26" r="8" ${S}/>
+      <path d="M36 26 L20 26 M64 26 L80 26 M39 15 L28 6 M61 15 L72 6" stroke="${c.accent}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <path d="M34 92 L66 92" ${S}/>
+      <circle cx="50" cy="26" r="2.5" fill="${c.accent}"/>`;
 
   if (has("bell", "ring", "alarm"))
     return `<path d="M50 14 C33 14 28 30 28 46 L28 62 L20 74 L80 74 L72 62 L72 46 C72 30 67 14 50 14 Z" ${S}/>
@@ -142,32 +185,40 @@ function buildSvg(spec: TokenArtSpec): string {
   const glyph = motifGlyph(spec.motif ?? "chart", c);
 
   const sym = `$${spec.symbol.slice(0, 10)}`;
-  const fontSize = Math.min(72, Math.floor(400 / sym.length));
+  const fontSize = Math.min(70, Math.floor(390 / sym.length));
 
-  /* Sparse "data rain" specks seeded by the spec */
+  /* Sparse starfield seeded by the spec — deep space, not terminal noise */
   let specks = "";
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 30; i++) {
     const x = Math.floor(rng() * 512);
     const y = Math.floor(rng() * 512);
-    const o = (0.06 + rng() * 0.16).toFixed(2);
-    const r = rng() > 0.8 ? 2.5 : 1.4;
-    specks += `<circle cx="${x}" cy="${y}" r="${r}" fill="${c.glow}" opacity="${o}"/>`;
+    const o = (0.06 + rng() * 0.18).toFixed(2);
+    const r = rng() > 0.85 ? 2.4 : 1.3;
+    const fill = rng() > 0.75 ? c.accent : c.glow;
+    specks += `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${o}"/>`;
   }
 
   let grid = "";
   for (let i = 1; i < 8; i++) {
     const p = i * 64;
-    grid += `<path d="M${p} 0 L${p} 512 M0 ${p} L512 ${p}" stroke="${c.glow}" stroke-width="1" opacity="0.07"/>`;
+    grid += `<path d="M${p} 0 L${p} 512 M0 ${p} L512 ${p}" stroke="${c.glow}" stroke-width="1" opacity="0.045"/>`;
   }
+
+  /* Orbital guardianship ring behind the glyph — the sentinel-era signature */
+  const orbitTilt = Math.floor(rng() * 24) - 12 - 14;
+  const orbit = `<g transform="rotate(${orbitTilt} 256 206)">
+    <ellipse cx="256" cy="206" rx="196" ry="58" fill="none" stroke="${c.glow}" stroke-width="2" opacity="0.4"/>
+    <circle cx="${256 - 196}" cy="196" r="4.5" fill="${c.glow}" opacity="0.9" filter="url(#glow)"/>
+  </g>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
-      <stop offset="0%" stop-color="${c.dim}" stop-opacity="0.85"/>
-      <stop offset="55%" stop-color="#08110c"/>
-      <stop offset="100%" stop-color="#04080a"/>
+    <radialGradient id="bg" cx="50%" cy="38%" r="78%">
+      <stop offset="0%" stop-color="${c.dim}" stop-opacity="0.9"/>
+      <stop offset="52%" stop-color="#050a12"/>
+      <stop offset="100%" stop-color="#02040a"/>
     </radialGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
       <feGaussianBlur stdDeviation="7" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
@@ -175,10 +226,15 @@ function buildSvg(spec: TokenArtSpec): string {
   <rect width="512" height="512" fill="url(#bg)"/>
   ${grid}
   ${specks}
-  <path d="M26 26 L26 58 M26 26 L58 26 M486 26 L486 58 M486 26 L454 26 M26 486 L26 454 M26 486 L58 486 M486 486 L486 454 M486 486 L454 486" stroke="${c.glow}" stroke-width="4" opacity="0.55" fill="none"/>
+  ${orbit}
+  <path d="M26 26 L26 62 M26 26 L62 26 M486 26 L486 62 M486 26 L450 26 M26 486 L26 450 M26 486 L62 486 M486 486 L486 450 M486 486 L450 486" stroke="${c.glow}" stroke-width="3" opacity="0.45" fill="none"/>
   <g transform="translate(126, 66) scale(2.6)" filter="url(#glow)">${glyph}</g>
-  <text x="256" y="404" text-anchor="middle" font-family="Cascadia Mono, DejaVu Sans Mono, monospace" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="3" filter="url(#glow)">${sym}</text>
-  <text x="256" y="464" text-anchor="middle" font-family="Cascadia Mono, DejaVu Sans Mono, monospace" font-size="21" fill="${c.glow}" opacity="0.8" letter-spacing="6">— LAURA —</text>
+  <text x="256" y="400" text-anchor="middle" font-family="Cascadia Mono, DejaVu Sans Mono, monospace" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="3" filter="url(#glow)">${sym}</text>
+  <g opacity="0.85">
+    <path d="M118 456 L216 456 M296 456 L394 456" stroke="${c.glow}" stroke-width="1.5" opacity="0.6"/>
+    <path d="M108 456 L114 450 L120 456 L114 462 Z M404 456 L398 450 L392 456 L398 462 Z" fill="${c.glow}" opacity="0.8"/>
+    <text x="256" y="463" text-anchor="middle" font-family="Cascadia Mono, DejaVu Sans Mono, monospace" font-size="20" fill="${c.glow}" letter-spacing="8">LAURA</text>
+  </g>
 </svg>`;
 }
 
@@ -203,17 +259,25 @@ const ART_DIR = process.env.SWARM_DATA_DIR
   ? path.join(process.env.SWARM_DATA_DIR, "launch-art")
   : path.join(process.cwd(), "data", "launch-art");
 
+/** New art is written under the current version; legacy `<id>.webp` files stay untouched. */
 export async function saveLaunchArt(launchId: string, bytes: Buffer): Promise<void> {
   await fs.mkdir(ART_DIR, { recursive: true });
-  await fs.writeFile(path.join(ART_DIR, `${launchId}.webp`), bytes);
+  await fs.writeFile(path.join(ART_DIR, `${launchId}.v${ART_VERSION}.webp`), bytes);
 }
 
+/** Reads stored art: current version first, then any older version, then legacy unversioned. */
 export async function readLaunchArt(launchId: string): Promise<Buffer | null> {
-  try {
-    return await fs.readFile(path.join(ART_DIR, `${launchId}.webp`));
-  } catch {
-    return null;
+  const candidates = [];
+  for (let v = ART_VERSION; v >= 2; v--) candidates.push(`${launchId}.v${v}.webp`);
+  candidates.push(`${launchId}.webp`);
+  for (const file of candidates) {
+    try {
+      return await fs.readFile(path.join(ART_DIR, file));
+    } catch {
+      /* try the next candidate */
+    }
   }
+  return null;
 }
 
 /** Reads stored art, generating (and persisting) it on demand. */
