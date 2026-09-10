@@ -30,6 +30,7 @@ import { ActivityFeed } from "@/components/console/activity";
 import { Growth } from "@/components/console/growth";
 import { Launchpad } from "@/components/console/launchpad";
 import { ChatPanel } from "@/components/console/chat";
+import { CafeBar } from "@/components/console/forum";
 import { pct, usd } from "@/components/console/format";
 import type { CycleRun } from "@/lib/types";
 
@@ -193,7 +194,7 @@ export function Console() {
                 <LineChartIcon /> Growth
               </TabsTrigger>
               <TabsTrigger className={TAB_CLASS} value="chat">
-                <MessageCircle /> Chat
+                <MessageCircle /> The Cafe Bar
               </TabsTrigger>
               <TabsTrigger className={TAB_CLASS} value="queue">
                 <Inbox /> Review queue
@@ -239,9 +240,12 @@ export function Console() {
               <Growth state={state} />
             </TabsContent>
             <TabsContent value="chat">
-              <ViewerShield>
-                <ChatPanel />
-              </ViewerShield>
+              <div className="space-y-4">
+                <CafeBar state={state} refresh={refresh} />
+                <ViewerShield>
+                  <ChatPanel />
+                </ViewerShield>
+              </div>
             </TabsContent>
             <TabsContent value="queue">
               <ViewerShield>

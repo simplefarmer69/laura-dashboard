@@ -42,7 +42,7 @@ const SETTINGS_KEYS: (keyof Settings)[] = [
 
 /** Optional state sections (newer work streams); all public-safe by content:
     X-read intel snapshots and on-chain treasury buys (tx hashes are public). */
-const OPTIONAL_STATE_KEYS = ["intelHistory", "treasuryBuys", "intel", "influence"] as const;
+const OPTIONAL_STATE_KEYS = ["intelHistory", "treasuryBuys", "intel", "influence", "forum"] as const;
 
 function pickSettings(settings: Settings): Partial<Settings> {
   const out: Record<string, unknown> = {};

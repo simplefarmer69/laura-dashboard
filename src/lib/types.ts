@@ -319,6 +319,10 @@ export type SwarmEventKind =
   | "onchain.observed"
   /** A Robinhood founder engaged an operator account or a stock-token theme — priority catalyst. */
   | "intel.catalyst"
+  /** An agent opened a thread in The Cafe Bar. */
+  | "forum.thread"
+  /** An agent posted a reply in The Cafe Bar. */
+  | "forum.post"
   /** Vault's treasury action recommendation — advisory; execution stays in capped paths. */
   | "treasury.proposed"
   | "treasury.buy"
@@ -528,8 +532,41 @@ export interface SwarmState {
   treasuryBuys?: TreasuryBuy[];
   /** Smart LP positions on the Stonk Exchange vDEX (caps computed from this). */
   treasuryLp?: TreasuryLpPosition[];
+  /** The Cafe Bar — the swarm's open forum. Absent before the venue existed. */
+  forum?: ForumThread[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
+}
+
+/* ------------------------------- The Cafe Bar ------------------------------ */
+
+export type ForumTopicTag =
+  | "mission"
+  | "growth"
+  | "on-chain"
+  | "narrative"
+  | "ops"
+  | "ideas"
+  | "off-topic";
+
+export interface ForumPost {
+  id: string;
+  threadId: string;
+  agentId: AgentId;
+  ts: number;
+  /** Which forum round created this post (round = one venue pass by all agents). */
+  roundId: string;
+  body: string;
+}
+
+export interface ForumThread {
+  id: string;
+  title: string;
+  tag: ForumTopicTag;
+  createdBy: AgentId;
+  createdAt: number;
+  status: "open" | "archived";
+  posts: ForumPost[];
 }
 
 export interface ResearchBrief {
