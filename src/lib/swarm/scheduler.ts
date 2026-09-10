@@ -1,5 +1,6 @@
 import os from "node:os";
 import { loadState } from "@/lib/store";
+import { acquireCycleLock, releaseCycleLock } from "@/lib/swarm/cycle-lock";
 import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy";
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
@@ -125,13 +126,32 @@ async function tick(): Promise<void> {
       log(`deferring cycle: ${busy}`);
       return;
     }
-    log(triggerEvent ? `starting event-driven cycle (${triggerEvent})` : "starting scheduled cycle");
-    const run = await runCycle(triggerEvent ? "event" : "scheduler");
-    s.lastCycleAt = Date.now();
-    s.lastGradeDate = today;
-    log(
-      `cycle ${run.id} finished: ${run.draftsCreated} drafts, ${run.proposalsCreated} proposals${run.error ? `, error: ${run.error}` : ""}`,
-    );
+    /* Cross-process cycle lock: the startedAt/in-flight defer above only sees
+       runs that reached state.json; two processes ticking in the same second
+       (the restart stampede) both pass it. The file lock is the durable gate —
+       exactly one process wins the atomic create. "held" defers to the holder
+       (next tick retries); "unlocked" means the filesystem failed and we fail
+       open rather than stall the swarm; stale orphans are taken over inside. */
+    const lock = await acquireCycleLock();
+    if (lock === "held") {
+      log("deferring cycle: another process holds the cycle lock");
+      return;
+    }
+    if (lock === "unlocked") log("cycle lock unavailable (fs error); proceeding without it");
+    try {
+      log(triggerEvent ? `starting event-driven cycle (${triggerEvent})` : "starting scheduled cycle");
+      const run = await runCycle(triggerEvent ? "event" : "scheduler");
+      s.lastCycleAt = Date.now();
+      s.lastGradeDate = today;
+      log(
+        `cycle ${run.id} finished: ${run.draftsCreated} drafts, ${run.proposalsCreated} proposals${run.error ? `, error: ${run.error}` : ""}`,
+      );
+    } finally {
+      if (lock === "acquired") {
+        await releaseCycleLock();
+        log("cycle lock released");
+      }
+    }
     return;
   }
 
