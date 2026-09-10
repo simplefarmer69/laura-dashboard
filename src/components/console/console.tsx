@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Activity,
@@ -32,6 +32,9 @@ import { Launchpad } from "@/components/console/launchpad";
 import { ChatPanel } from "@/components/console/chat";
 import { pct, usd } from "@/components/console/format";
 import type { CycleRun } from "@/lib/types";
+
+const TAB_CLASS =
+  "sb-ticker text-[11px] tracking-[0.08em] after:bg-primary dark:data-active:text-primary";
 
 export function Console() {
   const { state, error, loading, refresh } = useSwarmState();
@@ -75,10 +78,12 @@ export function Console() {
               alt="LAURA sentinel mark"
               width={40}
               height={40}
-              className="size-10 shrink-0 border border-cyan-400/40 bg-black/60 shadow-[0_0_16px_rgba(34,211,238,0.3)]"
+              className="size-10 shrink-0 border border-primary/40 bg-black/60 shadow-[0_0_16px_var(--sb-glow)]"
             />
             <div>
-              <h1 className="sb-ticker text-sm font-semibold leading-tight text-primary">LAURA</h1>
+              <h1 className="sb-ticker text-sm font-semibold leading-tight tracking-[0.18em] text-primary sb-glow-text">
+                LAURA
+              </h1>
               <p className="text-xs text-muted-foreground">
                 {state?.settings.projectName ?? "StonkBrokers"} growth swarm · Robinhood Chain · by Clutch Markets
               </p>
@@ -114,94 +119,104 @@ export function Console() {
             </Button>
           </div>
         </div>
-        {latest && (
-          <div className="border-t border-border/60 bg-black/40">
-            <div className="mx-auto flex w-full max-w-7xl gap-6 overflow-x-auto px-4 py-1.5 sb-ticker text-[11px] whitespace-nowrap sm:px-6">
-              <Tick label="$STONKBROKER" value={usd(latest.priceUsd)} />
-              <Tick
-                label="24h"
-                value={pct(latest.priceChange24hPct)}
-                tone={latest.priceChange24hPct >= 0 ? "up" : "down"}
-              />
-              <Tick label="MCAP" value={usd(latest.marketCapUsd)} />
-              <Tick label="REV 24H" value={usd(latest.protocolRevenue24hUsd)} />
-              <Tick label="VOL 24H" value={usd(latest.protocolVolume24hUsd)} />
-              {latest.onchain && <Tick label="CLOCK IN POT" value={`${latest.onchain.clockInPotEth.toFixed(3)} ETH`} />}
-              {grade && <Tick label="GRADE" value={`${grade.letter} ${grade.score.toFixed(1)}`} tone="accent" />}
-              {state && (
+        <div className="border-t border-border/60 bg-black/40">
+          <div className="mx-auto flex h-8 w-full max-w-7xl items-center gap-6 overflow-x-auto px-4 sb-ticker text-[11px] whitespace-nowrap sm:px-6">
+            {latest ? (
+              <>
+                <Tick label="$STONKBROKER" value={usd(latest.priceUsd)} />
                 <Tick
-                  label="TO $1B"
-                  value={Number.isFinite(state.mission.multipleToTarget) ? `${state.mission.multipleToTarget.toFixed(1)}x` : "—"}
+                  label="24h"
+                  value={`${latest.priceChange24hPct >= 0 ? "▲" : "▼"} ${pct(latest.priceChange24hPct)}`}
+                  tone={latest.priceChange24hPct >= 0 ? "up" : "down"}
                 />
-              )}
-              <span className="ml-auto text-muted-foreground">
-                data {latest.source} · {new Date(latest.ts).toUTCString().slice(17, 25)} UTC
-              </span>
-            </div>
+                <Tick label="MCAP" value={usd(latest.marketCapUsd)} />
+                <Tick label="REV 24H" value={usd(latest.protocolRevenue24hUsd)} />
+                <Tick label="VOL 24H" value={usd(latest.protocolVolume24hUsd)} />
+                {latest.onchain && (
+                  <Tick label="CLOCK IN POT" value={`${latest.onchain.clockInPotEth.toFixed(3)} ETH`} />
+                )}
+                {grade && <Tick label="GRADE" value={`${grade.letter} ${grade.score.toFixed(1)}`} tone="accent" />}
+                {state && (
+                  <Tick
+                    label="TO $1B"
+                    value={Number.isFinite(state.mission.multipleToTarget) ? `${state.mission.multipleToTarget.toFixed(1)}x` : "—"}
+                  />
+                )}
+                <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
+                  <span className={`size-1.5 rounded-full ${latest.source === "live" ? "bg-[var(--sb-green)] sb-pulse" : "bg-[var(--sb-gold)]"}`} />
+                  data {latest.source} · {new Date(latest.ts).toUTCString().slice(17, 25)} UTC
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-muted-foreground">telemetry — awaiting first snapshot</span>
+                <span className="ml-auto text-muted-foreground">
+                  <UtcClock /> UTC
+                </span>
+              </>
+            )}
           </div>
-        )}
+        </div>
         {VIEWER_MODE && <ViewerBanner publishedAt={state?.viewer?.publishedAt ?? null} />}
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
         {error && (
-          <div className="mb-4 border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            Could not reach the console API: {error}
+          <div className="mb-4 flex flex-wrap items-center gap-3 border border-destructive/40 border-l-2 border-l-destructive bg-destructive/10 px-3 py-2 text-sm">
+            <span className="sb-ticker text-[10px] text-destructive">link down</span>
+            <span className="min-w-0 flex-1 truncate text-destructive/90">{error}</span>
+            <Button size="sm" variant="outline" disabled={loading} onClick={() => void refresh()}>
+              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Retry
+            </Button>
           </div>
         )}
-        {!state && loading && (
-          <div className="grid gap-4 md:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-28 animate-pulse border border-border/60 bg-muted/30" />
-            ))}
-          </div>
-        )}
+        {!state && loading && <ConsoleSkeleton />}
         {state && (
           <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="gap-4">
             <TabsList variant="line" className="w-full justify-start overflow-x-auto">
-              <TabsTrigger value="overview">
+              <TabsTrigger className={TAB_CLASS} value="overview">
                 <Activity /> Overview
               </TabsTrigger>
-              <TabsTrigger value="activity">
+              <TabsTrigger className={TAB_CLASS} value="activity">
                 <Radio /> Activity
               </TabsTrigger>
-              <TabsTrigger value="growth">
+              <TabsTrigger className={TAB_CLASS} value="growth">
                 <LineChartIcon /> Growth
               </TabsTrigger>
-              <TabsTrigger value="chat">
+              <TabsTrigger className={TAB_CLASS} value="chat">
                 <MessageCircle /> Chat
               </TabsTrigger>
-              <TabsTrigger value="queue">
+              <TabsTrigger className={TAB_CLASS} value="queue">
                 <Inbox /> Review queue
                 {pendingDrafts > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+                  <Badge className="ml-1 h-4 bg-primary/15 px-1.5 font-mono text-[10px] text-primary">
                     {pendingDrafts}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="launchpad">
+              <TabsTrigger className={TAB_CLASS} value="launchpad">
                 <Rocket /> Launchpad
                 {pendingLaunches > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+                  <Badge className="ml-1 h-4 bg-primary/15 px-1.5 font-mono text-[10px] text-primary">
                     {pendingLaunches}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="evolution">
+              <TabsTrigger className={TAB_CLASS} value="evolution">
                 <GitBranch /> Evolution
                 {pendingProposals > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+                  <Badge className="ml-1 h-4 bg-primary/15 px-1.5 font-mono text-[10px] text-primary">
                     {pendingProposals}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="agents">
+              <TabsTrigger className={TAB_CLASS} value="agents">
                 <Bot /> Agents
               </TabsTrigger>
-              <TabsTrigger value="runs">
+              <TabsTrigger className={TAB_CLASS} value="runs">
                 <Play /> Runs
               </TabsTrigger>
-              <TabsTrigger value="settings">
+              <TabsTrigger className={TAB_CLASS} value="settings">
                 <Settings2 /> Settings
               </TabsTrigger>
             </TabsList>
@@ -250,11 +265,49 @@ export function Console() {
           </Tabs>
         )}
       </main>
-      <footer className="border-t border-border/60 px-4 py-3 text-center sb-ticker text-[10px] text-muted-foreground">
+      <footer className="border-t border-border/60 px-4 py-3 text-center sb-ticker text-[10px] text-muted-foreground/80">
         LAURA operates under the swarm charter · drafts are reviewed before publishing · rewards are contract distributions, not dividends
       </footer>
     </div>
   );
+}
+
+/** Structured loading state: the exact shell the data will occupy, one light sweep. */
+function ConsoleSkeleton() {
+  return (
+    <div aria-busy="true" className="space-y-4">
+      <div className="flex gap-4 border-b border-border/60 pb-2">
+        {["w-20", "w-16", "w-16", "w-12", "w-24", "w-20", "w-20", "w-14", "w-12", "w-16"].map((w, i) => (
+          <div key={i} className={`h-4 ${w} bg-muted/40 ${i === 0 ? "bg-primary/20" : ""}`} />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="sb-skeleton h-80 lg:col-span-1" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
+          <div className="sb-skeleton h-28" />
+          <div className="sb-skeleton h-28" />
+          <div className="sb-skeleton h-28" />
+          <div className="sb-skeleton h-28" />
+          <div className="sb-skeleton h-40 sm:col-span-2" />
+        </div>
+      </div>
+      <p className="sb-ticker text-center text-[10px] text-muted-foreground">reading swarm state…</p>
+    </div>
+  );
+}
+
+/** Client-only ticking clock; renders a placeholder until mounted so SSR markup matches. */
+function UtcClock() {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const first = setTimeout(() => setNow(Date.now()), 0);
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+  return <span>{now === null ? "—" : new Date(now).toUTCString().slice(17, 25)}</span>;
 }
 
 function Tick({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "up" | "down" | "neutral" | "accent" }) {
