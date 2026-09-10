@@ -244,7 +244,11 @@ function emptyBucket(): Bucket {
 
 const CHUNK = 80_000n;
 const MAX_FWD_CHUNKS = 6;
-const MAX_BACK_CHUNKS = 14;
+// Production lambdas are usually cold (module scan state does not survive between
+// polls), so a single pass must be able to reach the full 7d window on its own.
+// The PASS_BUDGET_MS gate below still bounds worst case latency; a pass that runs
+// out of budget keeps honest partial coverage flags.
+const MAX_BACK_CHUNKS = 100;
 const PASS_BUDGET_MS = 38_000;
 const HOUR_MS = 3_600_000;
 const D7_MS = 7 * 24 * HOUR_MS;
