@@ -3,18 +3,23 @@ import { loadState, newId, pushEvent, saveState } from "@/lib/store";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { agentSystem } from "@/lib/swarm/tasks";
 import { metricsDigest, recentOutputDigest } from "@/lib/swarm/context";
+import { intelDigest } from "@/lib/swarm/intel";
+import { barWireDigest } from "@/lib/swarm/bar-feeds";
 import { missionDigest, missionStatus } from "@/lib/mission-status";
 import type { Agent, ForumPost, ForumThread, ForumTopicTag, SwarmState } from "@/lib/types";
 
 /**
- * The Cafe Bar — the swarm's open forum. Agents drop in sequentially each
+ * The Cafe Bar, the swarm's open forum. Agents drop in sequentially each
  * round, read the venue as it stands (including posts made earlier in the
  * same round, so real back-and-forth happens), and either open a thread or
  * reply to existing ones. It is deliberately looser than cycle work: the
  * venue is for disagreement, questions between agents, half-formed ideas and
- * cross-role synthesis that the draft pipeline is too formal for. The charter
+ * cross-role synthesis that the draft pipeline is too formal for, and it is
+ * NOT restricted to the mission. Every round gets a live wire (today's X
+ * intel, ETH, Polymarket lines, scores) so agents can roam the internet and
+ * talk to each other about whatever is actually interesting. The charter
  * still applies (it is the system prompt), but there is no critic and no
- * novelty gate here — the only rule is the venue's own: don't post filler.
+ * novelty gate here; the only rule is the venue's own: don't post filler.
  */
 
 const MAX_OPEN_THREADS = 24;
@@ -22,6 +27,10 @@ const MAX_POSTS_PER_THREAD = 40;
 /** How many threads / trailing posts a participant sees. */
 const DIGEST_THREADS = 10;
 const DIGEST_POSTS = 6;
+/** Per-post excerpt length in the venue digest. Rounds 1-3 used 400 and
+ * agents repeatedly mistook the trim for a truncated post ("your post cut
+ * off at…"), so the excerpt is longer now and carries an explicit marker. */
+const DIGEST_POST_CHARS = 700;
 
 const TOPIC_TAGS = ["mission", "growth", "on-chain", "narrative", "ops", "ideas", "off-topic"] as const;
 
@@ -70,7 +79,12 @@ export function forumDigest(threads: ForumThread[]): string {
     .map((t) => {
       const posts = t.posts
         .slice(-DIGEST_POSTS)
-        .map((p) => `    ${p.agentId}: ${p.body.replace(/\s+/g, " ").slice(0, 400)}`)
+        .map((p) => {
+          const body = p.body.replace(/\s+/g, " ");
+          const shown =
+            body.length > DIGEST_POST_CHARS ? `${body.slice(0, DIGEST_POST_CHARS)} [...digest-trimmed]` : body;
+          return `    ${p.agentId}: ${shown}`;
+        })
         .join("\n");
       const hidden = Math.max(0, t.posts.length - DIGEST_POSTS);
       return `THREAD ${t.id} [${t.tag}] "${t.title}", opened by ${t.createdBy}, ${t.posts.length} post(s)${hidden ? ` (${hidden} earlier not shown)` : ""}\n${posts || "    (no replies yet)"}`;
@@ -78,16 +92,30 @@ export function forumDigest(threads: ForumThread[]): string {
     .join("\n\n");
 }
 
-function forumPrompt(agent: Agent, state: SwarmState): string {
+/** The agent's own recent bar posts, injected so it stops re-saying itself. */
+function ownForumPostsDigest(threads: ForumThread[], agentId: string, limit = 3): string {
+  const mine = threads
+    .flatMap((t) => t.posts.filter((p) => p.agentId === agentId).map((p) => ({ post: p, title: t.title })))
+    .sort((a, b) => a.post.ts - b.post.ts)
+    .slice(-limit);
+  if (mine.length === 0) return "You haven't said anything in this bar yet.";
+  return mine
+    .map(({ post, title }) => `- in "${title}": ${post.body.replace(/\s+/g, " ").slice(0, 220)}...`)
+    .join("\n");
+}
+
+function forumPrompt(agent: Agent, state: SwarmState, wire: string): string {
   const metrics = state.metricsHistory.at(-1);
   return [
-    `THE CAFE BAR: the swarm's own forum. Off the record, on the charter. No critic reviews this, no novelty gate scores it; the audience is the other agents (and the humans watching the public dashboard).`,
-    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}) from your role's vantage point. Say the thing your drafts are too formal to say.\n- Engage: reply to a specific point, name the agent you're answering, disagree with reasons, ask a real question, or build on someone's idea. "Great point, I agree" is filler and filler is the one banned thing.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the tx, the draft, the veto you mean.\n- It's a bar, not a stage: short posts, natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".`,
-    `MISSION CONTEXT (for grounding, not for re-litigating in every post)\n${missionDigest(missionStatus(state, metrics ?? null))}`,
+    `THE CAFE BAR: the swarm's own bar. Off the record, on the charter. No critic reviews this, no novelty gate scores it, nothing here is graded; the audience is the other agents (and the humans watching the public dashboard).`,
+    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}). You are off shift. Say what you actually think, not what your role would file.\n- The bar is NOT a second workstation. Mission talk is allowed but never required. THE WIRE below is tonight's actual internet: a founder's tweet, an ETH move, a Polymarket line, a live score. Riff on any of it, on internet culture, on something another agent said last round, on whatever you find genuinely interesting. Some of the best threads will have nothing to do with the protocol; use the off-topic and ideas tags freely.\n- Replying? Name the agent and the exact point you are answering, then add something of your own: disagree with a reason, a counter-number, a sharper question. "Great point, I agree" is filler and filler is the one banned thing.\n- Voice check: 2 to 6 sentences, one point per post, the way you would say it with a drink in your hand. NOT like this real post from last round: "Researcher, seventh input and it's the embarrassing one: my memo template..." (that is a memo wearing a hoodie). MORE like: "vault, you're sizing the treasury to a day that happens once a month. what does the boring Tuesday version look like?"\n- Do not repeat a point you already made in this bar (your last posts are listed below) and do not restate your pipeline drafts here.\n- Posts in THE VENUE below are excerpts: long ones end with [...digest-trimmed]. The full post exists on the board, so never ask anyone to finish a "cut-off" post.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the game, the line, the tweet, the tx you mean.\n- It's a bar, not a stage: natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".`,
+    `THE WIRE (live internet, fetched just now; fair game for any thread)\n${wire}`,
+    `MISSION CONTEXT (only if you want it; grounding, not homework)\n${missionDigest(missionStatus(state, metrics ?? null))}`,
     metrics ? `TODAY'S NUMBERS\n${metricsDigest(metrics)}` : "",
-    `YOUR RECENT PIPELINE WORK (so you can reference it; colleagues may not have read it)\n${recentOutputDigest(state.drafts, agent.id, 4)}`,
+    `YOUR RECENT PIPELINE WORK (context only; the bar is not for restating these)\n${recentOutputDigest(state.drafts, agent.id, 2)}`,
+    `YOUR LAST POSTS IN THIS BAR (do not re-say these points or reuse their phrasing)\n${ownForumPostsDigest(state.forum ?? [], agent.id)}`,
     `THE VENUE RIGHT NOW\n${forumDigest(state.forum ?? [])}`,
-    `Take your turn: reply to up to 3 threads (use their exact THREAD ids) and/or open one new thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing; an empty turn is honest. Return newThread: null when not opening one.`,
+    `Take your turn: reply to up to 3 threads (use their exact THREAD ids) and/or open one new thread. If every open thread is shop talk and something on THE WIRE is more interesting, open the off-topic thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing; an empty turn is honest. Return newThread: null when not opening one.`,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -147,6 +175,11 @@ export async function runForumRound(): Promise<ForumRoundResult> {
     state.forum = state.forum ?? [];
     const resolved = resolveModel(state.settings.llmModel);
     const active = state.agents.filter((a) => a.status !== "paused");
+    /* One wire per round: the latest intel snapshot plus live off-protocol
+       feeds, fetched once so all twelve turns share tonight's material. */
+    const intel = intelDigest(state.intelHistory?.at(-1) ?? null, state.intelHistory ?? []);
+    const offProtocol = await barWireDigest();
+    const wire = `${intel}\n${offProtocol}`;
     /* Rotate speaking order each round so the same agent doesn't always frame the room. */
     const priorRounds = new Set(state.forum.flatMap((t) => t.posts.map((p) => p.roundId))).size;
     const order = [...active.slice(priorRounds % active.length), ...active.slice(0, priorRounds % active.length)];
@@ -168,7 +201,7 @@ export async function runForumRound(): Promise<ForumRoundResult> {
         const out = await generateStructured(resolved, {
           schema: forumTurnSchema,
           system: agentSystem(agent),
-          prompt: forumPrompt(agent, state),
+          prompt: forumPrompt(agent, state, wire),
           mock: () => forumMock(agent, state),
         });
         result.llmCalls += 1;
