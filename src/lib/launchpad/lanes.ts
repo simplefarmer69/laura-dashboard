@@ -31,11 +31,11 @@ export const LANE_INFO: Record<PadLane, LaneInfo> = {
   weth: { quote: "WETH", kind: "crypto", vibe: "the default ETH lane; broadest reach (every launcher user holds ETH) and creator fees arrive as WETH; fits any concept" },
   stonk: { quote: "STONK", kind: "crypto", vibe: "ecosystem-native $STONKBROKER lane; every curve trade IS mission-token volume (the volume grade lever) and creator fees arrive as $STONKBROKER — pick it when the launch serves the mission, ecosystem lore or community themes" },
   usdg: { quote: "USDG", kind: "crypto", vibe: "stable-quoted lane; fits dollar, payroll, savings and irony-about-stability themes" },
-  gme: { quote: "GME", kind: "stock", vibe: "GameStop lane; fits meme-stock, diamond-hands, retail-vs-wallstreet lore" },
-  nvda: { quote: "NVDA", kind: "stock", vibe: "Nvidia lane; fits AI, GPUs, compute and tech-bubble themes" },
-  aapl: { quote: "AAPL", kind: "stock", vibe: "Apple lane; fits consumer tech, design and cult-of-brand themes" },
-  spcx: { quote: "SPCX", kind: "stock", vibe: "SpaceX lane; fits rockets, space, mars and moonshot themes" },
-  uso: { quote: "USO", kind: "stock", vibe: "oil ETF lane; fits energy, macro and commodity themes" },
+  gme: { quote: "GME", kind: "stock", vibe: "GameStop lane — the quote asset IS the tokenized GME stock, so the launch trades against GME natively and creator fees accrue IN GME; the strongest possible frame for meme-stock, diamond-hands and retail-vs-wallstreet lore (LAURA inside the meme-stock story, not commenting on it)" },
+  nvda: { quote: "NVDA", kind: "stock", vibe: "Nvidia lane — quote is tokenized NVDA stock and fees accrue in NVDA; the native home for AI, GPU, compute and tech-bubble angles" },
+  aapl: { quote: "AAPL", kind: "stock", vibe: "Apple lane — quote is tokenized AAPL stock and fees accrue in AAPL; fits consumer tech, design and cult-of-brand themes" },
+  spcx: { quote: "SPCX", kind: "stock", vibe: "SpaceX lane — quote is tokenized SPCX stock and fees accrue in SPCX; fits rockets, space, mars and moonshot themes" },
+  uso: { quote: "USO", kind: "stock", vibe: "oil ETF lane — quote is tokenized USO and fees accrue in USO; fits energy, macro and commodity themes" },
 };
 
 export const CRYPTO_LANES = PAD_LANE_KEYS.filter((l) => LANE_INFO[l].kind === "crypto");
@@ -136,7 +136,7 @@ export function laneMenuDigest(
   return [
     ...lines,
     open
-      ? "All lanes are open right now (weekday, equity feeds live)."
+      ? "All lanes are open right now (weekday, equity feeds live). Stock lanes are first-class, verified deployable surfaces (identical pad bounds to weth, createLaunch simulates clean on every stock pad — see the integrations library doc), not exotic options: pairing a launch against a tokenized stock puts LAURA natively inside that stock's story and accrues her fees in it."
       : "Stock lanes are CLOSED for the weekend (Chainlink equity feeds pause Friday 20:00 UTC to Monday 00:15 UTC). Pick weth, stonk or usdg.",
     `Rotation hint for this cycle: ${hint}. Recent launch lanes (newest first): ${history}.`,
     "Pick the lane whose quote token genuinely fits the concept - a GME-lore token belongs on the gme lane, an AI token on nvda, a generic meme on weth. Avoid using the same lane three launches in a row unless the concept demands it.",

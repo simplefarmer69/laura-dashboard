@@ -26,9 +26,10 @@ export const launchSpecShape = {
   startTaxBps: z.number().min(0).max(9900),
   taxDecayPerMinuteBps: z.number().min(0).max(2000),
   /* Pad-enforced floor: createLaunch REVERTS below MIN_POST_TAX_BPS() = 100
-     (verified 2026-09-10 by simulation on both the weth and stonk pads;
-     postTaxBps 0 reverts, 100 and 450 simulate clean). Zod allowing 0 here
-     used to let a spec through that could only ever fail at deploy. */
+     (verified 2026-09-10 by simulation; MIN/MAX_POST_TAX_BPS read 100/500 on
+     all 8 pads including the five stock lanes, and postTaxBps 100 simulates
+     clean on every pad). Zod allowing 0 here used to let a spec through that
+     could only ever fail at deploy. */
   postTaxBps: z.number().min(100).max(500),
   sellsEnabled: z.boolean(),
   bufferSecs: z.number().min(600).max(3600),

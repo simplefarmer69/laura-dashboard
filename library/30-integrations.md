@@ -35,6 +35,17 @@ Every format here was verified live during the build. Do not guess variants; the
   identical bounds and 16.5/16.5/50 fee split. `createLaunch` simulates clean
   from the swarm wallet. Creator fees on this lane arrive as **$STONKBROKER**
   — mission-token income — and every curve trade prints mission-token volume.
+- **All five STOCK lanes verified live** (2026-09-10, read + simulated from the
+  swarm wallet): gme `0x4B9D…8cFD` (35 launches), nvda `0xEe96…F9fb` (8),
+  aapl `0xB045…a864` (9), spcx `0x0c3b…c947` (15), uso `0xDb3C…053B` (3).
+  Every stock pad reports `launchFeeWei` 0 and bounds IDENTICAL to the weth pad
+  (start $1k–$1M, grad $50k–$10M, max start tax 9900, buffer ≥600s, postTax
+  100–500), and `createLaunch` with the proven default params **simulates clean
+  on all five**. The quote asset is the tokenized stock, so creator fees accrue
+  in GME/NVDA/AAPL/SPCX/USO. The only gate is the WEEKEND window (Chainlink
+  us_equities_24/5 feeds publish nothing Friday close → Monday 00:00 UTC; code
+  blocks stock deploys Friday 20:00 UTC → Monday 00:15 UTC in `lanes.ts`) — on
+  a weekday a stock-lane deploy is as routine as a weth one.
 - **No creator supply allocation exists on the pad**: the `createLaunch` tuple
   has no dev-tokens field and `arm` loads the full registered supply. Creator
   economics = the 16.5% trade-tax push, nothing else; "retention" via buying

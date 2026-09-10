@@ -47,9 +47,28 @@ arms, verifies and tracks earnings on whichever pad the lane names. Strategy:
   grade lever) and creator fees arrive as $STONKBROKER. Pick it when the launch
   serves the mission, ecosystem lore, or community themes — the launch then works
   the grade twice (its own volume + fee income in the mission token).
-- **usdg / stock lanes (gme, nvda, aapl, spcx, uso)** — thematic fit only; stock
-  lanes CLOSE on weekends (Chainlink equity feeds pause) and closed picks are
-  rerouted by code. Match the lane to the concept, not the other way around.
+- **usdg** — stable-quoted lane; fits dollar, payroll, savings and
+  irony-about-stability themes. Fees arrive as USDG.
+- **stock lanes (gme, nvda, aapl, spcx, uso)** — first-class lanes, not exotic
+  options: the quote asset is the TOKENIZED STOCK itself, so the launch trades
+  against real GME/NVDA/AAPL/SPCX/USO stock tokens and creator fees accrue IN
+  that stock. A stock lane BEATS weth/stonk when the concept's story belongs to
+  that stock's world: meme-stock/squeeze/retail-army lore is strictly stronger
+  on gme (LAURA inside the GME story natively, not commenting from outside), an
+  AI/GPU concept is stronger on nvda, a rockets/moonshot concept on spcx,
+  consumer-tech on aapl, energy/macro on uso. Stock lanes CLOSE on weekends
+  (Chainlink equity feeds pause Friday 20:00 UTC → Monday 00:15 UTC; the menu
+  marks closed lanes and code reroutes closed picks) — on weekdays they are
+  verified deployable (identical pad bounds to weth; createLaunch simulates
+  clean on every stock pad, verified on-chain 2026-09-10). Match the lane to
+  the concept, not the other way around.
+
+**Operator directive (2026-09-10, stock-lane exploration).** Every LAURA launch so
+far used the weth lane. The operator wants the next few launches to explore the
+stock lanes while they are open: pick concepts that genuinely belong on a stock
+lane and launch them there. The lane supplies the real-stock exposure; your token
+still supplies an original name, symbol and message (never a real ticker as your
+symbol).
 
 **Pre-stage when capped.** The deploy cap being exhausted is NOT a skip reason. Check
 LAUNCH CAPACITY for when headroom returns; if the queue is empty, propose the next
