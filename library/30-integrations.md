@@ -14,6 +14,14 @@ Every format here was verified live during the build. Do not guess variants; the
   Fee from `launchFeeWei()` (currently 0 — a full create+approve+arm costs gas only,
   well under 0.001 ETH). Live `bounds()`: start mcap $1k–$1M, graduation $50k–$10M
   (≥2x start), buffer ≥600s, max start tax 9900 bps.
+- **Our WETH pad IS the Stonklauncher UI's active ETH lane** (verified 2026-09-10 from
+  the live client bundle after the "not visible" scare). The site keys it `weth2`; the
+  /launcher lane menu defaults to it (`XJ.find(e => e.key === "weth2")`) and organic
+  launches land on it. Other pads that look tempting but are NOT the UI write path:
+  the bundle's legacy native pad `0xEcA5…71f9` (creation disabled — `launchFeeWei`
+  returns the 1e24-wei sentinel) and the newer `weth22` pad `0x5BCE…a3B3` (present in
+  config but hidden by the lane menu filter). Floor ids are `laneIdOffset + launchId`
+  (weth2 offset 18,000,000 → launch #276 = floor id 18000276).
 - Always simulate before send; parse the `LaunchCreated` event for launch id + token.
 - Vanity salt zero, `unsoldMode` 0, `openEnded` true, `bondVenue` 0 are the proven params.
 
@@ -34,9 +42,16 @@ Every format here was verified live during the build. Do not guess variants; the
 
 ## Public reads
 
-- Factory-curve grid: `GET /api/launcher/tokens?sort=new`.
-- **Safe Launch tokens live at `GET /api/safe-launch/floor`** (rows include phase,
-  progress, creator). `GET /api/launcher/token/<addr>` returns "unknown token" for
+- Factory-curve grid: `GET /api/launcher/tokens?sort=new`. For Safe Launch tokens it
+  also carries the UI route (`safeHref`, e.g. `/safe-launch/token/weth2-laura-276`)
+  and the attached `imageHash`.
+- **`GET /api/safe-launch/floor` is THE surface the /launcher (Stonklauncher) UI
+  renders from** — the client bundle fetches it and filters client-side. A launch is
+  user-visible only when its floor row reports phase `live` (or `bonded`/
+  `graduated`); a created-but-unarmed launch sits as `waiting` among 100+ others and
+  is effectively invisible. `verifyLaunchVisible()` in `service.ts` checks exactly
+  this; the executor runs it after every arm.
+  `GET /api/launcher/token/<addr>` returns "unknown token" for
   Safe Launch deploys — that is normal, not an error.
 - Batch logo map: `GET /api/safe-launch/token-logo?tokens=<a>,<b>`.
 - Also available: `/api/safe-launch/stats`, `/leaderboard`, `/mcap-series`, `/buys`.

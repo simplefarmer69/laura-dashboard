@@ -13,6 +13,19 @@ holds the durable ones from the build itself.
   running), not the transaction receipt. The executor now arms on deploy and runs a
   repair pass for deployed-but-unarmed launches every tick.
 
+- **Verify the exact surface the UI renders from, not just any API that returns
+  "live".** (2026-09-10, follow-up to the #276/#277 scare.) When the operator said the
+  tokens were "launched external to the v2 stonklauncher launchpad", the reflex was to
+  hunt for a different V2 contract. Reverse-engineering the live bundle + a headless
+  render of /launcher proved the opposite: our weth2 pad IS the UI's default ETH lane,
+  and both tokens render on the floor with logos and Quick Trade — the invisibility
+  the operator saw was the ~30-minute deployed-but-unarmed window (phase `waiting`,
+  buried under 110 other waiting rows). Method that settled it: (1) find the endpoint
+  the UI client actually fetches (`/api/safe-launch/floor`), (2) find the pad the UI's
+  create flow writes (`e$ = XJ.find(key === "weth2")` in the bundle), (3) render the
+  page headless and screenshot the token cards. The executor now has a verify pass
+  (`launch.verified` event) that closes the loop from tx receipt to pixels-on-screen.
+
 - **First real deploys succeeded autonomously** (2026-09-10, ~90s after wallet funding):
   two launches, two logo attaches, zero human clicks, total spend ~0.00023 ETH. The
   fail-closed pattern (simulate → cap-check → send → verify receipt → brand) works;
