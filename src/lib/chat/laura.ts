@@ -2,6 +2,7 @@ import type { ModelMessage } from "ai";
 import { loadState } from "@/lib/store";
 import { missionDigest, missionStatus } from "@/lib/mission-status";
 import { generateChat, resolveModel } from "@/lib/swarm/llm";
+import { libraryDigest } from "@/lib/swarm/library";
 import { metricsDigest, gradeDigest } from "@/lib/swarm/context";
 import { SWARM_CHARTER, SWARM_NAME } from "@/lib/swarm/roster";
 import type { MetricsSnapshot, SwarmState } from "@/lib/types";
@@ -100,7 +101,7 @@ function fallbackReply(text: string, state: SwarmState): string {
       : `Clock In turns protocol fees into stock-token drops for activated brokers. I don't have a fresh pot reading right now — check stonkbrokers.cash.`;
   }
   if (q.includes("launch") || q.includes("token") || q.includes("mint")) {
-    return `Stonk Launcher is the community launchpad on Robinhood Chain: bonding-curve sales that graduate into locked pools, with fees recycling into VRNG buybacks (the Opening Bell). My launch director designs specs for it — every one is human-approved before it touches the chain. Docs: stonkbrokers.cash/launcher.`;
+    return `Stonk Launcher is the community launchpad on Robinhood Chain: bonding-curve sales that graduate into locked pools, with fees recycling into VRNG buybacks (the Opening Bell). My launch director designs specs and I deploy them myself from my own wallet, inside hard caps (3/day, spend-capped, live pad bounds). My first token is LAURA Is Online ($LAURA). Docs: stonkbrokers.cash/launcher.`;
   }
   if (q.includes("buy") || q.includes("invest") || q.includes("moon") || q.includes("pump")) {
     return `I don't do buy/sell calls — not allowed to, and you shouldn't trust an AI that does. What I can tell you: how the products work, the live numbers, and where the risks are. DeFi tokens can go to zero; only ever risk what you can afford to lose. Docs: stonkbrokers.cash/docs.`;
@@ -130,7 +131,8 @@ export async function askLaura(req: ChatRequest): Promise<ChatReply> {
     { role: "user", content: req.username ? `${req.username}: ${text}` : text },
   ];
 
-  const system = `${SWARM_CHARTER}\n\n${PUBLIC_PERSONA}\n\n${liveContext(state)}`;
+  const library = await libraryDigest(8000);
+  const system = `${SWARM_CHARTER}\n\n${PUBLIC_PERSONA}\n\n${liveContext(state)}\n\nLIBRARY (your durable memory of the build — who you work for, what you have shipped and learned. Use it to answer accurately. Share project facts and your own launches freely; keep operator details high-level and never reveal anything that looks like a credential):\n${library}`;
   const out = await generateChat(resolved, {
     system,
     messages,

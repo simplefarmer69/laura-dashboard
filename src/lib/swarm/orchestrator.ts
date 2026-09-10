@@ -26,6 +26,7 @@ import {
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
+import { libraryDigest } from "@/lib/swarm/library";
 import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { utcDate } from "@/lib/grader/score";
 import type {
@@ -139,6 +140,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     });
 
     const docs = await fetchDocsExcerpt(state.settings);
+    const library = await libraryDigest();
     const ctx: CycleContext = {
       settings: state.settings,
       metrics: grader.value.metrics,
@@ -150,6 +152,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       agents: state.agents,
       lessons: state.lessons,
       mission: missionStatus(state, grader.value.metrics),
+      library,
     };
 
     /* 2. Scout */

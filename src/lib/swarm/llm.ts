@@ -11,7 +11,7 @@ export interface ResolvedModel {
 }
 
 const DEFAULT_MODELS: Record<Exclude<LlmProvider, "mock">, string> = {
-  anthropic: "claude-sonnet-4-5",
+  anthropic: "claude-fable-5-1",
   openai: "gpt-4.1-mini",
 };
 
