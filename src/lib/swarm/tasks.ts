@@ -290,7 +290,7 @@ export function mintPrompt(
     `METRICS\n${metricsDigest(ctx.metrics)}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
-    `PENDING LAURA LAUNCHES AWAITING REVIEW OR DEPLOY: ${pendingLaunches}`,
+    `QUEUED LAURA LAUNCHES AWAITING AUTONOMOUS DEPLOY: ${pendingLaunches}`,
     `WHAT LAURA HAS ALREADY SAID (recent launches; never repeat a statement)\n${spokenDigest}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.mint ?? "None."}`,
@@ -301,7 +301,7 @@ export function mintPrompt(
 
 export function mintMock(ctx: CycleContext, pendingLaunches: number): LaunchOut {
   if (pendingLaunches >= 2) {
-    return { launch: null, skipReason: "Two LAURA launches already await review; keeping the queue tight." };
+    return { launch: null, skipReason: "Two LAURA launches already queued for autonomous deploy; keeping the queue tight." };
   }
   const day = ctx.grade.date.replaceAll("-", "").slice(4);
   return {
@@ -349,7 +349,7 @@ export function coachPrompt(ctx: CycleContext): string {
       return `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected. ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or the review requirement.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or charter compliance.`;
 }
 
 export function coachMock(ctx: CycleContext): ProposalsOut {
