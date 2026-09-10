@@ -87,11 +87,27 @@ function docsSection(docs: LibraryDoc[], budget: number): string {
  * the operator and project docs keep the same depth they had while the other
  * docs gain their heads; raised 22k → 23k when 25-stonkbrokers-official.md
  * joined, covering its 1k floor so no existing doc lost depth; raised
- * 23k → 24k when 65-collective-intelligence.md (Sage's ledger) joined, for
- * the same reason.
+ * 23k → 26k when Sage's collective intelligence ledger joined as its own
+ * budgeted section (the 1k per-doc floor would have trimmed the ledger to its
+ * header, and reaching every agent whole is the ledger's entire job).
  */
-export async function libraryDigest(maxChars = 24_000): Promise<string> {
-  const [docs, notebook, skills] = await Promise.all([libraryDocs(), notebookDigest(), skillsIndex()]);
+const LEDGER_FILE = "65-collective-intelligence.md";
+const LEDGER_BUDGET = 3_000;
+
+export async function libraryDigest(maxChars = 26_000): Promise<string> {
+  const [allDocs, notebook, skills] = await Promise.all([libraryDocs(), notebookDigest(), skillsIndex()]);
+  /* The ledger gets a dedicated head-kept section (newest entries lead the
+     doc by construction); it is excluded from the shared docs budget. */
+  const ledger = allDocs.find((d) => d.file === LEDGER_FILE);
+  const docs = allDocs.filter((d) => d.file !== LEDGER_FILE);
+  const ledgerText = ledger
+    ? ledger.text.length <= LEDGER_BUDGET
+      ? ledger.text
+      : `${ledger.text.slice(0, LEDGER_BUDGET)}\n[...ledger trimmed; full doc: library/${LEDGER_FILE}]`
+    : null;
+  const ledgerSec = ledgerText
+    ? `## Collective intelligence ledger (Sage's shared context; apply it)\n${ledgerText}`
+    : null;
   /* Notebook: keep the TAIL (newest entries last is the file's order). */
   const notebookBudget = 4_500;
   const notebookText =
@@ -103,9 +119,11 @@ export async function libraryDigest(maxChars = 24_000): Promise<string> {
     skills.length <= skillsBudget ? skills : `${skills.slice(0, skillsBudget)}\n[...skill index truncated]`;
   const notebookSec = `## Self-authored notebook (written by the swarm itself; newest last)\n${notebookText}`;
   const skillsSec = `## Skill index (full skill text is injected per role)\n${skillsText}`;
-  const docsBudget = Math.max(3_000, maxChars - notebookSec.length - skillsSec.length - SEP.length * 2);
+  const fixedLen =
+    notebookSec.length + skillsSec.length + (ledgerSec ? ledgerSec.length + SEP.length : 0) + SEP.length * 2;
+  const docsBudget = Math.max(3_000, maxChars - fixedLen);
   const docsSec = docsSection(docs, docsBudget);
-  return [docsSec, skillsSec, notebookSec].join(SEP);
+  return [docsSec, ...(ledgerSec ? [ledgerSec] : []), skillsSec, notebookSec].join(SEP);
 }
 
 /* --------------------------- Self-editing (sage) ---------------------------- */
