@@ -426,9 +426,22 @@ export const criticSchema = z.object({
 
 export type CriticOut = z.infer<typeof criticSchema>;
 
+/* Review excerpt size for draft bodies in the critic prompt. Excerpts MUST be
+   labelled: an unmarked slice reads as a mid-sentence cut, and the critic
+   vetoed complete drafts as "truncated" for cycles because of it (observed
+   2026-09-10: a complete 3.4k-char growth thread vetoed for "ending" at
+   exactly char 1800). */
+const CRITIC_BODY_EXCERPT_CHARS = 2400;
+
 export function criticPrompt(ctx: CycleContext, cycleDrafts: Draft[]): string {
   const current = cycleDrafts
-    .map((d) => `### id=${d.id} · ${d.agentId} · ${d.kind} → ${d.channel}\nTitle: ${d.title}\nRationale: ${d.rationale}\nBody:\n${d.body.slice(0, 1800)}`)
+    .map((d) => {
+      const body =
+        d.body.length > CRITIC_BODY_EXCERPT_CHARS
+          ? `${d.body.slice(0, CRITIC_BODY_EXCERPT_CHARS)}\n[REVIEW EXCERPT ENDS — the stored draft continues for ${d.body.length - CRITIC_BODY_EXCERPT_CHARS} more chars and ends properly; an apparent cut at this point is the excerpt boundary, NOT a defect]`
+          : d.body;
+      return `### id=${d.id} · ${d.agentId} · ${d.kind} → ${d.channel}\nTitle: ${d.title}\nRationale: ${d.rationale}\nBody:\n${body}`;
+    })
     .join("\n\n");
   const history = ctx.drafts
     .filter((d) => !cycleDrafts.some((c) => c.id === d.id))
@@ -442,7 +455,7 @@ export function criticPrompt(ctx: CycleContext, cycleDrafts: Draft[]): string {
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 8)}`,
     `RECENT SWARM OUTPUT (history — what "repetitive" means is measured against this)\n${history || "No prior drafts."}`,
     `THIS CYCLE'S DRAFTS (review each; use the exact draftId given)\n${current}`,
-    `Return one review per draft above. VETO repetitive or low-quality drafts (name the earlier draft duplicated, or the defect); PASS genuinely new or materially improved work. The daily metrics report format is intentionally recurring — judge it on quality only. Then record your observation: the repetition pattern forming and what would break it.`,
+    `Return one review per draft above. VETO repetitive or low-quality drafts (name the earlier draft duplicated, or the defect); PASS genuinely new or materially improved work. The daily metrics report format is intentionally recurring — judge it on quality only. Long bodies are EXCERPTED for review at ${CRITIC_BODY_EXCERPT_CHARS} chars and marked where the excerpt ends — never veto a draft for appearing to cut off at the marked excerpt boundary. Then record your observation: the repetition pattern forming and what would break it.`,
   ].join("\n\n");
 }
 
