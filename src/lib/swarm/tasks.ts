@@ -100,7 +100,10 @@ export const proposalsSchema = z.object({
       body: z.string().min(50).max(5000),
       rationale: z.string().min(10).max(500),
     })
-    .nullable(),
+    .nullable()
+    /* Optional too: a coach response that omits the key entirely must not
+       lose the whole turn to schema validation (observed 2026-09-10). */
+    .optional(),
 });
 
 export type BriefOut = z.infer<typeof briefSchema>;
