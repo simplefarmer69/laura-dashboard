@@ -61,6 +61,10 @@ export interface XIntel {
   topMentions: IntelTweet[];
   /** Latest original tweets from Robinhood leadership (vladtenev, JohannKerbrat). */
   leaders: { username: string; tweets: IntelTweet[] }[];
+  /** Latest tweets from operator-owned accounts (ClutchMarkets, personal). Optional: absent on pre-tracking snapshots. */
+  tracked?: { username: string; tweets: IntelTweet[] }[];
+  /** Founder tweets engaging operator accounts or stock-token themes — the operator's #1 catalyst. Optional: absent on pre-tracking snapshots. */
+  catalysts?: IntelTweet[];
   /** Which X endpoints answered vs were rate-limited/blocked this cycle. */
   note: string;
 }
@@ -313,6 +317,8 @@ export type SwarmEventKind =
   | "earnings.claimed"
   /** Watcher's per-cycle on-chain state read (treasury, pools, LP, earnings). */
   | "onchain.observed"
+  /** A Robinhood founder engaged an operator account or a stock-token theme — priority catalyst. */
+  | "intel.catalyst"
   /** Vault's treasury action recommendation — advisory; execution stays in capped paths. */
   | "treasury.proposed"
   | "treasury.buy"

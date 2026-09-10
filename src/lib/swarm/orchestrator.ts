@@ -180,6 +180,19 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       state.intelHistory = [...(state.intelHistory ?? []), intel.value];
       intelText = intelDigest(intel.value, state.intelHistory);
       const snap = intel.value;
+      /* Founder catalyst hits are the operator's #1 priority — surface each
+         once as a first-class event (deduped by tweet id via refId). */
+      for (const hit of snap.x?.catalysts ?? []) {
+        const refId = `xcat_${hit.id}`;
+        if (state.events.some((e) => e.refId === refId)) continue;
+        pushEvent(state, {
+          kind: "intel.catalyst",
+          agentId: "system",
+          title: `PRIORITY CATALYST: @${hit.author} engaged operator accounts / stock tokens`,
+          detail: `"${hit.text}" (${hit.likes} likes, ${hit.retweets} RTs) — operator playbook: amplify immediately across all channels.`,
+          refId,
+        });
+      }
       step({
         agentId: "system",
         label: "Internet intel",

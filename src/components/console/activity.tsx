@@ -24,6 +24,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "draft.created":
     case "launch.proposed":
     case "onchain.observed":
+    case "intel.catalyst":
     case "treasury.proposed":
     case "cycle.started":
     case "cycle.finished":
@@ -72,6 +73,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
 export function kindTone(kind: SwarmEventKind): string {
   switch (kind) {
     case "milestone.reached":
+    case "intel.catalyst":
     case "earnings.accrued":
     case "earnings.claimed":
     case "treasury.proposed":

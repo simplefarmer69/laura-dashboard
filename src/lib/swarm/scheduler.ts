@@ -28,8 +28,15 @@ const DAY_MS = 86_400_000;
 const MIN_EVENT_GAP_MS = 20 * 60_000;
 
 /** Event kinds that justify running a cycle early. Deliberately excludes kinds
- *  emitted inside every cycle (grade.stamped, drafts, …) to avoid self-trigger loops. */
-const TRIGGER_KINDS: SwarmEventKind[] = ["launch.deployed", "launch.armed", "milestone.reached"];
+ *  emitted inside every cycle (grade.stamped, drafts, …) to avoid self-trigger loops.
+ *  intel.catalyst is safe: it is deduped per tweet id, so one founder engagement
+ *  triggers exactly one early reaction cycle. */
+const TRIGGER_KINDS: SwarmEventKind[] = [
+  "launch.deployed",
+  "launch.armed",
+  "milestone.reached",
+  "intel.catalyst",
+];
 
 declare global {
   var __lauraScheduler: { started: boolean; lastCycleAt: number; lastGradeDate: string } | undefined;

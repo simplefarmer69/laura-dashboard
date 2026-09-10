@@ -27,7 +27,29 @@ export const X_LEADERS = [
   { username: "JohannKerbrat", id: "1419089826586918913" },
 ] as const;
 
+/**
+ * Operator-owned accounts LAURA follows for live direction and amplification
+ * targets. ids resolve lazily via /2/users/by/username so the operator can
+ * fix a handle here without shipping anything else; unresolvable handles are
+ * skipped with a warning until they exist. ClutchMarkets resolved 2026-09-10.
+ * "ocsimplefarmer" is the handle the operator gave for their personal account
+ * — X currently returns Not Found for it (typo or rename); it lights up
+ * automatically once the exact handle is corrected.
+ */
+export const X_TRACKED: { username: string; id: string | null }[] = [
+  { username: "ClutchMarkets", id: "1803187737874366464" },
+  { username: "ocsimplefarmer", id: null },
+];
+
 const X_SEARCH_QUERY = "$STONKBROKER OR StonkBrokers OR stonkbrokers.cash";
+
+/**
+ * The operator's #1 catalyst: a Robinhood founder engaging an operator
+ * account, or talking stock tokens / tokenized equities — the narrative
+ * $STONKBROKER rides. Recent-search covers the last 7 days.
+ */
+const X_CATALYST_QUERY =
+  '(from:vladtenev OR from:JohannKerbrat) (@ClutchMarkets OR @ocsimplefarmer OR stonkbroker OR "stock token" OR "stock tokens" OR "tokenized stocks" OR "tokenized equities" OR "meme stock")';
 
 interface Cache<T> {
   at: number;
@@ -40,6 +62,10 @@ declare global {
     | {
         search?: Cache<{ count: number; engagement: number; top: IntelTweet[] }>;
         leaders?: Cache<XIntel["leaders"]>;
+        tracked?: Cache<NonNullable<XIntel["tracked"]>>;
+        catalysts?: Cache<IntelTweet[]>;
+        /** username -> resolved id, or null for a confirmed miss (negative-cached). */
+        trackedIds?: Cache<Record<string, string | null>>;
         eth?: Cache<{ usd: number; change24hPct: number }>;
         blockscout?: Cache<{ holders: number | null; transfers: number | null }>;
       }
@@ -53,6 +79,10 @@ function caches() {
 
 const SEARCH_TTL_MS = 20 * 60_000;
 const LEADERS_TTL_MS = 60 * 60_000;
+const TRACKED_TTL_MS = 45 * 60_000;
+const CATALYST_TTL_MS = 30 * 60_000;
+/** Handle-resolution misses re-checked hourly, hits kept for a day. */
+const TRACKED_IDS_TTL_MS = 60 * 60_000;
 const ETH_TTL_MS = 10 * 60_000;
 const BLOCKSCOUT_TTL_MS = 30 * 60_000;
 
@@ -146,6 +176,70 @@ async function fetchXLeaders(): Promise<XIntel["leaders"]> {
   return leaders;
 }
 
+/** Resolve tracked-account handles to ids, negative-caching misses so a bad handle costs one lookup per hour, not per cycle. */
+async function resolveTrackedIds(token: string): Promise<Record<string, string | null>> {
+  const c = caches();
+  if (c.trackedIds && Date.now() - c.trackedIds.at < TRACKED_IDS_TTL_MS) return c.trackedIds.value;
+  const ids: Record<string, string | null> = {};
+  for (const acct of X_TRACKED) {
+    if (acct.id) {
+      ids[acct.username] = acct.id;
+      continue;
+    }
+    try {
+      const json = await getJson<{ data?: { id: string } }>(
+        `https://api.x.com/2/users/by/username/${encodeURIComponent(acct.username)}`,
+        { authorization: `Bearer ${token}` },
+      );
+      ids[acct.username] = json.data?.id ?? null;
+    } catch {
+      ids[acct.username] = null;
+    }
+  }
+  c.trackedIds = { at: Date.now(), value: ids };
+  return ids;
+}
+
+/** Latest original tweets from the operator's own accounts — live direction for the swarm. */
+async function fetchXTracked(): Promise<NonNullable<XIntel["tracked"]>> {
+  const c = caches();
+  if (c.tracked && Date.now() - c.tracked.at < TRACKED_TTL_MS) return c.tracked.value;
+  const token = bearer();
+  if (!token) throw new Error("X_BEARER_TOKEN not set");
+  const ids = await resolveTrackedIds(token);
+  const tracked: NonNullable<XIntel["tracked"]> = [];
+  for (const acct of X_TRACKED) {
+    const id = ids[acct.username];
+    if (!id) continue; // unresolved handle — surfaced as a warning by collectIntel
+    const url =
+      `https://api.x.com/2/users/${id}/tweets?max_results=5&exclude=replies,retweets` +
+      `&tweet.fields=created_at,public_metrics`;
+    const json = await getJson<{ data?: XApiTweet[] }>(url, { authorization: `Bearer ${token}` });
+    tracked.push({
+      username: acct.username,
+      tweets: (json.data ?? []).slice(0, 3).map((t) => toIntelTweet(t, acct.username)),
+    });
+  }
+  c.tracked = { at: Date.now(), value: tracked };
+  return tracked;
+}
+
+/** Founder engagement with operator accounts or stock-token themes (last 7d via recent search). */
+async function fetchXCatalysts(): Promise<IntelTweet[]> {
+  const c = caches();
+  if (c.catalysts && Date.now() - c.catalysts.at < CATALYST_TTL_MS) return c.catalysts.value;
+  const token = bearer();
+  if (!token) throw new Error("X_BEARER_TOKEN not set");
+  const url =
+    `https://api.x.com/2/tweets/search/recent?query=${encodeURIComponent(X_CATALYST_QUERY)}` +
+    `&max_results=10&tweet.fields=public_metrics,created_at,author_id`;
+  const json = await getJson<{ data?: XApiTweet[] }>(url, { authorization: `Bearer ${token}` });
+  const byAuthor = new Map<string, string>(X_LEADERS.map((l) => [l.id, l.username]));
+  const value = (json.data ?? []).map((t) => toIntelTweet(t, byAuthor.get(t.author_id ?? "")));
+  c.catalysts = { at: Date.now(), value };
+  return value;
+}
+
 /** ETH macro context from CoinGecko (keyless simple price). */
 async function fetchEth(): Promise<{ usd: number; change24hPct: number }> {
   const c = caches();
@@ -184,9 +278,11 @@ export async function collectIntel(
   settings: Settings,
   prev: IntelSnapshot | null,
 ): Promise<IntelSnapshot> {
-  const [search, leaders, eth, chain] = await Promise.allSettled([
+  const [search, leaders, tracked, catalysts, eth, chain] = await Promise.allSettled([
     fetchXMentions(),
     fetchXLeaders(),
+    fetchXTracked(),
+    fetchXCatalysts(),
     fetchEth(),
     fetchBlockscout(settings),
   ]);
@@ -213,6 +309,22 @@ export async function collectIntel(
     warnings.push(`X timelines: ${msg}${msg.includes("429") ? " (rate-limited; skipped this cycle)" : ""}`);
     xNotes.push("leader timelines unavailable");
   }
+  const trackedOk = tracked.status === "fulfilled";
+  if (trackedOk) {
+    sources.push("x-tracked");
+    const missing = X_TRACKED.filter((a) => !tracked.value.some((t) => t.username === a.username));
+    if (missing.length > 0) {
+      warnings.push(
+        `X tracked: handle(s) not found: ${missing.map((a) => `@${a.username}`).join(", ")} — operator should confirm the exact spelling`,
+      );
+    }
+  } else {
+    warnings.push(`X tracked timelines: ${String(tracked.reason)}`);
+  }
+  const catalystsOk = catalysts.status === "fulfilled";
+  if (catalystsOk) sources.push("x-catalysts");
+  else warnings.push(`X catalyst search: ${String(catalysts.reason)}`);
+
   if (searchOk || leadersOk) {
     x = {
       fetchedAt: Date.now(),
@@ -220,6 +332,8 @@ export async function collectIntel(
       engagement24h: searchOk ? search.value.engagement : (prev?.x?.engagement24h ?? 0),
       topMentions: searchOk ? search.value.top : (prev?.x?.topMentions ?? []),
       leaders: leadersOk ? leaders.value : (prev?.x?.leaders ?? []),
+      tracked: trackedOk ? tracked.value : (prev?.x?.tracked ?? []),
+      catalysts: catalystsOk ? catalysts.value : (prev?.x?.catalysts ?? []),
       note: xNotes.join("; "),
     };
   }
@@ -274,6 +388,13 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
   const dayAgo = current.ts - 24 * 3600 * 1000;
   const prior = [...history].reverse().find((s) => s.ts <= dayAgo && s.x);
 
+  if (current.x?.catalysts?.length) {
+    for (const t of current.x.catalysts.slice(0, 2)) {
+      lines.push(
+        `PRIORITY CATALYST — @${t.author} (Robinhood founder) on operator accounts / stock tokens (${ago(t.createdAt)}, ${t.likes} likes): "${t.text.slice(0, 180)}" — amplify this NOW; it outranks every other angle this cycle.`,
+      );
+    }
+  }
   if (current.x) {
     const trend =
       prior?.x && prior.x.mentionCount24h > 0
@@ -290,6 +411,13 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
       if (!t) continue;
       lines.push(
         `- @${leader.username} latest (${ago(t.createdAt)}, ${t.likes} likes, ${t.impressions.toLocaleString()} impressions): "${t.text.slice(0, 180)}"`,
+      );
+    }
+    for (const acct of current.x.tracked ?? []) {
+      const t = acct.tweets[0];
+      if (!t) continue;
+      lines.push(
+        `- Operator account @${acct.username} latest (${ago(t.createdAt)}, ${t.likes} likes): "${t.text.slice(0, 160)}" — align messaging with and amplify operator accounts.`,
       );
     }
   } else {
