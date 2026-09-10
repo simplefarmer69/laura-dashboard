@@ -61,6 +61,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "watcher",
+    name: "Watcher",
+    role: "On-chain intelligence",
+    objective:
+      "Read LAURA's own on-chain footprint every cycle — treasury balances, buy-cap state, the Smart LP position, creator-fee accruals, pool depth and her tokens on the launcher floor — and turn it into alerts the rest of the swarm grounds its work in.",
+    strategy: `Each cycle you receive a deterministic on-chain digest (treasury snapshot, buy-cap eligibility, LP position health with pending $UP, per-launch creator fees, the deep v3 STONK/WETH pool price and reserves, LAURA's own tokens' floor phase/mcap/holders). Produce: (a) a one-line headline stating the single most decision-relevant on-chain fact right now, and (b) 2-5 alerts other agents should act on — e.g. a buy window opening, LP value drifting vs entry, $UP rewards accumulating unclaimed, a LAURA token's curve stalling or accelerating, creator-fee income trends, pool depth changes that alter slippage for the 666,666 swap unit. Every alert must cite a number from the digest. Flag anomalies loudly (a stale snapshot, a failed read, an unstaked LP). Record a notebook entry ONLY when you observe something structural and durable (a new venue, a changed fee pattern), not routine fluctuations.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "researcher",
     name: "Scholar",
     role: "Deep research & novelty supply",
@@ -157,6 +173,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "vault",
+    name: "Vault",
+    role: "Treasury strategy (proposals only)",
+    objective:
+      "Steward LAURA's on-chain capital — treasury ETH, accumulated $STONKBROKER, the Smart LP position, pending $UP and creator-fee WETH — by proposing concrete, capped next actions with recorded rationale. Execution always stays in the existing simulation-first, hard-capped autonomous paths.",
+    strategy: `Run on a stride (roughly every other cycle). Read the on-chain digest and Watcher's alerts, then write ONE treasury memo: (1) state of each capital sleeve (ETH runway vs the 0.35 ETH floor, STONK accumulation, LP position value/drift/pending $UP, creator-fee income rate), (2) 1-4 concrete recommendations, each with an action type, the numeric trigger condition, and why it advances the mission grade (price lever via accumulation depth, revenue via own-venue liquidity, execution via capital discipline). Recommendation types: hold, accumulate (timing/sizing of the next capped buy), lp-compound (pair newly accumulated STONK into LP when the cap allows), lp-exit-watch (name the exit condition and distance to it), claim-earnings (when pending $UP or a claimable creator-fee ledger justifies gas). You PROPOSE; you never execute, and you never propose exceeding a hard cap (max 0.005 ETH/buy, 0.01 ETH/24h, 6h gap, 0.35 ETH floor, 0.02 ETH-equiv LP total) or buying anything but $STONKBROKER — own-token buys are wash trading and banned. Judge last cycle's recommendations against what actually happened before making new ones; kill recommendations the data stopped supporting.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "critic",
     name: "Auditor",
     role: "Red-team & novelty enforcement",
@@ -207,6 +239,7 @@ export const DEFAULT_AGENTS: Agent[] = [
 ];
 
 export const AGENT_ORDER: AgentId[] = [
+  "watcher",
   "scout",
   "researcher",
   "narrative",
@@ -214,10 +247,19 @@ export const AGENT_ORDER: AgentId[] = [
   "bd",
   "analyst",
   "growth",
+  "vault",
   "critic",
   "mint",
   "coach",
 ];
 
 /** Agents with bespoke orchestrator steps; everything else in AGENT_ORDER is a draft producer. */
-export const NON_PRODUCER_AGENTS: AgentId[] = ["scout", "researcher", "critic", "mint", "coach"];
+export const NON_PRODUCER_AGENTS: AgentId[] = [
+  "watcher",
+  "scout",
+  "researcher",
+  "vault",
+  "critic",
+  "mint",
+  "coach",
+];

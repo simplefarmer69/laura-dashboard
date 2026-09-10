@@ -6,12 +6,14 @@ import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt, priceTrendDigest, runsDigest } from "@/lib/swarm/context";
 import { collectIntel, intelDigest } from "@/lib/swarm/intel";
+import { collectOnchainDigest } from "@/lib/swarm/onchain";
 import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
 import { checkNovelty } from "@/lib/swarm/novelty";
 import {
   agentSystem,
   briefSchema,
+  chainReadSchema,
   coachMock,
   coachPrompt,
   criticMock,
@@ -30,6 +32,11 @@ import {
   scoutMock,
   scoutPrompt,
   spokenLaunchesDigest,
+  vaultMock,
+  vaultPrompt,
+  vaultSchema,
+  watcherMock,
+  watcherPrompt,
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
@@ -185,6 +192,26 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     }
     await saveState(state);
 
+    /* 1c. On-chain digest: deterministic reads of LAURA's own footprint
+       (treasury, caps, LP, earnings from state + live pool/floor reads).
+       Non-fatal by construction; Watcher interprets it right after. */
+    let onchainText = "On-chain digest unavailable this cycle.";
+    try {
+      const ethUsd =
+        grader.value.metrics.onchain?.ethPriceUsd ?? state.intelHistory?.at(-1)?.ethUsd ?? null;
+      const oc = await timed(() => collectOnchainDigest(state, ethUsd));
+      onchainText = oc.value.digest;
+      step({
+        agentId: "system",
+        label: "On-chain digest",
+        status: oc.value.warnings.length === 0 ? "ok" : "error",
+        summary: `${onchainText.split("\n")[0]?.slice(0, 160) ?? ""}${oc.value.warnings.length ? ` · ${oc.value.warnings.length} warning(s)` : ""}`,
+        durationMs: oc.ms,
+      });
+    } catch (err) {
+      step({ agentId: "system", label: "On-chain digest", status: "error", summary: String(err), durationMs: 0 });
+    }
+
     const docs = await fetchDocsExcerpt(state.settings);
     const library = await libraryDigest();
     const skillEntries = await Promise.all(
@@ -207,7 +234,63 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       opsHealth: runsDigest(state.runs.filter((r) => r.id !== run.id)),
       priceTrend: priceTrendDigest(state.metricsHistory, grader.value.metrics),
       intel: intelText,
+      onchain: onchainText,
     };
+
+    /* 1d. Watcher: interprets the on-chain digest into a headline + alerts
+       that every downstream prompt receives via ctx.onchain. Runs before the
+       scout so the whole cycle reasons from live chain state. */
+    const watcher = agentById(state, "watcher");
+    if (watcher.status === "paused") {
+      step({ agentId: "watcher", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else {
+      try {
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: chainReadSchema,
+              system: agentSystem(watcher),
+              prompt: watcherPrompt(ctx),
+              mock: () => watcherMock(ctx),
+            }),
+          ),
+        );
+        const read = out.value.value;
+        ctx.onchain = `${onchainText}\n\nWatcher's read this cycle:\n${read.headline}\n${read.alerts.map((a) => `- ${a}`).join("\n")}`;
+        pushEvent(state, {
+          kind: "onchain.observed",
+          agentId: "watcher",
+          title: read.headline,
+          detail: read.alerts.join(" · "),
+          refId: run.id,
+        });
+        if (read.notebook && !out.value.usedMock) {
+          for (const rec of await recordNotes(run.id, [read.notebook])) {
+            pushEvent(state, {
+              kind: "note.recorded",
+              agentId: "watcher",
+              title: `Notebook ${rec.replaced ? "updated" : "entry"}: ${rec.entry.topic}`,
+              detail: rec.entry.text,
+              refId: rec.entry.id,
+            });
+          }
+        }
+        markRan(watcher);
+        step({
+          agentId: "watcher",
+          label: "On-chain read",
+          status: "ok",
+          summary: `${read.headline}${out.value.usedMock ? " (fallback)" : ""}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        watcher.status = "error";
+        watcher.lastError = String(err);
+        step({ agentId: "watcher", label: "On-chain read", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "watcher", title: "Watcher failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
 
     /* 2. Scout */
     const scout = agentById(state, "scout");
@@ -420,6 +503,89 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         agent.lastError = String(err);
         step({ agentId: id, label: "Drafts", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: id, title: `${agent.name} failed`, detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 3a. Vault: treasury strategy memo + capped-action recommendations.
+       Runs on a stride (~every 2nd cycle at base cadence) because treasury
+       state moves on 6h buy gaps, not 75-minute cycles — this keeps the
+       per-cycle LLM call count flat most cycles. Its memo is a "report"
+       draft, so the critic reviews it below like everything else; execution
+       stays exclusively in the capped scheduler/executor paths. */
+    const vault = agentById(state, "vault");
+    const vaultStrideMs = 1.5 * state.settings.cycleIntervalMinutes * 60_000;
+    if (vault.status === "paused") {
+      step({ agentId: "vault", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (vault.lastRunAt !== null && Date.now() - vault.lastRunAt < vaultStrideMs) {
+      step({
+        agentId: "vault",
+        label: "Treasury memo",
+        status: "skipped",
+        summary: `Stride: last memo ${((Date.now() - vault.lastRunAt) / 60_000).toFixed(0)}m ago (< ${Math.round(vaultStrideMs / 60_000)}m) — treasury state moves slower than the cycle cadence`,
+        durationMs: 0,
+      });
+    } else {
+      try {
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: vaultSchema,
+              system: agentSystem(vault),
+              prompt: vaultPrompt(ctx),
+              mock: () => vaultMock(ctx),
+            }),
+          ),
+        );
+        const v = out.value.value;
+        const autoApprove = state.settings.autoApproveProposals;
+        const memo: Draft = {
+          id: newId("draft"),
+          cycleId: run.id,
+          agentId: "vault",
+          kind: "report",
+          channel: "Treasury",
+          title: `Treasury strategy — ${ctx.grade.date}`,
+          body: `${v.memo}\n\n## Recommendations (proposals only — execution stays in the capped autonomous paths)\n${v.recommendations.map((r) => `- **${r.action}**: ${r.detail}\n  Trigger: ${r.trigger}`).join("\n")}`,
+          rationale: v.rationale,
+          status: autoApprove ? "approved" : "pending",
+          createdAt: Date.now(),
+          reviewedAt: autoApprove ? Date.now() : null,
+          reviewerNote: autoApprove ? AUTO_APPROVE_NOTE : null,
+        };
+        state.drafts.push(memo);
+        vault.stats.drafts += 1;
+        if (autoApprove) vault.stats.approved += 1;
+        run.draftsCreated += 1;
+        pushEvent(state, {
+          kind: "draft.created",
+          agentId: "vault",
+          title: `Vault drafted: ${memo.title}`,
+          detail: `report for Treasury · ${v.rationale}`,
+          refId: memo.id,
+        });
+        for (const r of v.recommendations) {
+          pushEvent(state, {
+            kind: "treasury.proposed",
+            agentId: "vault",
+            title: `Vault proposes: ${r.action}`,
+            detail: `${r.detail} · Trigger: ${r.trigger}`,
+            refId: memo.id,
+          });
+        }
+        markRan(vault);
+        step({
+          agentId: "vault",
+          label: "Treasury memo",
+          status: "ok",
+          summary: `${v.recommendations.map((r) => r.action).join(", ")}${out.value.usedMock ? " (fallback)" : ""}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        vault.status = "error";
+        vault.lastError = String(err);
+        step({ agentId: "vault", label: "Treasury memo", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "vault", title: "Vault failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }

@@ -111,12 +111,14 @@ export interface DailyGrade {
 
 export type AgentId =
   | "scout"
+  | "watcher"
   | "researcher"
   | "narrative"
   | "steward"
   | "bd"
   | "analyst"
   | "growth"
+  | "vault"
   | "critic"
   | "mint"
   | "coach";
@@ -309,6 +311,10 @@ export type SwarmEventKind =
   | "launch.failed"
   | "earnings.accrued"
   | "earnings.claimed"
+  /** Watcher's per-cycle on-chain state read (treasury, pools, LP, earnings). */
+  | "onchain.observed"
+  /** Vault's treasury action recommendation — advisory; execution stays in capped paths. */
+  | "treasury.proposed"
   | "treasury.buy"
   | "treasury.lp"
   | "treasury.stake"

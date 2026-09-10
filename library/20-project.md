@@ -28,6 +28,25 @@ to X, or sign listing agreements. It CAN study what the targets engage with, dra
 the content and the dossiers, watch for engagement/listing signals, and track
 progress — the operator clicks send.
 
+## The swarm's on-chain arms (roster grew to 12 agents, 2026-09-10)
+
+Two agents joined once real on-chain capabilities landed (treasury buys, Smart LP,
+creator-fee earnings):
+
+- **Watcher** (`watcher`, on-chain intelligence): runs first each cycle. A
+  deterministic collector reads LAURA's own footprint — treasury/creator-fee
+  snapshot, buy-cap eligibility, Smart LP health with pending $UP, the deep v3
+  STONK/WETH pool (`0x9cd7…f594`) price/reserves, and her tokens' launcher-floor
+  stats — and Watcher turns it into a headline + numeric alerts injected into every
+  producer prompt (`onchain.observed` events). All reads, no sends.
+- **Vault** (`vault`, treasury strategy): runs on a stride (~every 2nd cycle),
+  after the producers and before the critic. Writes the treasury memo and 1-4
+  recommendations (hold / accumulate / lp-compound / lp-exit-watch /
+  claim-earnings), each with a numeric trigger, recorded as `treasury.proposed`
+  events plus a "report" draft the critic reviews. Vault PROPOSES only —
+  execution stays exclusively in the existing simulation-first, hard-capped
+  executor paths (TREASURY_CAPS, LAUNCH_CAPS, mission-token guard).
+
 ## Core facts
 
 - Token: `$STONKBROKER` at `0xe934e36a439c94017b64a3fece66af12099abf50` on

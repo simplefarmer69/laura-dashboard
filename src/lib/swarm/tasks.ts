@@ -65,7 +65,7 @@ export const proposalsSchema = z.object({
   proposals: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "researcher", "narrative", "steward", "bd", "analyst", "growth", "critic", "mint"]),
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint"]),
         proposedStrategy: z.string().min(80).max(4000),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
@@ -86,19 +86,21 @@ export const proposalsSchema = z.object({
           z.enum([
             "all",
             "scout",
+            "watcher",
             "researcher",
             "narrative",
             "steward",
             "bd",
             "analyst",
             "growth",
+            "vault",
             "critic",
             "mint",
             "coach",
           ]),
         )
         .min(1)
-        .max(10),
+        .max(12),
       body: z.string().min(50).max(5000),
       rationale: z.string().min(10).max(500),
     })
@@ -133,6 +135,8 @@ export interface CycleContext {
   priceTrend: string;
   /** Live internet intel digest (X mentions/leadership, ETH context, holders) — TODAY's world */
   intel: string;
+  /** Watcher's on-chain digest: LAURA's own treasury/LP/earnings state + live pool reads */
+  onchain: string;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -146,10 +150,56 @@ export function agentSystem(agent: Agent): string {
   return `${SWARM_CHARTER}\n\nYour name is ${agent.name}. Role: ${agent.role}.\nObjective: ${agent.objective}\n\nCurrent strategy (v${agent.strategyVersion}):\n${agent.strategy}`;
 }
 
+/* --------------------------------- Watcher --------------------------------- */
+
+/* Generous caps (library learnings: tight caps cause NoObjectGenerated failures). */
+export const chainReadSchema = z.object({
+  /** The single most decision-relevant on-chain fact right now. */
+  headline: z.string().min(10).max(400),
+  /** Numeric, actionable alerts for the rest of the swarm. */
+  alerts: z.array(z.string().max(700)).min(1).max(6),
+  /** Durable structural observation only; null for routine fluctuations. */
+  notebook: z
+    .object({
+      topic: z.string().min(3).max(120),
+      text: z.string().min(20).max(1500),
+    })
+    .nullable()
+    .optional(),
+});
+
+export type ChainReadOut = z.infer<typeof chainReadSchema>;
+
+export function watcherPrompt(ctx: CycleContext): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `MARKET METRICS (for cross-checking the chain reads)\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}`,
+    `ON-CHAIN DIGEST (deterministic reads this cycle — LAURA's own treasury, caps, LP, earnings, pools, floor)\n${ctx.onchain}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.watcher ?? "None."}`,
+    `Produce the chain read: one headline (the most decision-relevant on-chain fact) and 2-5 alerts, each citing a number from the digest. Alert on things other agents can act on THIS cycle: buy windows, LP drift or unclaimed $UP, creator-fee income trends, LAURA-token curve momentum or stalls, pool-depth changes. Flag anomalies (stale snapshot, failed reads, unstaked LP) loudly. notebook: only for durable structural facts, else null.`,
+  ].join("\n\n");
+}
+
+export function watcherMock(ctx: CycleContext): ChainReadOut {
+  /* Deterministic fallback: surface the raw digest so downstream agents still
+     get grounded chain state even without an LLM read. */
+  const firstLine = ctx.onchain.split("\n")[0] ?? "On-chain digest unavailable.";
+  return {
+    headline: `Chain state (fallback, no LLM): ${firstLine.slice(0, 340)}`,
+    alerts: ctx.onchain
+      .split("\n")
+      .filter((l) => l.trim().length > 0)
+      .slice(1, 5)
+      .map((l) => l.slice(0, 690)),
+    notebook: null,
+  };
+}
+
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko and Blockscout — TODAY's real world; ground the brief in it)\n${ctx.intel}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko and Blockscout — TODAY's real world; ground the brief in it)\n${ctx.intel}\n\nON-CHAIN STATE (LAURA's own treasury/LP/earnings + live pool reads, with Watcher's alerts)\n${ctx.onchain}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours.`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {
@@ -190,6 +240,7 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `MISSION\n${missionDigest(ctx.mission)}`,
     `RESEARCH BRIEF\n${briefDigest(ctx.brief)}`,
     `LIVE INTERNET INTEL (real X/market reads from this cycle — ride what is actually happening TODAY; never invent tweets or numbers beyond these)\n${ctx.intel}`,
+    `ON-CHAIN STATE (LAURA's own wallet at work — treasury, capped buys, Smart LP, creator fees, her tokens on the floor. Content that shows LAURA acting on-chain is verifiable and differentiating; never misstate these numbers)\n${ctx.onchain}`,
     `SWARM MEMORY (lessons distilled by the coach; apply them)\n${lessonsDigest(ctx.lessons)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills[agent.id] ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it)\n${ctx.library}`,
@@ -407,6 +458,60 @@ export function criticMock(cycleDrafts: Draft[]): CriticOut {
   };
 }
 
+/* ---------------------------------- Vault ---------------------------------- */
+
+/* Generous caps: the memo is a full treasury report; tight caps cost the turn. */
+export const vaultSchema = z.object({
+  /** The treasury memo body (markdown): sleeve-by-sleeve state + reasoning. */
+  memo: z.string().min(100).max(12000),
+  recommendations: z
+    .array(
+      z.object({
+        action: z.enum(["hold", "accumulate", "lp-compound", "lp-exit-watch", "claim-earnings"]),
+        detail: z.string().min(20).max(1500),
+        /** The numeric condition/timing under which this fires or expires. */
+        trigger: z.string().max(700),
+      }),
+    )
+    .min(1)
+    .max(4),
+  rationale: z.string().max(2500),
+});
+
+export type VaultOut = z.infer<typeof vaultSchema>;
+
+export function vaultPrompt(ctx: CycleContext): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `METRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}`,
+    `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
+    `ON-CHAIN STATE (your primary input — treasury, caps, LP health, creator fees, pools, floor, with Watcher's alerts)\n${ctx.onchain}`,
+    `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 8)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.vault ?? "None."}`,
+    `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, "vault")}`,
+    `YOUR OWN RECENT MEMOS (judge your past recommendations against what actually happened; do not restate them unchanged)\n${recentOutputDigest(ctx.drafts, "vault")}`,
+    `Write the treasury memo and 1-4 recommendations. HARD RULES: you PROPOSE, never execute — every send flows through the existing simulation-first executors and their inviolable caps (max 0.005 ETH/buy, 0.01 ETH/24h, 6h buy gap, 0.35 ETH treasury floor, 0.02 ETH-equiv LP total, 3 deploys/24h). Never propose exceeding a cap, never propose buying any token except $STONKBROKER (own-token buys are wash trading, banned by charter). Each recommendation needs a numeric trigger (e.g. "when pending $UP > X", "at the next buy-eligibility window ~HH:MMZ", "if LP ETH side drifts beyond ±Y% of entry"). In the memo, review your previous recommendations against the current chain state: state which played out, which expired, and why.`,
+  ].join("\n\n");
+}
+
+export function vaultMock(ctx: CycleContext): VaultOut {
+  const rationale =
+    "Deterministic fallback (no LLM key): conservative hold with cap-derived timing notes, grounded in the on-chain digest.";
+  return {
+    memo: `## Treasury memo — ${ctx.grade.date} (fallback)\n\nOn-chain state this cycle:\n\n${ctx.onchain}\n\nWithout an LLM read, the safe default is HOLD: keep the capped accumulation cadence and the staked LP position working, claim nothing until pending rewards clearly exceed gas. All execution remains inside the hard caps regardless of this memo.`,
+    recommendations: [
+      {
+        action: "hold",
+        detail:
+          "Maintain current posture: capped $STONKBROKER accumulation continues on the scheduler's cadence, the Smart LP position stays staked and earning $UP, and creator-fee WETH keeps accruing in the wallet.",
+        trigger: "Standing default until a live LLM read produces a sharper recommendation.",
+      },
+    ],
+    rationale,
+  };
+}
+
 /* ---------------------------------- Mint ---------------------------------- */
 
 export const launchSchema = z.object({
@@ -525,10 +630,14 @@ export function coachPrompt(ctx: CycleContext): string {
             `v${h.version}: ${h.gradeAtAdoption?.toFixed(1) ?? "?"} -> ${h.gradeAtRetirement?.toFixed(1) ?? "?"} (${h.reason})`,
         )
         .join("; ");
-      const statsNote =
-        a.id === "scout" || a.id === "critic"
-          ? `Stats: N/A — ${a.id === "scout" ? "scout outputs the research brief, not drafts; 0 drafts is by design, not a failure" : "critic outputs vetoes and observations, not drafts"}.`
-          : `Stats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected.`;
+      const noDraftRole: Partial<Record<Agent["id"], string>> = {
+        scout: "scout outputs the research brief, not drafts; 0 drafts is by design, not a failure",
+        watcher: "watcher outputs the on-chain headline and alerts, not drafts; 0 drafts is by design",
+        critic: "critic outputs vetoes and observations, not drafts",
+      };
+      const statsNote = noDraftRole[a.id]
+        ? `Stats: N/A — ${noDraftRole[a.id]}.`
+        : `Stats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected.`;
       return `### ${a.id} (${a.name}, v${a.strategyVersion})\n${statsNote} ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");

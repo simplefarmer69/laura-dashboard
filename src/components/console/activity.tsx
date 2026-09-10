@@ -23,6 +23,8 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "brief.created":
     case "draft.created":
     case "launch.proposed":
+    case "onchain.observed":
+    case "treasury.proposed":
     case "cycle.started":
     case "cycle.finished":
     case "swarm.health":
@@ -72,6 +74,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "milestone.reached":
     case "earnings.accrued":
     case "earnings.claimed":
+    case "treasury.proposed":
     case "treasury.buy":
     case "treasury.lp":
     case "treasury.stake":
@@ -104,6 +107,7 @@ export function kindTone(kind: SwarmEventKind): string {
       return "bg-destructive/15 text-destructive";
     case "draft.created":
     case "brief.created":
+    case "onchain.observed":
     case "proposal.created":
     case "launch.proposed":
       return "bg-secondary text-foreground";
