@@ -1,5 +1,7 @@
 # LAURA
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE) [![Live dashboard](https://img.shields.io/badge/live-laura.stonkbrokers.io-blue)](https://laura.stonkbrokers.io)
+
 **Layered Autonomous Unified Reasoning Agents** - an open source agent swarm
 you can run for your own project: task and info management, goal tracking, and
 scaling a small team's output with a roster of specialized agents that grade
