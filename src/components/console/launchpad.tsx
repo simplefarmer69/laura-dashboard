@@ -300,7 +300,7 @@ function LaunchCard({
         {l.error && <p className="border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">{l.error}</p>}
         {l.status === "deployed" && !l.armedAt && (
           <p className="border border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/10 px-2 py-1 text-xs text-[var(--sb-gold)]">
-            Supply not loaded yet — the executor arms it automatically (registered, not live).
+            Supply not loaded yet; the executor arms it automatically (registered, not live).
           </p>
         )}
         {l.status === "deployed" && l.txHash && (
