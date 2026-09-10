@@ -4,14 +4,18 @@ import { loadState, newId, pushEvent, saveState } from "@/lib/store";
 import { checkMilestones } from "@/lib/mission";
 import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
-import { fetchDocsExcerpt } from "@/lib/swarm/context";
-import { AGENT_ORDER } from "@/lib/swarm/roster";
+import { fetchDocsExcerpt, runsDigest } from "@/lib/swarm/context";
+import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
+import { checkNovelty } from "@/lib/swarm/novelty";
 import {
   agentSystem,
   briefSchema,
   coachMock,
   coachPrompt,
+  criticMock,
+  criticPrompt,
+  criticSchema,
   draftsSchema,
   launchSchema,
   mintMock,
@@ -19,6 +23,9 @@ import {
   producerMock,
   producerPrompt,
   proposalsSchema,
+  researcherMock,
+  researcherPrompt,
+  researchSchema,
   scoutMock,
   scoutPrompt,
   spokenLaunchesDigest,
@@ -118,6 +125,9 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     proposalsCreated: 0,
     llmProvider: resolved.provider === "mock" ? "mock" : `${resolved.provider}/${resolved.modelId}`,
     error: null,
+    llmCalls: 0,
+    llmFallbacks: 0,
+    llmRepairs: 0,
   };
   state.runs.push(run);
   for (const a of state.agents) if (a.status !== "paused") a.status = "running";
@@ -131,6 +141,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
   await saveState(state);
 
   const step = (s: RunStep) => run.steps.push(s);
+  /** Telemetry: every generateStructured result passes through here. */
+  const tally = <T extends { usedMock: boolean; repaired: boolean }>(out: T): T => {
+    run.llmCalls = (run.llmCalls ?? 0) + 1;
+    if (out.usedMock) run.llmFallbacks = (run.llmFallbacks ?? 0) + 1;
+    if (out.repaired) run.llmRepairs = (run.llmRepairs ?? 0) + 1;
+    return out;
+  };
 
   try {
     /* 1. Grader */
@@ -162,17 +179,20 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       mission: missionStatus(state, grader.value.metrics),
       library,
       skills,
+      opsHealth: runsDigest(state.runs.filter((r) => r.id !== run.id)),
     };
 
     /* 2. Scout */
     const scout = agentById(state, "scout");
-    const brief = await timed(() =>
-      generateStructured(resolved, {
-        schema: briefSchema,
-        system: agentSystem(scout),
-        prompt: scoutPrompt(ctx),
-        mock: () => scoutMock(ctx),
-      }),
+    const brief = await timed(async () =>
+      tally(
+        await generateStructured(resolved, {
+          schema: briefSchema,
+          system: agentSystem(scout),
+          prompt: scoutPrompt(ctx),
+          mock: () => scoutMock(ctx),
+        }),
+      ),
     );
     ctx.brief = {
       id: newId("brief"),
@@ -206,11 +226,80 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     });
     await saveState(state);
 
+    /* 2b. Researcher: one deep-dive per cycle feeding novelty into the notebook.
+       Its memo is a "research" draft outside the producer budget — knowledge
+       work always runs; only outward-facing content competes for budget. */
+    const researcher = agentById(state, "researcher");
+    if (researcher.status === "paused") {
+      step({ agentId: "researcher", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else {
+      try {
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: researchSchema,
+              system: agentSystem(researcher),
+              prompt: researcherPrompt(ctx),
+              mock: () => researcherMock(ctx),
+            }),
+          ),
+        );
+        const r = out.value.value;
+        const memo: Draft = {
+          id: newId("draft"),
+          cycleId: run.id,
+          agentId: "researcher",
+          kind: "research",
+          channel: "Library",
+          title: `Deep-dive: ${r.topic}`,
+          body: `${r.memo}\n\n## Angles for the swarm\n${r.anglesForSwarm.map((a) => `- ${a}`).join("\n")}`,
+          rationale: r.whyNow,
+          status: "pending",
+          createdAt: Date.now(),
+          reviewedAt: null,
+          reviewerNote: null,
+        };
+        state.drafts.push(memo);
+        researcher.stats.drafts += 1;
+        run.draftsCreated += 1;
+        pushEvent(state, {
+          kind: "draft.created",
+          agentId: "researcher",
+          title: `Scholar deep-dived: ${r.topic}`,
+          detail: r.whyNow,
+          refId: memo.id,
+        });
+        for (const rec of await recordNotes(run.id, r.notebook)) {
+          pushEvent(state, {
+            kind: "note.recorded",
+            agentId: "researcher",
+            title: `Notebook ${rec.replaced ? "updated" : "entry"}: ${rec.entry.topic}`,
+            detail: rec.entry.text,
+            refId: rec.entry.id,
+          });
+        }
+        markRan(researcher);
+        step({
+          agentId: "researcher",
+          label: "Deep research",
+          status: "ok",
+          summary: `${r.topic} · ${r.notebook.length} notebook entr${r.notebook.length === 1 ? "y" : "ies"}${out.value.usedMock ? " (fallback)" : ""}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        researcher.status = "error";
+        researcher.lastError = String(err);
+        step({ agentId: "researcher", label: "Deep research", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "researcher", title: "Scholar failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
     /* 3. Producers — ordered by the data: weakest-lever agent first, then by approval rate */
     const weakest = [...ctx.grade.components].sort((a, b) => a.score - b.score)[0];
     const producers = producerOrder(
       state,
-      AGENT_ORDER.filter((id) => id !== "scout" && id !== "coach" && id !== "mint"),
+      AGENT_ORDER.filter((id) => !NON_PRODUCER_AGENTS.includes(id)),
       weakest.key,
     );
     let budget = state.settings.maxDraftsPerCycle;
@@ -226,18 +315,35 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         continue;
       }
       try {
-        const out = await timed(() =>
-          generateStructured(resolved, {
-            schema: draftsSchema,
-            system: agentSystem(agent),
-            prompt: producerPrompt(agent, ctx),
-            mock: () => producerMock(agent, ctx),
-          }),
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: draftsSchema,
+              system: agentSystem(agent),
+              prompt: producerPrompt(agent, ctx),
+              mock: () => producerMock(agent, ctx),
+            }),
+          ),
         );
         const accepted = out.value.value.drafts.slice(0, budget);
-        budget -= accepted.length;
+        let rejectedForRepetition = 0;
         const autoApprove = state.settings.autoApproveProposals;
         for (const d of accepted) {
+          /* Write-time novelty gate: near-duplicates of the agent's recent
+             output never land. Rejections are logged so repetition is visible. */
+          const novelty = checkNovelty({ agentId: id, kind: d.kind, title: d.title, body: d.body }, state.drafts);
+          if (!novelty.ok) {
+            rejectedForRepetition += 1;
+            pushEvent(state, {
+              kind: "novelty.rejected",
+              agentId: id,
+              title: `Rejected near-duplicate from ${agent.name}: ${d.title}`,
+              detail: `${(novelty.score * 100).toFixed(0)}% token overlap with "${novelty.nearest?.title ?? "?"}" (${novelty.nearest ? new Date(novelty.nearest.createdAt).toISOString().slice(0, 10) : "?"})`,
+              refId: novelty.nearest?.id ?? null,
+            });
+            continue;
+          }
+          budget -= 1;
           const draft: Draft = {
             id: newId("draft"),
             cycleId: run.id,
@@ -278,7 +384,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           agentId: id,
           label: "Drafts",
           status: "ok",
-          summary: `${accepted.length} draft(s): ${accepted.map((d) => d.title).join(" | ")}${out.value.usedMock ? " (fallback)" : ""}`,
+          summary: `${accepted.length - rejectedForRepetition} draft(s)${rejectedForRepetition > 0 ? `, ${rejectedForRepetition} rejected as near-duplicate` : ""}: ${accepted.map((d) => d.title).join(" | ")}${out.value.usedMock ? " (fallback)" : ""}`,
           durationMs: out.ms,
         });
       } catch (err) {
@@ -286,6 +392,82 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         agent.lastError = String(err);
         step({ agentId: id, label: "Drafts", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: id, title: `${agent.name} failed`, detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 3b. Critic: red-team pass over this cycle's drafts. Kills repetitive or
+       low-quality output before the operator sees it, forcing differentiation
+       the lexical novelty gate can't judge. */
+    const critic = agentById(state, "critic");
+    const cycleDrafts = state.drafts.filter(
+      (d) => d.cycleId === run.id && (d.status === "pending" || d.status === "approved"),
+    );
+    if (critic.status === "paused") {
+      step({ agentId: "critic", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (cycleDrafts.length === 0) {
+      step({ agentId: "critic", label: "Red-team review", status: "skipped", summary: "No drafts to review this cycle", durationMs: 0 });
+    } else {
+      try {
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: criticSchema,
+              system: agentSystem(critic),
+              prompt: criticPrompt(ctx, cycleDrafts),
+              mock: () => criticMock(cycleDrafts),
+            }),
+          ),
+        );
+        let vetoes = 0;
+        for (const review of out.value.value.reviews) {
+          if (review.verdict !== "veto") continue;
+          const draft = cycleDrafts.find((d) => d.id === review.draftId);
+          if (!draft) continue;
+          const wasApproved = draft.status === "approved";
+          draft.status = "rejected";
+          draft.reviewedAt = Date.now();
+          draft.reviewerNote = `Critic veto: ${review.reason}`;
+          const author = state.agents.find((a) => a.id === draft.agentId);
+          if (author) {
+            author.stats.rejected += 1;
+            if (wasApproved && author.stats.approved > 0) author.stats.approved -= 1;
+          }
+          vetoes += 1;
+          pushEvent(state, {
+            kind: "critic.vetoed",
+            agentId: "critic",
+            title: `Auditor vetoed: ${draft.title}`,
+            detail: review.reason,
+            refId: draft.id,
+          });
+        }
+        if (out.value.value.observation && !out.value.usedMock) {
+          for (const rec of await recordNotes(run.id, [
+            { topic: "Critic observation", text: out.value.value.observation },
+          ])) {
+            pushEvent(state, {
+              kind: "note.recorded",
+              agentId: "critic",
+              title: `Notebook ${rec.replaced ? "updated" : "entry"}: ${rec.entry.topic}`,
+              detail: rec.entry.text,
+              refId: rec.entry.id,
+            });
+          }
+        }
+        markRan(critic);
+        step({
+          agentId: "critic",
+          label: "Red-team review",
+          status: "ok",
+          summary: `${cycleDrafts.length} reviewed, ${vetoes} vetoed${out.value.usedMock ? " (fallback: all passed)" : ""} · ${out.value.value.observation.slice(0, 160)}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        critic.status = "error";
+        critic.lastError = String(err);
+        step({ agentId: "critic", label: "Red-team review", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "critic", title: "Auditor failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }
@@ -313,13 +495,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         }
         const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
         const spoken = spokenLaunchesDigest(state.launches);
-        const out = await timed(() =>
-          generateStructured(resolved, {
-            schema: launchSchema,
-            system: agentSystem(mint),
-            prompt: mintPrompt(ctx, floor, pending, spoken),
-            mock: () => mintMock(ctx, pending),
-          }),
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: launchSchema,
+              system: agentSystem(mint),
+              prompt: mintPrompt(ctx, floor, pending, spoken),
+              mock: () => mintMock(ctx, pending),
+            }),
+          ),
         );
         let spec = out.value.value.launch;
         let skipReason = out.value.value.skipReason ?? "No launch this cycle";
@@ -420,13 +604,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     /* 5. Coach: lessons + proposals */
     const coach = agentById(state, "coach");
     if (coach.status !== "paused") {
-      const out = await timed(() =>
-        generateStructured(resolved, {
-          schema: proposalsSchema,
-          system: agentSystem(coach),
-          prompt: coachPrompt(ctx),
-          mock: () => coachMock(ctx),
-        }),
+      const out = await timed(async () =>
+        tally(
+          await generateStructured(resolved, {
+            schema: proposalsSchema,
+            system: agentSystem(coach),
+            prompt: coachPrompt(ctx),
+            mock: () => coachMock(ctx),
+          }),
+        ),
       );
       for (const l of out.value.value.lessons) {
         const duplicate = state.lessons.some((x) => x.text.trim().toLowerCase() === l.text.trim().toLowerCase());

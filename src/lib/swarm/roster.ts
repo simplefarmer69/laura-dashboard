@@ -7,7 +7,8 @@ export const DEFAULT_SETTINGS: Settings = {
   llamaSlug: "stonkbrokers",
   projectName: "StonkBrokers",
   projectSite: "https://www.stonkbrokers.cash",
-  cycleIntervalHours: 6,
+  cycleIntervalMinutes: 75,
+  maxLlmCyclesPerDay: 20,
   autoApplyStrategyProposals: false,
   maxDraftsPerCycle: 6,
   llmModel: "",
@@ -43,6 +44,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     objective:
       "Pull fresh on-chain and market signals plus doc changes every cycle, then brief the rest of the swarm on what matters today.",
     strategy: `Each cycle, read the metrics snapshot and the docs excerpt. Produce a research brief with: (a) the 3 most important numbers and how they moved vs the 7-day baseline, (b) any product surface that looks under-used relative to its potential (e.g. loans, lockers, vDEX pools), (c) one narrative hook the swarm should lean into today, (d) one risk or caveat the team must not overlook. Be terse and numeric.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
+    id: "researcher",
+    name: "Scholar",
+    role: "Deep research & novelty supply",
+    objective:
+      "Deep-dive ONE new topic per cycle and write durable findings into the notebook, so every other agent always has fresh raw material instead of re-treading old angles.",
+    strategy: `Each cycle, pick ONE topic the swarm has NOT covered recently (check the research log and notebook topics injected in your prompt): an under-used product surface, a competitor or comparable protocol's growth mechanic, a Robinhood Chain ecosystem development, a holder-behavior question, or a distribution channel the swarm has never used. Go deep on that single topic using the metrics, docs and library you are given: mechanics, numbers, who cares, and what the swarm should do differently because of it. Output a research memo (300-600 words) plus 1-2 notebook entries of durable fact. End the memo with one concrete, novel angle each producer could use next cycle. Never repeat a topic covered in the last 10 cycles unless material new data exists — say what changed if you do.`,
     strategyVersion: 1,
     versionAdoptedAt: null,
     gradeAtVersionAdoption: null,
@@ -117,6 +134,38 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "growth",
+    name: "Catalyst",
+    role: "Growth experiments (weakest lever)",
+    objective:
+      "Run one explicit growth experiment per cycle against the weakest grade lever — currently token price — using analysis and content only, never trading or coordination.",
+    strategy: `Each cycle, read the grade components and target the WEAKEST lever with one explicit experiment. Format every draft as an experiment: (1) hypothesis — "angle X for audience Y moves lever Z because ...", (2) the content itself (thread or post executing the angle), (3) the measurable proxy you expect to move (liquidity depth, holder count, pool volume, doc visits). For price, work the durable-demand levers only: liquidity depth and the fixed 666,666 swap unit, activation burn mechanics, reasons to hold through Clock In eligibility. Next cycle, state in your rationale what your previous experiment was and whether its proxy moved, then iterate: kill losers, scale winners. Analysis and content ONLY — never suggest trading, buying coordination or anything the charter forbids. Never rerun an experiment from your recent-output digest unchanged.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
+    id: "critic",
+    name: "Auditor",
+    role: "Red-team & novelty enforcement",
+    objective:
+      "Review every draft the swarm produced this cycle against recent history; veto repetitive or low-quality output before it ships, and force differentiation.",
+    strategy: `After the producers run, review each new draft against the last several cycles of output. VETO a draft when: (a) its theme + angle substantially repeats a recent draft without new data or a sharper take, (b) it violates the charter or makes unsourced claims, (c) it is filler that no target reader would act on. PASS drafts that bring a new angle, new surface, new audience or materially better execution — do not veto merely for covering the same product twice, and respect intentionally recurring formats (the daily metrics report) unless quality dropped. Every veto must name the earlier draft it duplicates or the specific defect. Also record one observation per cycle: the repetition pattern you see forming and what would break it.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "mint",
     name: "Mint",
     role: "Launch director (Stonk Launcher)",
@@ -152,10 +201,16 @@ export const DEFAULT_AGENTS: Agent[] = [
 
 export const AGENT_ORDER: AgentId[] = [
   "scout",
+  "researcher",
   "narrative",
   "steward",
   "bd",
   "analyst",
+  "growth",
+  "critic",
   "mint",
   "coach",
 ];
+
+/** Agents with bespoke orchestrator steps; everything else in AGENT_ORDER is a draft producer. */
+export const NON_PRODUCER_AGENTS: AgentId[] = ["scout", "researcher", "critic", "mint", "coach"];

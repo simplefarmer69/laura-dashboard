@@ -1,4 +1,4 @@
-import type { DailyGrade, Draft, MetricsSnapshot, ResearchBrief, Settings } from "@/lib/types";
+import type { CycleRun, DailyGrade, Draft, MetricsSnapshot, ResearchBrief, Settings } from "@/lib/types";
 
 export function usd(n: number, digits = 0): string {
   if (!Number.isFinite(n)) return "n/a";
@@ -53,6 +53,37 @@ export function reviewerFeedback(drafts: Draft[], agentId: string, limit = 5): s
       (d) =>
         `- [${d.status.toUpperCase()}] "${d.title}"${d.reviewerNote ? ` - reviewer: ${d.reviewerNote}` : ""}`,
     )
+    .join("\n");
+}
+
+/**
+ * The agent's own recent output, injected so it can differ from itself.
+ * Stateless prompting re-derives the same "best" answer every cycle; showing
+ * the agent what it already made is the cheapest anti-repetition lever.
+ */
+export function recentOutputDigest(drafts: Draft[], agentId: string, limit = 5): string {
+  const recent = drafts.filter((d) => d.agentId === agentId).slice(-limit);
+  if (recent.length === 0) return "You have produced nothing yet — everything is a fresh angle.";
+  return recent
+    .map((d) => `- [${new Date(d.createdAt).toISOString().slice(0, 10)}] "${d.title}" (${d.kind}) — ${d.body.slice(0, 160).replace(/\s+/g, " ")}...`)
+    .join("\n");
+}
+
+/** Operational health of recent cycles: duration, output, LLM failures. For the coach. */
+export function runsDigest(runs: CycleRun[], limit = 6): string {
+  const recent = runs.filter((r) => r.finishedAt).slice(-limit);
+  if (recent.length === 0) return "No completed cycles yet.";
+  return recent
+    .map((r) => {
+      const secs = ((r.finishedAt! - r.startedAt) / 1000).toFixed(0);
+      const errors = r.steps.filter((s) => s.status === "error").length;
+      const skipped = r.steps.filter((s) => s.status === "skipped").length;
+      const llm =
+        r.llmCalls != null
+          ? `; LLM ${r.llmCalls} calls, ${r.llmFallbacks ?? 0} fallbacks, ${r.llmRepairs ?? 0} repairs`
+          : "";
+      return `- ${r.id} (${r.trigger}): ${secs}s, ${r.draftsCreated} drafts, ${r.proposalsCreated} proposals, ${errors} error step(s), ${skipped} skipped${llm}${r.error ? `; CYCLE ERROR: ${r.error}` : ""}`;
+    })
     .join("\n");
 }
 

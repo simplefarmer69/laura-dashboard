@@ -18,6 +18,7 @@ import {
   gradeDigest,
   metricsDigest,
   pct,
+  recentOutputDigest,
   reviewerFeedback,
   usd,
 } from "@/lib/swarm/context";
@@ -60,7 +61,7 @@ export const proposalsSchema = z.object({
   proposals: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "narrative", "steward", "bd", "analyst", "mint"]),
+        agentId: z.enum(["scout", "researcher", "narrative", "steward", "bd", "analyst", "growth", "critic", "mint"]),
         proposedStrategy: z.string().min(80).max(4000),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
@@ -88,6 +89,8 @@ export interface CycleContext {
   library: string;
   /** Per-agent operating procedures from /library/skills, keyed by agent id */
   skills: Record<string, string>;
+  /** Recent cycle health (durations, LLM fallbacks/repairs, step errors) for the coach */
+  opsHealth: string;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -133,6 +136,7 @@ const KIND_BY_AGENT: Record<string, DraftKind[]> = {
   steward: ["community"],
   bd: ["outreach"],
   analyst: ["report"],
+  growth: ["thread"],
 };
 
 export function producerPrompt(agent: Agent, ctx: CycleContext): string {
@@ -147,8 +151,10 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills[agent.id] ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it)\n${ctx.library}`,
     `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, agent.id)}`,
+    `YOUR OWN RECENT OUTPUT (do NOT repeat these themes or angles)\n${recentOutputDigest(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
     `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever.`,
+    `ANTI-REPETITION RULE: your new drafts must differ from every item in YOUR OWN RECENT OUTPUT in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs.`,
   ].join("\n\n");
 }
 
@@ -219,6 +225,18 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
           },
         ],
       };
+    case "growth":
+      return {
+        drafts: [
+          {
+            kind: "thread",
+            channel: "X",
+            title: `Experiment: liquidity depth as the price story (${ctx.grade.date})`,
+            body: `Hypothesis: explaining WHY $STONKBROKER liquidity depth (${usd(m.liquidityUsd)} across ${m.pairCount} pairs) gates the path into a broker moves the price lever better than commentary on the move itself.\n\n1/ Getting a StonkBroker costs a fixed 666,666 $STONKBROKER. Not "about", not "roughly" — fixed. That makes pool depth, not sentiment, the real price story.\n\n2/ Today the token trades at ${usd(m.priceUsd, 5)} with ${usd(m.liquidityUsd)} of DEX liquidity. Thin pools mean the 666,666 unit costs more slippage; deep pools make the path into a broker cheaper for everyone.\n\n3/ Every activation burns 50% of the fee in $STONKBROKER. Supply falls as usage rises — that is the durable-demand mechanic, verifiable on-chain.\n\n4/ Measurable proxy for this experiment: liquidity depth and holder count over the next 7 days, not the price print. Smart-contract distributions, not dividends; no promises. Docs: stonkbrokers.cash/docs\n\nProxy to check next cycle: DEX liquidity vs today's ${usd(m.liquidityUsd)}.`,
+            rationale: `${rationale} Experiment format: hypothesis, execution, measurable proxy — differs from prior output by targeting the liquidity-depth mechanic rather than fee-flow narratives.`,
+          },
+        ],
+      };
     default:
       return {
         drafts: [
@@ -232,6 +250,115 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
         ],
       };
   }
+}
+
+/* ------------------------------- Researcher ------------------------------- */
+
+export const researchSchema = z.object({
+  topic: z.string().min(3).max(120),
+  /** Why this topic now, and why it is NOT a repeat of recent research. */
+  whyNow: z.string().max(600),
+  memo: z.string().min(200).max(8000),
+  /** One concrete, novel angle per producer for next cycle. */
+  anglesForSwarm: z.array(z.string().max(400)).min(1).max(5),
+  notebook: z
+    .array(
+      z.object({
+        topic: z.string().min(3).max(80),
+        text: z.string().min(20).max(700),
+      }),
+    )
+    .max(2),
+});
+
+export type ResearchOut = z.infer<typeof researchSchema>;
+
+export function researcherPrompt(ctx: CycleContext): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `METRICS\n${metricsDigest(ctx.metrics)}`,
+    `RESEARCH BRIEF (scout's, this cycle)\n${briefDigest(ctx.brief)}`,
+    `YOUR RECENT RESEARCH (topics you must NOT repeat without material new data)\n${recentOutputDigest(ctx.drafts.filter((d) => d.kind === "research"), "researcher", 10)}`,
+    `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 8)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.researcher ?? "None."}`,
+    `LIBRARY (durable build knowledge; the notebook topics listed here are already covered)\n${ctx.library}`,
+    `DOCS EXCERPT\n${ctx.docs.slice(0, 3500)}`,
+    `Deep-dive ONE topic the swarm has not covered recently. In whyNow, name the last topics you covered and how this one differs. The memo must ground every claim in the data you were given. Record 1-2 notebook entries of durable fact the library is missing, and give each producer one concrete novel angle in anglesForSwarm.`,
+  ].join("\n\n");
+}
+
+export function researcherMock(ctx: CycleContext): ResearchOut {
+  const m = ctx.metrics;
+  return {
+    topic: "NFT-backed loans as an under-used revenue surface",
+    whyNow:
+      "Deterministic fallback (no LLM key). Loans generate ETH fees but appear in none of the recent drafts; token DEX volume dwarfs protocol-surface volume, so an unworked fee surface is the highest-information target.",
+    memo: `The loans surface lets a broker NFT collateralize an ETH loan, with fees routed into the same 70/30 rail that feeds the Stock Booster pot. Today protocol fees ran ${usd(m.protocolFees24hUsd)} over 24h against a 7d total of ${usd(m.protocolFees7dUsd)}, while token DEX volume (${usd(m.tokenDexVolume24hUsd)}) concentrates in swaps — meaning fee-bearing surfaces like loans are under-utilized relative to attention. A broker holder who needs liquidity can borrow against the NFT instead of selling it, which (a) keeps the broker activated and Clock In-eligible, (b) avoids sell pressure on the collection, and (c) pays ETH fees into the pot. The swarm has never explained this loop end to end. Verifiable mechanics live in the docs; loan volume is readable on-chain. What the swarm should do differently: treat loans as the bridge topic between "price" and "revenue" levers — it is the one surface where holder self-interest (liquidity without selling) directly feeds protocol revenue.`,
+    anglesForSwarm: [
+      "narrative: walk one loan lifecycle end to end with real fee numbers — collateralize, borrow, repay, stay Clock In-eligible",
+      "steward: explainer on when a loan beats selling a broker, with the exact UI path",
+      "bd: pitch a lending-aggregator listing for the NFT-loan surface",
+      "growth: experiment — does loan-mechanics content move liquidity/holder proxies better than fee-flow content?",
+    ],
+    notebook: [
+      {
+        topic: "Loans surface (mechanics)",
+        text: "NFT-backed loans keep the broker activated while borrowed against; fees route into the standard 70/30 rail. Under-used vs swaps: bridge topic between price and revenue levers.",
+      },
+    ],
+  };
+}
+
+/* --------------------------------- Critic --------------------------------- */
+
+export const criticSchema = z.object({
+  reviews: z
+    .array(
+      z.object({
+        draftId: z.string().max(60),
+        verdict: z.enum(["pass", "veto"]),
+        /** For vetoes: the earlier draft it duplicates or the specific defect. */
+        reason: z.string().max(500),
+      }),
+    )
+    .max(12),
+  /** The repetition pattern forming across the swarm and what would break it. */
+  observation: z.string().max(700),
+});
+
+export type CriticOut = z.infer<typeof criticSchema>;
+
+export function criticPrompt(ctx: CycleContext, cycleDrafts: Draft[]): string {
+  const current = cycleDrafts
+    .map((d) => `### id=${d.id} · ${d.agentId} · ${d.kind} → ${d.channel}\nTitle: ${d.title}\nRationale: ${d.rationale}\nBody:\n${d.body.slice(0, 1800)}`)
+    .join("\n\n");
+  const history = ctx.drafts
+    .filter((d) => !cycleDrafts.some((c) => c.id === d.id))
+    .slice(-24)
+    .map((d) => `- [${d.agentId}/${d.kind}/${d.status}] "${d.title}" — ${d.body.slice(0, 140).replace(/\s+/g, " ")}`)
+    .join("\n");
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `TODAY'S GRADE\n${ctx.grade.summary}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.critic ?? "None."}`,
+    `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 8)}`,
+    `RECENT SWARM OUTPUT (history — what "repetitive" means is measured against this)\n${history || "No prior drafts."}`,
+    `THIS CYCLE'S DRAFTS (review each; use the exact draftId given)\n${current}`,
+    `Return one review per draft above. VETO repetitive or low-quality drafts (name the earlier draft duplicated, or the defect); PASS genuinely new or materially improved work. The daily metrics report format is intentionally recurring — judge it on quality only. Then record your observation: the repetition pattern forming and what would break it.`,
+  ].join("\n\n");
+}
+
+export function criticMock(cycleDrafts: Draft[]): CriticOut {
+  return {
+    reviews: cycleDrafts.map((d) => ({
+      draftId: d.id,
+      verdict: "pass" as const,
+      reason: "Deterministic fallback (no LLM key): passing without adversarial review.",
+    })),
+    observation:
+      "Fallback mode — no critic judgment available this cycle. The code-level novelty gate still enforces near-duplicate rejection.",
+  };
 }
 
 /* ---------------------------------- Mint ---------------------------------- */
@@ -349,7 +476,7 @@ export function coachPrompt(ctx: CycleContext): string {
       return `### ${a.id} (${a.name}, v${a.strategyVersion})\nStats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected. ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or charter compliance.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or charter compliance.`;
 }
 
 export function coachMock(ctx: CycleContext): ProposalsOut {

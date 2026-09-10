@@ -5,8 +5,10 @@ const DAY_MS = 86_400_000;
 
 /** Hard rails the tuner can never leave, whatever the data says. */
 export const TUNER_RAILS = {
-  minCycleHours: 2,
-  maxCycleHours: 12,
+  minCycleMinutes: 45,
+  maxCycleMinutes: 360,
+  /** Step size for cadence adjustments */
+  cycleStepMinutes: 30,
   minDraftsPerCycle: 3,
   maxDraftsPerCycle: 8,
   /** Minimum reviewed drafts before approval-rate rules fire */
@@ -14,7 +16,7 @@ export const TUNER_RAILS = {
 } as const;
 
 export interface TuningChange {
-  key: "cycleIntervalHours" | "maxDraftsPerCycle";
+  key: "cycleIntervalMinutes" | "maxDraftsPerCycle";
   from: number;
   to: number;
   reason: string;
@@ -85,25 +87,25 @@ export function tuneSettings(state: SwarmState): TuningChange[] {
     s.gradeTrend3d !== null &&
     s.gradeTrend3d <= -3 &&
     s.pending < 2 * set.maxDraftsPerCycle &&
-    set.cycleIntervalHours > TUNER_RAILS.minCycleHours
+    set.cycleIntervalMinutes > TUNER_RAILS.minCycleMinutes
   ) {
     changes.push({
-      key: "cycleIntervalHours",
-      from: set.cycleIntervalHours,
-      to: Math.max(TUNER_RAILS.minCycleHours, set.cycleIntervalHours - 2),
+      key: "cycleIntervalMinutes",
+      from: set.cycleIntervalMinutes,
+      to: Math.max(TUNER_RAILS.minCycleMinutes, set.cycleIntervalMinutes - TUNER_RAILS.cycleStepMinutes),
       reason: `Grade fell ${Math.abs(s.gradeTrend3d).toFixed(1)} pts over 3 days — increasing cycle frequency for faster iteration`,
     });
-  } else if (s.pending > 3 * set.maxDraftsPerCycle && set.cycleIntervalHours < TUNER_RAILS.maxCycleHours) {
+  } else if (s.pending > 3 * set.maxDraftsPerCycle && set.cycleIntervalMinutes < TUNER_RAILS.maxCycleMinutes) {
     changes.push({
-      key: "cycleIntervalHours",
-      from: set.cycleIntervalHours,
-      to: Math.min(TUNER_RAILS.maxCycleHours, set.cycleIntervalHours + 2),
+      key: "cycleIntervalMinutes",
+      from: set.cycleIntervalMinutes,
+      to: Math.min(TUNER_RAILS.maxCycleMinutes, set.cycleIntervalMinutes + TUNER_RAILS.cycleStepMinutes),
       reason: `${s.pending} drafts pending (>3x budget) — slowing cadence until reviewers catch up`,
     });
   }
 
   for (const c of changes) {
-    if (c.key === "cycleIntervalHours") set.cycleIntervalHours = c.to;
+    if (c.key === "cycleIntervalMinutes") set.cycleIntervalMinutes = c.to;
     else set.maxDraftsPerCycle = c.to;
     pushEvent(state, {
       kind: "tuner.adjusted",
@@ -118,7 +120,9 @@ export function tuneSettings(state: SwarmState): TuningChange[] {
 
 /** Which producer's output most directly targets each grade lever. */
 const LEVER_AGENT: Record<GradeComponent["key"], AgentId> = {
-  price: "narrative",
+  /* Catalyst exists to run experiments against the weakest lever; price is the
+     weakest by far, so it gets first call on the draft budget when price lags. */
+  price: "growth",
   revenue: "steward",
   volume: "bd",
   execution: "analyst",

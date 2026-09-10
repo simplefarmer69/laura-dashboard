@@ -54,8 +54,8 @@ export interface StructuredCall<T> {
 export async function generateStructured<T>(
   resolved: ResolvedModel,
   call: StructuredCall<T>,
-): Promise<{ value: T; usedMock: boolean }> {
-  if (!resolved.model) return { value: call.mock(), usedMock: true };
+): Promise<{ value: T; usedMock: boolean; repaired: boolean }> {
+  if (!resolved.model) return { value: call.mock(), usedMock: true, repaired: false };
   try {
     const { object } = await generateObject({
       model: resolved.model,
@@ -64,7 +64,7 @@ export async function generateStructured<T>(
       prompt: call.prompt,
       maxRetries: 2,
     });
-    return { value: object, usedMock: false };
+    return { value: object, usedMock: false, repaired: false };
   } catch (err) {
     /* One repair attempt: feed the validation failure and the raw output back
        so the model can fix its own JSON instead of losing the whole turn. */
@@ -81,10 +81,10 @@ export async function generateStructured<T>(
         prompt: `${call.prompt}\n\nYOUR PREVIOUS ATTEMPT FAILED SCHEMA VALIDATION.\nValidation error: ${cause.slice(0, 1200)}\nPrevious output (may be truncated):\n${(e.text ?? "").slice(0, 3000)}\n\nReturn a corrected response that satisfies the schema exactly. Respect every min/max length and enum.`,
         maxRetries: 1,
       });
-      return { value: object, usedMock: false };
+      return { value: object, usedMock: false, repaired: true };
     } catch (err2) {
       console.error(`[llm] ${resolved.provider}/${resolved.modelId} repair failed, using mock:`, err2);
-      return { value: call.mock(), usedMock: true };
+      return { value: call.mock(), usedMock: true, repaired: false };
     }
   }
 }

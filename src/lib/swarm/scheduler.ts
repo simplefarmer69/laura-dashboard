@@ -4,14 +4,27 @@ import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { utcDate } from "@/lib/grader/score";
+import type { SwarmEventKind, SwarmState } from "@/lib/types";
 
 /**
- * LAURA's autopilot. Runs a full cycle every `cycleIntervalHours` (read live from
- * settings so the console can change it) and makes sure the grader has stamped
+ * LAURA's autopilot. Cascade design: the per-minute tick does only cost-free
+ * checks (launch queue, budget, capacity, trigger events); LLM cycles run on a
+ * base cadence of `cycleIntervalMinutes` (read live from settings) PLUS early
+ * event-driven cycles when something worth reacting to lands (a launch goes
+ * live, a milestone hits). A hard rolling-24h budget (`maxLlmCyclesPerDay`)
+ * bounds API cost whatever the cadence and triggers do. The grader is stamped
  * every UTC day even if no cycle landed on it. Safe to call more than once per
  * process: only the first call starts the loop.
  */
 const TICK_MS = 60_000;
+const DAY_MS = 86_400_000;
+
+/** Minimum gap between cycles even when trigger events fire back-to-back. */
+const MIN_EVENT_GAP_MS = 20 * 60_000;
+
+/** Event kinds that justify running a cycle early. Deliberately excludes kinds
+ *  emitted inside every cycle (grade.stamped, drafts, …) to avoid self-trigger loops. */
+const TRIGGER_KINDS: SwarmEventKind[] = ["launch.deployed", "launch.armed", "milestone.reached"];
 
 declare global {
   var __lauraScheduler: { started: boolean; lastCycleAt: number; lastGradeDate: string } | undefined;
@@ -40,11 +53,22 @@ function machineBusy(): string | null {
   return null;
 }
 
+/** Cycles started in the rolling 24h window, whatever their trigger. */
+export function cyclesInLast24h(state: SwarmState, now = Date.now()): number {
+  return state.runs.filter((r) => r.startedAt > now - DAY_MS).length;
+}
+
+/** Trigger events recorded since the last cycle finished. */
+function pendingTriggerEvent(state: SwarmState, sinceTs: number): string | null {
+  const hit = state.events.find((e) => e.ts > sinceTs && TRIGGER_KINDS.includes(e.kind));
+  return hit ? `${hit.kind}: ${hit.title}` : null;
+}
+
 async function tick(): Promise<void> {
   const s = globalThis.__lauraScheduler;
   if (!s) return;
   const state = await loadState();
-  const intervalMs = Math.max(1, state.settings.cycleIntervalHours) * 3_600_000;
+  const intervalMs = Math.max(30, state.settings.cycleIntervalMinutes) * 60_000;
   const latestRun = state.runs.at(-1);
   if (latestRun?.finishedAt && latestRun.finishedAt > s.lastCycleAt) s.lastCycleAt = latestRun.finishedAt;
 
@@ -69,14 +93,25 @@ async function tick(): Promise<void> {
     await runLaunchExecutor();
   }
 
-  if (Date.now() - s.lastCycleAt >= intervalMs) {
-    const busy = machineBusy();
-    if (busy) {
-      log(`deferring scheduled cycle: ${busy}`);
+  const sinceLastCycle = Date.now() - s.lastCycleAt;
+  const due = sinceLastCycle >= intervalMs;
+  const triggerEvent =
+    !due && sinceLastCycle >= MIN_EVENT_GAP_MS ? pendingTriggerEvent(state, s.lastCycleAt) : null;
+
+  if (due || triggerEvent) {
+    const used = cyclesInLast24h(state);
+    if (used >= state.settings.maxLlmCyclesPerDay) {
+      /* Budget exhausted: log once per tick, retry when the window rolls. */
+      log(`deferring cycle: daily LLM budget spent (${used}/${state.settings.maxLlmCyclesPerDay} in 24h)`);
       return;
     }
-    log("starting scheduled cycle");
-    const run = await runCycle("scheduler");
+    const busy = machineBusy();
+    if (busy) {
+      log(`deferring cycle: ${busy}`);
+      return;
+    }
+    log(triggerEvent ? `starting event-driven cycle (${triggerEvent})` : "starting scheduled cycle");
+    const run = await runCycle(triggerEvent ? "event" : "scheduler");
     s.lastCycleAt = Date.now();
     s.lastGradeDate = today;
     log(

@@ -111,7 +111,10 @@ export function scoreExecution(state: SwarmState, now: number): GradeComponent {
   const recent = state.drafts.filter((d) => d.createdAt >= since);
   const reviewed = recent.filter((d) => d.status !== "pending");
   const approved = reviewed.filter((d) => d.status === "approved" || d.status === "published");
-  const cyclesPerDay = Math.max(1, Math.floor(24 / state.settings.cycleIntervalHours));
+  const cyclesPerDay = Math.max(
+    1,
+    Math.min(state.settings.maxLlmCyclesPerDay, Math.floor(1440 / state.settings.cycleIntervalMinutes)),
+  );
   const target = state.settings.maxDraftsPerCycle * cyclesPerDay * 0.5;
   const proposals = state.proposals.filter((p) => p.createdAt >= since);
   const adopted = proposals.filter((p) => p.status === "approved");

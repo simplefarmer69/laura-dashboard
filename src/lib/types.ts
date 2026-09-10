@@ -63,10 +63,13 @@ export interface DailyGrade {
 
 export type AgentId =
   | "scout"
+  | "researcher"
   | "narrative"
   | "steward"
   | "bd"
   | "analyst"
+  | "growth"
+  | "critic"
   | "mint"
   | "coach";
 
@@ -163,7 +166,8 @@ export interface RunStep {
 
 export interface CycleRun {
   id: string;
-  trigger: "manual" | "scheduler";
+  /** "event" = an early cycle fired by a trigger event (launch live, milestone). */
+  trigger: "manual" | "scheduler" | "event";
   startedAt: number;
   finishedAt: number | null;
   steps: RunStep[];
@@ -171,6 +175,12 @@ export interface CycleRun {
   proposalsCreated: number;
   llmProvider: string;
   error: string | null;
+  /** LLM telemetry; absent on runs recorded before telemetry existed. */
+  llmCalls?: number;
+  /** Calls that fell back to the deterministic mock after the LLM failed. */
+  llmFallbacks?: number;
+  /** Calls that needed the schema-repair retry to produce valid output. */
+  llmRepairs?: number;
 }
 
 export type LlmProvider = "anthropic" | "openai" | "mock";
@@ -182,7 +192,10 @@ export interface Settings {
   llamaSlug: string;
   projectName: string;
   projectSite: string;
-  cycleIntervalHours: number;
+  /** Base LLM-cycle cadence. Event triggers can run a cycle early; the daily budget bounds cost. */
+  cycleIntervalMinutes: number;
+  /** Hard code-level cap on LLM cycles per rolling 24h (scheduled + event; manual cycles count but are never blocked). */
+  maxLlmCyclesPerDay: number;
   /** When true the coach's strategy-text proposals apply without review. Publishing is always gated. */
   autoApplyStrategyProposals: boolean;
   maxDraftsPerCycle: number;
@@ -219,6 +232,8 @@ export type SwarmEventKind =
   | "strategy.edited"
   | "lesson.learned"
   | "note.recorded"
+  | "novelty.rejected"
+  | "critic.vetoed"
   | "milestone.reached"
   | "agent.paused"
   | "agent.resumed"
@@ -227,6 +242,7 @@ export type SwarmEventKind =
   | "launch.rejected"
   | "launch.deployed"
   | "launch.armed"
+  | "launch.verified"
   | "launch.failed"
   | "tuner.adjusted"
   | "error";
@@ -313,6 +329,10 @@ export interface LaunchProposal {
    *  launch without this is registered but NOT live on the floor. */
   armedAt?: number | null;
   armTxHash?: string | null;
+  /** Set when the token was confirmed visible on the Stonklauncher UI's own
+   *  read surface (the /api/safe-launch/floor rows the /launcher page renders).
+   *  An armed launch without this has NOT been proven user-visible. */
+  verifiedAt?: number | null;
 }
 
 export interface SwarmState {
