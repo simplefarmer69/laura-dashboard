@@ -119,13 +119,23 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
  * self-authored knowledge growth, and the anti-repetition machinery working.
  */
 function EvolutionLedger({ state }: { state: ConsoleState }) {
-  const now = Date.now();
-  const week = state.events.filter((e) => e.ts >= now - WEEK_MS);
-  const noveltyRejected = week.filter((e) => e.kind === "novelty.rejected").length;
-  const criticVetoed = week.filter((e) => e.kind === "critic.vetoed").length;
-  const versionBumps = week.filter((e) => e.kind === "proposal.adopted" || e.kind === "strategy.edited").length;
-  const lessons7d = state.lessons.filter((l) => l.ts >= now - WEEK_MS).length;
-  const cycles24h = state.runs.filter((r) => r.startedAt >= now - 86_400_000).length;
+  /* Windows are anchored to the newest timestamp in the polled snapshot (pure
+     per render) instead of the wall clock, and recomputed only when state changes. */
+  const { noveltyRejected, criticVetoed, versionBumps, lessons7d, cycles24h } = useMemo(() => {
+    const now = Math.max(
+      state.events.at(-1)?.ts ?? 0,
+      state.runs.at(-1)?.startedAt ?? 0,
+      state.lessons.at(-1)?.ts ?? 0,
+    );
+    const week = state.events.filter((e) => e.ts >= now - WEEK_MS);
+    return {
+      noveltyRejected: week.filter((e) => e.kind === "novelty.rejected").length,
+      criticVetoed: week.filter((e) => e.kind === "critic.vetoed").length,
+      versionBumps: week.filter((e) => e.kind === "proposal.adopted" || e.kind === "strategy.edited").length,
+      lessons7d: state.lessons.filter((l) => l.ts >= now - WEEK_MS).length,
+      cycles24h: state.runs.filter((r) => r.startedAt >= now - 86_400_000).length,
+    };
+  }, [state.events, state.lessons, state.runs]);
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -165,7 +175,7 @@ function EvolutionLedger({ state }: { state: ConsoleState }) {
           <CardTitle className="text-sm">
             Agent versions & skills <span className="font-mono text-muted-foreground">{state.evolution.skills.length} skills</span>
           </CardTitle>
-          <CardDescription>Where each agent's strategy stands today.</CardDescription>
+          <CardDescription>Where each agent&apos;s strategy stands today.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex flex-wrap gap-1.5">
