@@ -8,7 +8,7 @@ export const DEFAULT_SETTINGS: Settings = {
   projectName: "StonkBrokers",
   projectSite: "https://www.stonkbrokers.cash",
   cycleIntervalMinutes: 75,
-  maxLlmCyclesPerDay: 20,
+  maxLlmCyclesPerDay: 28,
   autoApplyStrategyProposals: false,
   maxDraftsPerCycle: 6,
   llmModel: "",
