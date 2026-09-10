@@ -10,12 +10,16 @@ import { hashSeed, mulberry32 } from "@/lib/launchpad/art";
  * size in the console (raw SVG / large PNG).
  */
 
+/* StonkBrokers terminal palette: Bloomberg orange primary, volt accent,
+ * terminal gray tertiary, warm core, lm-black ink. Field names kept so the
+ * SVG body reads unchanged (cyan = primary stroke, teal = circuit accent,
+ * violet = tertiary ring/stars). */
 const SENTINEL = {
-  cyan: "#22d3ee",
-  teal: "#2dd4bf",
-  violet: "#a78bfa",
-  core: "#eafcff",
-  ink: "#01040a",
+  cyan: "#ff6600",
+  teal: "#cfff04",
+  violet: "#a6a6a6",
+  core: "#fff6e8",
+  ink: "#111111",
 } as const;
 
 /** The canonical LAURA sentinel mark as a 512x512 SVG. */
@@ -48,8 +52,8 @@ export function lauraLogoSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <radialGradient id="lbg" cx="50%" cy="40%" r="78%">
-      <stop offset="0%" stop-color="#07203a" stop-opacity="0.9"/>
-      <stop offset="52%" stop-color="#030b16"/>
+      <stop offset="0%" stop-color="#33170a" stop-opacity="0.9"/>
+      <stop offset="52%" stop-color="#1a0d05"/>
       <stop offset="100%" stop-color="${c.ink}"/>
     </radialGradient>
     <filter id="lglow" x="-80%" y="-80%" width="260%" height="260%">
@@ -76,7 +80,7 @@ export function lauraLogoSvg(): string {
 
   <!-- Guardian shield -->
   <path d="M256 78 L404 128 C404 252 358 344 256 410 C154 344 108 252 108 128 Z"
-    fill="#071a2c" stroke="${c.cyan}" stroke-width="9" stroke-linejoin="round" filter="url(#lglow)"/>
+    fill="#2a1405" stroke="${c.cyan}" stroke-width="9" stroke-linejoin="round" filter="url(#lglow)"/>
   <path d="M256 102 L382 145 C382 250 342 328 256 386 C170 328 130 250 130 145 Z"
     fill="none" stroke="${c.teal}" stroke-width="2.5" opacity="0.35"/>
 

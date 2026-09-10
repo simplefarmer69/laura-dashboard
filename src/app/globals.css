@@ -84,70 +84,71 @@
 }
 
 .dark {
-  /* Sentinel palette — anchored to LAURA's mark (src/lib/launchpad/laura-logo.ts):
-     cyan #22d3ee primary, teal #2dd4bf positive, ink #01040a depths.
-     Amber is the single warning signal; red is reserved for failures/negative. */
-  --background: #04070d;
-  --foreground: #d9e5ec;
-  --card: #090f17;
-  --card-foreground: #d9e5ec;
-  --popover: #0b121b;
-  --popover-foreground: #d9e5ec;
-  --primary: #22d3ee;
-  --primary-foreground: #02131a;
-  --secondary: #0e1620;
-  --secondary-foreground: #d9e5ec;
-  --muted: #0d141d;
-  --muted-foreground: #7e909d;
-  --accent: #102030;
-  --accent-foreground: #d9e5ec;
-  --destructive: #e5484d;
-  --border: rgba(150, 196, 222, 0.13);
-  --input: rgba(150, 196, 222, 0.18);
-  --ring: rgba(34, 211, 238, 0.55);
-  --chart-1: #22d3ee;
-  --chart-2: #2dd4bf;
-  --chart-3: #d9a860;
-  --chart-4: #64798a;
-  --chart-5: #e5484d;
-  --sidebar: #090f17;
-  --sidebar-foreground: #d9e5ec;
-  --sidebar-primary: #22d3ee;
-  --sidebar-primary-foreground: #02131a;
-  --sidebar-accent: #102030;
-  --sidebar-accent-foreground: #d9e5ec;
-  --sidebar-border: rgba(150, 196, 222, 0.13);
-  --sidebar-ring: rgba(34, 211, 238, 0.55);
+  /* StonkBrokers terminal palette — the stonkbrokers.io Bloomberg look:
+     lm-black #111111 depths, lm-dark-gray #1c1c1c panels, Bloomberg orange
+     #FF6600 primary, volt #CFFF04 accent, pure green/red signal colors.
+     Yellow is the single warning signal; red is reserved for failures. */
+  --background: #111111;
+  --foreground: #e8e8e8;
+  --card: #1c1c1c;
+  --card-foreground: #e8e8e8;
+  --popover: #232323;
+  --popover-foreground: #e8e8e8;
+  --primary: #ff6600;
+  --primary-foreground: #111111;
+  --secondary: #232323;
+  --secondary-foreground: #e8e8e8;
+  --muted: #1c1c1c;
+  --muted-foreground: #a6a6a6;
+  --accent: #2a2a2a;
+  --accent-foreground: #e8e8e8;
+  --destructive: #ff3333;
+  --border: rgba(255, 102, 0, 0.16);
+  --input: rgba(255, 102, 0, 0.22);
+  --ring: rgba(255, 102, 0, 0.55);
+  --chart-1: #ff6600;
+  --chart-2: #00ff00;
+  --chart-3: #cfff04;
+  --chart-4: #a6a6a6;
+  --chart-5: #ff3333;
+  --sidebar: #1c1c1c;
+  --sidebar-foreground: #e8e8e8;
+  --sidebar-primary: #ff6600;
+  --sidebar-primary-foreground: #111111;
+  --sidebar-accent: #2a2a2a;
+  --sidebar-accent-foreground: #e8e8e8;
+  --sidebar-border: rgba(255, 102, 0, 0.16);
+  --sidebar-ring: rgba(255, 102, 0, 0.55);
   --radius: 0px;
-  --sb-accent: #22d3ee;
-  --sb-green: #2dd4bf;
-  --sb-gold: #d9a860;
-  --sb-neg: #e5484d;
-  --sb-glow: rgba(34, 211, 238, 0.16);
-  --sb-panel-border: rgba(34, 211, 238, 0.32);
+  --sb-accent: #ff6600;
+  --sb-green: #00ff00;
+  --sb-gold: #ffff00;
+  --sb-neg: #ff3333;
+  --sb-glow: rgba(255, 102, 0, 0.16);
+  --sb-panel-border: rgba(255, 102, 0, 0.32);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
-    scrollbar-color: rgba(126, 144, 157, 0.3) transparent;
+    scrollbar-color: rgba(166, 166, 166, 0.3) transparent;
   }
   body {
     @apply bg-background text-foreground;
     /* Numerals line up in every data column, sans or mono. */
     font-variant-numeric: tabular-nums;
     background-image:
-      radial-gradient(1100px 380px at 50% -120px, rgba(34, 211, 238, 0.05), transparent 72%),
-      linear-gradient(rgba(34, 211, 238, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(34, 211, 238, 0.02) 1px, transparent 1px);
+      radial-gradient(1100px 380px at 50% -120px, rgba(255, 102, 0, 0.05), transparent 72%),
+      linear-gradient(rgba(255, 102, 0, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 102, 0, 0.02) 1px, transparent 1px);
     background-size: auto, 32px 32px, 32px 32px;
   }
   html {
     @apply font-sans;
   }
   ::selection {
-    background: rgba(34, 211, 238, 0.28);
+    background: rgba(255, 102, 0, 0.35);
   }
 }
 
@@ -234,7 +235,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(100deg, transparent 25%, rgba(34, 211, 238, 0.06) 50%, transparent 75%);
+    background: linear-gradient(100deg, transparent 25%, rgba(255, 102, 0, 0.06) 50%, transparent 75%);
     animation: sb-sweep 2.4s ease-in-out infinite;
   }
 }

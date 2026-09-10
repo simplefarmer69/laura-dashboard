@@ -42,7 +42,8 @@ export function Overview({
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <Card className="lg:col-span-1">
+      <div className="flex flex-col gap-4 lg:col-span-1">
+      <Card>
         <CardHeader>
           <CardDescription>Today&apos;s grade · {grade.date} UTC</CardDescription>
           <CardTitle className="flex items-end gap-3">
@@ -71,6 +72,32 @@ export function Overview({
           </div>
         </CardContent>
       </Card>
+
+      <Card className="flex-1">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Radio className="size-3.5 text-[var(--sb-green)] sb-blink" /> Live actions
+            </CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => onNavigate("activity")}>
+              Full log <ArrowRight className="size-3.5" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-1.5">
+            {[...state.events].sort((a, b) => b.ts - a.ts).slice(0, 12).map((e) => (
+              <li key={e.id} className="flex items-center gap-2 text-xs">
+                <Badge className={`${kindTone(e.kind)} h-4 px-1.5 font-mono text-[9px]`}>{e.kind}</Badge>
+                <span className="min-w-0 flex-1 truncate">{e.title}</span>
+                <span className="font-mono text-[10px] text-muted-foreground">{ago(e.ts)}</span>
+              </li>
+            ))}
+            {state.events.length === 0 && <li className="text-xs text-muted-foreground">No actions yet.</li>}
+          </ul>
+        </CardContent>
+      </Card>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
         <Metric
@@ -163,31 +190,6 @@ export function Overview({
             </CardContent>
           </Card>
         )}
-
-        <Card className="sm:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Radio className="size-3.5 text-[var(--sb-green)] sb-blink" /> Live actions
-              </CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => onNavigate("activity")}>
-                Full log <ArrowRight className="size-3.5" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1.5">
-              {[...state.events].sort((a, b) => b.ts - a.ts).slice(0, 8).map((e) => (
-                <li key={e.id} className="flex items-center gap-2 text-xs">
-                  <Badge className={`${kindTone(e.kind)} h-4 px-1.5 font-mono text-[9px]`}>{e.kind}</Badge>
-                  <span className="min-w-0 flex-1 truncate">{e.title}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{ago(e.ts)}</span>
-                </li>
-              ))}
-              {state.events.length === 0 && <li className="text-xs text-muted-foreground">No actions yet.</li>}
-            </ul>
-          </CardContent>
-        </Card>
 
         <Card className="sm:col-span-2">
           <CardContent className="flex flex-wrap items-center gap-3 py-4">

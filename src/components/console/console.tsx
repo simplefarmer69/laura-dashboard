@@ -117,6 +117,15 @@ export function Console() {
             >
               <Play className="size-3.5" /> Run cycle
             </Button>
+            {/* StonkBrokers brand mark */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/stonkbrokers-logo.png"
+              alt="StonkBrokers"
+              width={36}
+              height={36}
+              className="size-9 shrink-0 border border-primary/40"
+            />
           </div>
         </div>
         <div className="border-t border-border/60 bg-black/40">
