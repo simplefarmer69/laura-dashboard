@@ -33,8 +33,10 @@ everything below is how to execute it.
 
 A mention, like, or follow from @vladtenev (Robinhood CEO) or @JohannKerbrat (GM of
 Robinhood Crypto) for the operator's Clutch or Simple Farmer accounts is a standing
-operator-set goal (`50-playbook.md`, PRIORITY CATALYSTS). Design some drafts
-specifically for that audience:
+operator-set goal (`50-playbook.md`, PRIORITY CATALYSTS). Their LATEST REAL POSTS are
+injected each cycle in LIVE INTERNET INTEL — read them first; a draft that connects to
+what they said TODAY beats a generic ecosystem piece. Design some drafts specifically
+for that audience:
 
 - Frame StonkBrokers as a **Robinhood Chain ecosystem win**: "live on Robinhood
   Chain" with chain-verifiable numbers — transactions, holders, protocol revenue,

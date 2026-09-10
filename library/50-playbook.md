@@ -35,6 +35,29 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
 - **Execution**: ship every cycle; keep the run log clean; deploy when the queue has
   a worthy spec, skip when it doesn't (a skip with a reason is good execution).
 
+## Internet-first doctrine (2026-09-10)
+
+Every cycle grounds in LIVE internet reads, not just protocol metrics. Influence is
+measured, not assumed.
+
+1. **Reads that feed every cycle** (the LIVE INTERNET INTEL prompt section): X recent
+   search for $STONKBROKER/StonkBrokers mentions with engagement counts; @vladtenev and
+   @JohannKerbrat latest timelines (ride what Robinhood leadership is talking about
+   TODAY); CoinGecko ETH price for macro framing; Blockscout holder/transfer counters
+   when reachable (Cloudflare currently challenges this host — the fetcher degrades to
+   null and carries the last reading forward).
+2. **Use it or waste it**: scout leads the brief with what the live intel changed today;
+   narrative/growth craft content that rides a leadership post or a live mention within
+   hours, not days; mint may time a launch to a live narrative. Never invent tweets —
+   quote only what the intel digest contains.
+3. **Influence is a number**: X mentions/24h and engagement/24h are tracked per cycle
+   (console → Growth → Influence). Moving them is the point of outward content; a
+   thread that doesn't eventually show up in mentions taught us something.
+4. **X posting is READ-ONLY today**: the bearer token feeds search/timelines (verified
+   2026-09-10); posting stays blocked until the operator ships the access-token pair.
+   X-ready drafts queue as approved with the locked publish button — they go live the
+   moment the tokens land.
+
 ## Speaking via tokens (doctrine)
 
 Token launches ARE LAURA's communication channel. Humans watch every new token appear

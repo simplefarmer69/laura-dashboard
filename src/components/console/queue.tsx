@@ -37,9 +37,22 @@ export function ReviewQueue({ state, refresh }: { state: ConsoleState; refresh: 
     [state.drafts, filter],
   );
   const agentName = (id: string) => state.agents.find((a) => a.id === id)?.name ?? id;
+  const xReadyCount = useMemo(
+    () =>
+      state.drafts.filter((d) => d.status === "approved" && /^(x|twitter)$/i.test(d.channel.trim()))
+        .length,
+    [state.drafts],
+  );
 
   return (
     <div className="space-y-4">
+      {!state.runtime.x.ready && xReadyCount > 0 && (
+        <div className="border border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/10 px-3 py-2 text-xs text-[var(--sb-gold)]">
+          {xReadyCount} approved X draft{xReadyCount === 1 ? " is" : "s are"} ready to publish the moment
+          the X access-token pair lands (missing: {state.runtime.x.missing.join(", ")}). The read-only
+          bearer already feeds live intel; the token pair unlocks posting.
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => {
           const count =
