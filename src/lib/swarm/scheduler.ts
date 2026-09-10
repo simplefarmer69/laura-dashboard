@@ -50,9 +50,14 @@ async function tick(): Promise<void> {
   const today = utcDate();
   const hasGradeToday = state.grades.some((g) => g.date === today);
 
-  /* Full launch autonomy: work the approved queue every tick (fails closed
-     on wallet, caps and pad bounds; deploys at most one launch per tick). */
-  if (state.settings.autoExecuteLaunches && state.launches.some((l) => l.status === "approved")) {
+  /* Full launch autonomy: work the launch queue every tick (fails closed on
+     wallet, caps and pad bounds; deploys at most one launch per tick). Runs
+     when a spec awaits deploy OR a deployed launch still needs its supply
+     armed — the repair case that turns "waiting" tokens live. */
+  const launchWork = state.launches.some(
+    (l) => l.status === "approved" || (l.status === "deployed" && !l.armedAt),
+  );
+  if (state.settings.autoExecuteLaunches && launchWork) {
     await runLaunchExecutor();
   }
 
