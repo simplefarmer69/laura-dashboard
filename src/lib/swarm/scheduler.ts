@@ -7,6 +7,7 @@ import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
 import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
+import { runBuilderTick } from "@/lib/builder/executor";
 import { maybePublishSnapshot } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
@@ -131,6 +132,11 @@ async function tick(): Promise<void> {
      full-range position, stakes it for $UP, and refreshes position values.
      Same fail-closed caps/floor/executor-skip discipline. Never throws. */
   await runSmartLpTick(state);
+
+  /* Utility builder ops: ships approved dashboard builds every tick; chain
+     actions (bag buys, template deploys) additionally require the operator's
+     autoExecuteUtility flag and stay inside BUILDER_CAPS. Never throws. */
+  await runBuilderTick(state);
 
   const sinceLastCycle = Date.now() - s.lastCycleAt;
   const due = sinceLastCycle >= intervalMs;

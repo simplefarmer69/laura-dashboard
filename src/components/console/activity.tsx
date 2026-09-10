@@ -23,6 +23,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "brief.created":
     case "draft.created":
     case "launch.proposed":
+    case "utility.proposed":
     case "onchain.observed":
     case "intel.catalyst":
     case "forum.thread":
@@ -64,6 +65,11 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "launch.armed":
     case "launch.verified":
     case "launch.failed":
+    case "utility.approved":
+    case "utility.rejected":
+    case "utility.acquired":
+    case "utility.shipped":
+    case "utility.failed":
       return "operator";
     default: {
       const _exhaustive: never = kind;
@@ -83,6 +89,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "treasury.lp":
     case "treasury.stake":
     case "treasury.exit":
+    case "utility.acquired":
       return "bg-[var(--sb-gold)]/20 text-[var(--sb-gold)]";
     case "grade.stamped":
       return "bg-primary/15 text-primary";
@@ -99,11 +106,15 @@ export function kindTone(kind: SwarmEventKind): string {
     case "launch.deployed":
     case "launch.armed":
     case "launch.verified":
+    case "utility.approved":
+    case "utility.shipped":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.rejected":
     case "proposal.rejected":
     case "launch.rejected":
     case "launch.failed":
+    case "utility.rejected":
+    case "utility.failed":
     case "novelty.rejected":
     case "critic.vetoed":
     case "swarm.health":
@@ -116,6 +127,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "forum.post":
     case "proposal.created":
     case "launch.proposed":
+    case "utility.proposed":
       return "bg-secondary text-foreground";
     case "cycle.started":
     case "cycle.finished":

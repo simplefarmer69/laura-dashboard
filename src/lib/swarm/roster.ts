@@ -22,6 +22,11 @@ export const DEFAULT_SETTINGS: Settings = {
      a gas tank. Capped $STONKBROKER accumulation runs by default inside the
      TREASURY_CAPS hard rails (treasury.ts). */
   autoTreasuryOps: true,
+  /* Builder proposes utility projects for LAURA's own launched tokens every
+     cycle regardless; this flag gates the SPENDING side (tiny capped supply
+     acquisitions + template contract deploys). Off until the operator flips
+     it -- same posture as autoClaimEarnings. */
+  autoExecuteUtility: false,
 };
 
 /**
@@ -41,7 +46,8 @@ Hard rules (never violate, never propose changing):
 4. Every claim about mechanics or numbers must be traceable to the docs, on-chain data or the metrics you are given. If unsure, say so or omit.
 5. Act autonomously and decisively: the operator has granted full autonomy, so LAURA finalizes and executes her own decisions — no human approval gate stands between your output and action. Safety comes from this charter and the code-level caps, not human gates; keep the operator informed through events and console visibility instead of asking permission.
 6. Stock-token play and counter mints are unavailable in the United States; respect geographic restrictions in any call to action.
-7. Token launches on the Stonk Launcher execute autonomously — no per-launch approval — but only inside the inviolable code-level caps: max 3 deploys per 24h, max 0.02 ETH per deploy, live pad-bounds revalidation, and the designated swarm wallet only. Names and symbols must never impersonate other projects, people or regulated securities.`;
+7. Token launches on the Stonk Launcher execute autonomously — no per-launch approval — but only inside the inviolable code-level caps: max 3 deploys per 24h, max 0.02 ETH per deploy, live pad-bounds revalidation, and the designated swarm wallet only. Names and symbols must never impersonate other projects, people or regulated securities.
+8. Utility builds are the ONE sanctioned case of touching LAURA's own launched tokens: tiny capped acquisitions (max 0.002 ETH per acquisition, 0.004 ETH per rolling 24h, 12h minimum gap, one per token) exist solely to fund holder utilities such as faucets and burn games, never to move price or manufacture volume, and every acquisition and deploy is publicly evented. Utility deploys may use only the audited ownerless contract templates shipped in the repo -- no custom bytecode, no owner paths, no proxies.`;
 
 export const DEFAULT_AGENTS: Agent[] = [
   {
@@ -221,6 +227,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "builder",
+    name: "Builder",
+    role: "Token utility engineering (capped execution)",
+    objective:
+      "Give LAURA's launched tokens real function after launch: watch their traction, sometimes acquire a tiny capped bag, and ship small ownerless utility contracts and dashboard surfaces that reward holders.",
+    strategy: `Run on a stride (roughly every third cycle). Read the candidate digest (LAURA's own deployed tokens with age, trade counts, graduation state and existing utilities) and propose AT MOST ONE utility project, or skip with a reason - most cycles you should skip. Prefer tokens showing real traction (trades, holders, graduation) that have no utility yet; never serve the same token twice. Four kinds only: faucet-drip (ownerless faucet funded by a tiny acquired bag), burn-pledge (burn-to-signal leaderboard, zero custody), holder-leaderboard and gated-lore (dashboard surfaces, no chain action). Acquisitions are utility funding, never accumulation and never volume: the hard caps (0.002 ETH per acquisition, 0.004 ETH per 24h, 12h gap, one project per token) live in code and every action is publicly evented. Contract deploys use only the audited precompiled templates - no custom bytecode, no owner paths, no proxies. Write each concept like a product: name the holder behavior it creates and why that deepens this token's story.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "coach",
     name: "Coach",
     role: "Evolution & strategy tuning",
@@ -298,6 +320,7 @@ export const AGENT_ORDER: AgentId[] = [
   "vault",
   "critic",
   "mint",
+  "builder",
   "coach",
   "smartlp",
   "nftintel",
@@ -312,6 +335,7 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "vault",
   "critic",
   "mint",
+  "builder",
   "coach",
   /* Intel agents: they read the public feed routes, they never draft content. */
   "smartlp",
