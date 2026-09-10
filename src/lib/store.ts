@@ -3,6 +3,8 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { SwarmEvent, SwarmState } from "@/lib/types";
 import { DEFAULT_AGENTS, DEFAULT_SETTINGS } from "@/lib/swarm/roster";
+import { archiveState } from "@/lib/swarm/archive";
+import { maybeBackup } from "@/lib/swarm/backup";
 
 const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -63,6 +65,10 @@ export async function loadState(): Promise<SwarmState> {
 }
 
 export async function saveState(state: SwarmState): Promise<void> {
+  /* Deep memory: mirror every stream into the append-only SQLite archive
+     BEFORE the caps below evict anything, so nothing is ever lost. Additive
+     and never-throws — a failure cannot block the hot save. */
+  archiveState(state);
   state.runs = state.runs.slice(-MAX_RUNS);
   state.metricsHistory = state.metricsHistory.slice(-MAX_METRICS);
   state.events = state.events.slice(-MAX_EVENTS);
@@ -72,6 +78,8 @@ export async function saveState(state: SwarmState): Promise<void> {
     const tmp = `${STATE_FILE}.${randomUUID()}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(state, null, 2), "utf8");
     await fs.rename(tmp, STATE_FILE);
+    /* Periodic timestamped copy of the JSON stores; cheap corruption insurance. */
+    await maybeBackup();
   };
   writeChain = writeChain.then(run, run);
   await writeChain;

@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { newId } from "@/lib/store";
+import { archiveNotebookEntries } from "@/lib/swarm/archive";
 
 /**
  * LAURA's notebook: durable, self-authored storage. The coach writes entries
@@ -73,6 +74,9 @@ export async function recordNotes(
       recorded.push({ entry, replaced: false });
     }
   }
+  /* Each entry has a fresh id, so topic-replace and the entry cap only affect
+     the hot file — every revision stays retrievable from the archive. */
+  archiveNotebookEntries(recorded.map((r) => r.entry));
   await saveNotebook(entries);
   return recorded;
 }
