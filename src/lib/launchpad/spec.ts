@@ -1,0 +1,41 @@
+import { z } from "zod";
+import type { LaunchProposal } from "@/lib/types";
+
+/**
+ * Single source of truth for Safe Launch V2 pad bounds and launch-queue
+ * duplicate rules. Used by Mint's cycle schema (tasks.ts) and the manual
+ * create API (/api/launches) so the two paths can never drift apart.
+ * These mirror the pad's on-chain bounds; deployLaunch re-validates live.
+ */
+export const launchSpecShape = {
+  name: z.string().min(3).max(48),
+  symbol: z
+    .string()
+    .min(2)
+    .max(10)
+    .regex(/^[A-Z0-9]+$/),
+  supplyTokens: z.number().min(1_000_000).max(1e12),
+  startMcapUsd: z.number().min(1000).max(1_000_000),
+  gradMcapUsd: z.number().min(50_000).max(10_000_000),
+  startTaxBps: z.number().min(0).max(9900),
+  taxDecayPerMinuteBps: z.number().min(0).max(2000),
+  postTaxBps: z.number().min(0).max(500),
+  sellsEnabled: z.boolean(),
+  bufferSecs: z.number().min(600).max(3600),
+} as const;
+
+export const ART_PALETTES = ["emerald", "amber", "crimson", "violet", "cyan", "gold"] as const;
+
+/** True when a non-rejected, non-failed launch already uses this name or symbol. */
+export function isDuplicateLaunch(
+  launches: LaunchProposal[],
+  name: string,
+  symbol: string,
+): boolean {
+  return launches.some(
+    (l) =>
+      l.status !== "rejected" &&
+      l.status !== "failed" &&
+      (l.symbol === symbol || l.name.trim().toLowerCase() === name.trim().toLowerCase()),
+  );
+}

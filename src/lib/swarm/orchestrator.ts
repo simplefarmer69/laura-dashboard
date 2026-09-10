@@ -5,26 +5,26 @@ import { checkMilestones } from "@/lib/mission";
 import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt } from "@/lib/swarm/context";
-import { AGENT_ORDER, SWARM_CHARTER } from "@/lib/swarm/roster";
+import { AGENT_ORDER } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
 import {
+  agentSystem,
   briefSchema,
   coachMock,
   coachPrompt,
-  coachSystem,
   draftsSchema,
   launchSchema,
   mintMock,
   mintPrompt,
   producerMock,
   producerPrompt,
-  producerSystem,
   proposalsSchema,
   scoutMock,
   scoutPrompt,
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
+import { isDuplicateLaunch } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest } from "@/lib/swarm/library";
 import { recordNotes } from "@/lib/swarm/notebook";
@@ -167,7 +167,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     const brief = await timed(() =>
       generateStructured(resolved, {
         schema: briefSchema,
-        system: `${SWARM_CHARTER}\n\nYour name is ${scout.name}. ${scout.objective}\n\nStrategy (v${scout.strategyVersion}):\n${scout.strategy}`,
+        system: agentSystem(scout),
         prompt: scoutPrompt(ctx),
         mock: () => scoutMock(ctx),
       }),
@@ -227,7 +227,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         const out = await timed(() =>
           generateStructured(resolved, {
             schema: draftsSchema,
-            system: producerSystem(agent),
+            system: agentSystem(agent),
             prompt: producerPrompt(agent, ctx),
             mock: () => producerMock(agent, ctx),
           }),
@@ -302,7 +302,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         const out = await timed(() =>
           generateStructured(resolved, {
             schema: launchSchema,
-            system: producerSystem(mint),
+            system: agentSystem(mint),
             prompt: mintPrompt(ctx, floor, pending),
             mock: () => mintMock(ctx, pending),
           }),
@@ -311,13 +311,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         let skipReason = out.value.value.skipReason ?? "No launch this cycle";
         /* Never queue a concept that duplicates an existing non-rejected launch. */
         if (spec) {
-          const dupe = state.launches.some(
-            (l) =>
-              l.status !== "rejected" &&
-              l.status !== "failed" &&
-              (l.symbol === spec!.symbol || l.name.trim().toLowerCase() === spec!.name.trim().toLowerCase()),
-          );
-          if (dupe) {
+          if (isDuplicateLaunch(state.launches, spec.name, spec.symbol)) {
             skipReason = `Dropped duplicate concept: ${spec.name} ($${spec.symbol}) already exists in the queue or on-chain`;
             spec = null;
           }
@@ -414,7 +408,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       const out = await timed(() =>
         generateStructured(resolved, {
           schema: proposalsSchema,
-          system: coachSystem(coach),
+          system: agentSystem(coach),
           prompt: coachPrompt(ctx),
           mock: () => coachMock(ctx),
         }),

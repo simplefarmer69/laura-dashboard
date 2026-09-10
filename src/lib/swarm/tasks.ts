@@ -10,6 +10,7 @@ import type {
   Settings,
 } from "@/lib/types";
 import { missionDigest, type MissionStatus } from "@/lib/mission-status";
+import { ART_PALETTES, launchSpecShape } from "@/lib/launchpad/spec";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import {
   briefDigest,
@@ -94,7 +95,8 @@ function lessonsDigest(lessons: Lesson[], limit = 12): string {
   return recent.map((l) => `- ${l.text} (evidence: ${l.evidence})`).join("\n");
 }
 
-function systemFor(agent: Agent): string {
+/** System prompt for any agent: charter + identity + live strategy. */
+export function agentSystem(agent: Agent): string {
   return `${SWARM_CHARTER}\n\nYour name is ${agent.name}. Role: ${agent.role}.\nObjective: ${agent.objective}\n\nCurrent strategy (v${agent.strategyVersion}):\n${agent.strategy}`;
 }
 
@@ -131,10 +133,6 @@ const KIND_BY_AGENT: Record<string, DraftKind[]> = {
   bd: ["outreach"],
   analyst: ["report"],
 };
-
-export function producerSystem(agent: Agent): string {
-  return systemFor(agent);
-}
 
 export function producerPrompt(agent: Agent, ctx: CycleContext): string {
   const kinds = KIND_BY_AGENT[agent.id] ?? ["thread"];
@@ -240,20 +238,7 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
 export const launchSchema = z.object({
   launch: z
     .object({
-      name: z.string().min(3).max(48),
-      symbol: z
-        .string()
-        .min(2)
-        .max(10)
-        .regex(/^[A-Z0-9]+$/),
-      supplyTokens: z.number().min(1_000_000).max(1e12),
-      startMcapUsd: z.number().min(1000).max(1_000_000),
-      gradMcapUsd: z.number().min(50_000).max(10_000_000),
-      startTaxBps: z.number().min(0).max(9900),
-      taxDecayPerMinuteBps: z.number().min(0).max(2000),
-      postTaxBps: z.number().min(0).max(500),
-      sellsEnabled: z.boolean(),
-      bufferSecs: z.number().min(600).max(3600),
+      ...launchSpecShape,
       concept: z.string().max(1200),
       rationale: z.string().max(1200),
       artMotif: z
@@ -261,7 +246,7 @@ export const launchSchema = z.object({
         .min(2)
         .max(80)
         .describe("Visual motif for the logo, e.g. bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot"),
-      artPalette: z.enum(["emerald", "amber", "crimson", "violet", "cyan", "gold"]),
+      artPalette: z.enum(ART_PALETTES),
     })
     .nullable(),
   skipReason: z.string().max(300).nullable(),
@@ -312,10 +297,6 @@ export function mintMock(ctx: CycleContext, pendingLaunches: number): LaunchOut 
 }
 
 /* ---------------------------------- Coach --------------------------------- */
-
-export function coachSystem(agent: Agent): string {
-  return systemFor(agent);
-}
 
 export function coachPrompt(ctx: CycleContext): string {
   const roster = ctx.agents
