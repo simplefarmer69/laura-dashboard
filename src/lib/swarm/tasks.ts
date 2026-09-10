@@ -47,8 +47,8 @@ export const proposalsSchema = z.object({
   lessons: z
     .array(
       z.object({
-        text: z.string().min(20).max(700),
-        evidence: z.string().max(500),
+        text: z.string().min(20).max(1500),
+        evidence: z.string().max(1000),
       }),
     )
     .max(3),
@@ -57,7 +57,7 @@ export const proposalsSchema = z.object({
     .array(
       z.object({
         topic: z.string().min(3).max(80),
-        text: z.string().min(20).max(700),
+        text: z.string().min(20).max(1500),
       }),
     )
     .max(2),
