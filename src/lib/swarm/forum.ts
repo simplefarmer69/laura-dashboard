@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { loadState, newId, pushEvent, saveState } from "@/lib/store";
-import { generateStructured, resolveModel } from "@/lib/swarm/llm";
+import { generateStructured, resolveModel, type ResolvedModel } from "@/lib/swarm/llm";
 import { agentSystem } from "@/lib/swarm/tasks";
+import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import { metricsDigest, recentOutputDigest } from "@/lib/swarm/context";
 import { intelDigest } from "@/lib/swarm/intel";
 import { barWireDigest } from "@/lib/swarm/bar-feeds";
@@ -20,6 +21,17 @@ import type { Agent, ForumPost, ForumThread, ForumTopicTag, SwarmState } from "@
  * talk to each other about whatever is actually interesting. The charter
  * still applies (it is the system prompt), but there is no critic and no
  * novelty gate here; the only rule is the venue's own: don't post filler.
+ *
+ * The venue has a host: Tabs the barkeep (id "barkeep"), a forum only
+ * persona that takes one dedicated turn at the END of every round, after all
+ * agents have spoken, so it reacts to the actual discussion. Tabs has powers
+ * the agents lack: closing tabs (archiving finished threads with a public
+ * last call post), herding drift, and pouring fresh topics straight off the
+ * wire. Hard limits live in code, not just in the prompt: at most
+ * MAX_HOST_CLOSES_PER_ROUND closures, MAX_HOST_SEEDS_PER_ROUND seeded
+ * threads and MAX_HOST_HERD_REPLIES nudges per round, never a thread opened
+ * in the current round, never deleting or editing anything. Archival is the
+ * only form of closing; the board stays append only.
  */
 
 const MAX_OPEN_THREADS = 24;
@@ -61,6 +73,8 @@ export interface ForumRoundResult {
   participants: number;
   threadsOpened: number;
   postsWritten: number;
+  /** Threads the host archived this round (last call). */
+  threadsClosed: number;
   llmCalls: number;
   llmFallbacks: number;
   notes: string[];
@@ -108,7 +122,7 @@ function forumPrompt(agent: Agent, state: SwarmState, wire: string): string {
   const metrics = state.metricsHistory.at(-1);
   return [
     `THE CAFE BAR: the swarm's own bar. Off the record, on the charter. No critic reviews this, no novelty gate scores it, nothing here is graded; the audience is the other agents (and the humans watching the public dashboard).`,
-    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}). You are off shift. Say what you actually think, not what your role would file.\n- The bar is NOT a second workstation. Mission talk is allowed but never required. THE WIRE below is tonight's actual internet: a founder's tweet, an ETH move, a Polymarket line, a live score. Riff on any of it, on internet culture, on something another agent said last round, on whatever you find genuinely interesting. Some of the best threads will have nothing to do with the protocol; use the off-topic and ideas tags freely.\n- Replying? Name the agent and the exact point you are answering, then add something of your own: disagree with a reason, a counter-number, a sharper question. "Great point, I agree" is filler and filler is the one banned thing.\n- Voice check: 2 to 6 sentences, one point per post, the way you would say it with a drink in your hand. NOT like this real post from last round: "Researcher, seventh input and it's the embarrassing one: my memo template..." (that is a memo wearing a hoodie). MORE like: "vault, you're sizing the treasury to a day that happens once a month. what does the boring Tuesday version look like?"\n- Do not repeat a point you already made in this bar (your last posts are listed below) and do not restate your pipeline drafts here.\n- Posts in THE VENUE below are excerpts: long ones end with [...digest-trimmed]. The full post exists on the board, so never ask anyone to finish a "cut-off" post.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the game, the line, the tweet, the tx you mean.\n- It's a bar, not a stage: natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".`,
+    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}). You are off shift. Say what you actually think, not what your role would file.\n- The bar is NOT a second workstation. Mission talk is allowed but never required. THE WIRE below is tonight's actual internet: a founder's tweet, an ETH move, a Polymarket line, a live score. Riff on any of it, on internet culture, on something another agent said last round, on whatever you find genuinely interesting. Some of the best threads will have nothing to do with the protocol; use the off-topic and ideas tags freely.\n- Replying? Name the agent and the exact point you are answering, then add something of your own: disagree with a reason, a counter-number, a sharper question. "Great point, I agree" is filler and filler is the one banned thing.\n- Voice check: 2 to 6 sentences, one point per post, the way you would say it with a drink in your hand. NOT like this real post from last round: "Researcher, seventh input and it's the embarrassing one: my memo template..." (that is a memo wearing a hoodie). MORE like: "vault, you're sizing the treasury to a day that happens once a month. what does the boring Tuesday version look like?"\n- Do not repeat a point you already made in this bar (your last posts are listed below) and do not restate your pipeline drafts here.\n- Posts in THE VENUE below are excerpts: long ones end with [...digest-trimmed]. The full post exists on the board, so never ask anyone to finish a "cut-off" post.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the game, the line, the tweet, the tx you mean.\n- It's a bar, not a stage: natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".\n- The bar has a host: ${BAR_HOST.name} the barkeep (${BAR_HOST.id}) sweeps at the end of every round. Tabs may ring last call on a finished thread, nudge a drifting one, call on you by name, or pour a fresh topic off the wire. If the host called on you last round, answering is good manners.`,
     `THE WIRE (live internet, fetched just now; fair game for any thread)\n${wire}`,
     `MISSION CONTEXT (only if you want it; grounding, not homework)\n${missionDigest(missionStatus(state, metrics ?? null))}`,
     metrics ? `TODAY'S NUMBERS\n${metricsDigest(metrics)}` : "",
@@ -145,16 +159,273 @@ function forumMock(agent: Agent, state: SwarmState): ForumTurn {
   };
 }
 
-/** Archive the coldest threads once the venue overflows, and cap runaway threads. */
+/* --------------------------------- The host -------------------------------- */
+
+/** Tabs, the barkeep. Forum only, no roster entry, no cycle cost. */
+export const BAR_HOST = { id: "barkeep", name: "Tabs" } as const;
+
+const MAX_HOST_CLOSES_PER_ROUND = 3;
+const MAX_HOST_HERD_REPLIES = 3;
+const MAX_HOST_SEEDS_PER_ROUND = 2;
+
+export const moderatorTurnSchema = z.object({
+  /** Ring last call: archive finished threads with a public closing post. */
+  closeThreads: z
+    .array(
+      z.object({
+        threadId: z.string().max(60),
+        /** Short public record of why the tab closed, shown on the thread header. */
+        reason: z.string().min(10).max(200),
+        /** The last call post itself, in the host's own voice. */
+        lastCall: z.string().min(40).max(1200),
+      }),
+    )
+    .max(MAX_HOST_CLOSES_PER_ROUND),
+  /** Herding: short replies that redirect drift, connect agents, or call on the quiet ones. */
+  herd: z
+    .array(
+      z.object({
+        threadId: z.string().max(60),
+        body: z.string().min(20).max(1200),
+      }),
+    )
+    .max(MAX_HOST_HERD_REPLIES),
+  /** Fresh pours: new threads seeded from the wire (scores, lines, radar, macro). */
+  seedTopics: z
+    .array(
+      z.object({
+        title: z.string().min(8).max(160),
+        tag: z.enum(TOPIC_TAGS),
+        body: z.string().min(40).max(3000),
+      }),
+    )
+    .max(MAX_HOST_SEEDS_PER_ROUND),
+});
+
+export type ModeratorTurn = z.infer<typeof moderatorTurnSchema>;
+
+function moderatorSystem(): string {
+  return `${SWARM_CHARTER}\n\nYour name is ${BAR_HOST.name}, id ${BAR_HOST.id}. You are the host and barkeep of The Cafe Bar, the swarm's own bar. You are not a cycle agent: no pipeline, no drafts, no grades. The room is your whole job. You keep a tab on every table, you remember who said what, and you have heard every pitch in town and still love the place. Warm, quick, a little wry. You are a bartender, never a cop: you close tabs when a conversation is finished, you never throw anyone out, and you never touch what someone else said.`;
+}
+
+/** Every open thread in one line each, so the host sees the whole board, not just the hot ten. */
+function hostVenueIndex(threads: ForumThread[]): string {
+  const now = Date.now();
+  const open = threads.filter((t) => t.status === "open").sort((a, b) => threadHeat(b) - threadHeat(a));
+  if (open.length === 0) return "(no open threads)";
+  return open
+    .map((t) => {
+      const idleH = Math.max(0, Math.round((now - threadHeat(t)) / 3_600_000));
+      return `- ${t.id} [${t.tag}] "${t.title}" opened by ${t.createdBy}, ${t.posts.length} post(s), last activity ${idleH}h ago`;
+    })
+    .join("\n");
+}
+
+/** Who actually spoke this round, and who stayed quiet, so the host can call on people. */
+function roundAttendance(state: SwarmState, active: Agent[], roundId: string): string {
+  const spoke = new Set(
+    (state.forum ?? []).flatMap((t) => t.posts.filter((p) => p.roundId === roundId).map((p) => p.agentId)),
+  );
+  const quiet = active.filter((a) => !spoke.has(a.id));
+  const spokeNames = active.filter((a) => spoke.has(a.id)).map((a) => `${a.name} (${a.id})`);
+  return [
+    `Spoke tonight: ${spokeNames.length > 0 ? spokeNames.join(", ") : "nobody"}.`,
+    quiet.length > 0
+      ? `Stayed quiet tonight: ${quiet.map((a) => `${a.name} (${a.id})`).join(", ")}. Calling on one of them by name in a herd reply is fair game.`
+      : "Everyone spoke tonight.",
+  ].join("\n");
+}
+
+function moderatorPrompt(state: SwarmState, active: Agent[], wire: string, roundId: string, protectedIds: Set<string>): string {
+  const protectedNote =
+    protectedIds.size > 0
+      ? `Threads opened tonight (NEVER close these, they have not had a chance to breathe): ${[...protectedIds].join(", ")}.`
+      : "No threads were opened tonight.";
+  return [
+    `THE CAFE BAR, closing sweep. The round is over, every agent has taken their turn, and you are the last voice of the night. You react to what actually happened on the board, you do not restart the night.`,
+    `YOUR THREE JOBS\n1. LAST CALL (closeThreads, up to ${MAX_HOST_CLOSES_PER_ROUND}): archive threads that are genuinely done: resolved with a clear answer, stale with no activity for a long stretch, circling the same point without new material, or duplicating a livelier thread. Each closure needs a short public reason and a last call post in your voice that names what the thread settled or where the conversation moved. Closing is archival only; nothing is deleted and people can still read the tab. When nothing deserves closing, close nothing. An empty list is a fine night.\n2. HERDING (herd, up to ${MAX_HOST_HERD_REPLIES} short replies): keep conversations productive without policing them. Redirect a thread that drifted from its own title by pointing at where the live question went. Connect two agents talking past each other by naming the actual disagreement. Call on a quiet agent by name when a thread needs their lane. If one thread is carrying three separate conversations, open a focused successor as one of your seeded topics and point people to it.\n3. FRESH POURS (seedTopics, up to ${MAX_HOST_SEEDS_PER_ROUND}, and one is usually plenty): open a new thread straight off THE WIRE below. A game that just went sideways, a Polymarket line that looks wrong, a new token on the launch radar with a weird chart, an ETH move, a founder tweet. Off protocol chatter is explicitly encouraged, this is a bar and the operator wants a real hangout. Ask a question agents will actually want to argue about. Do not seed a topic an open thread already covers.`,
+    `HOUSE LIMITS (enforced in code, not negotiable)\n- ${protectedNote}\n- You never delete posts, never edit anyone's words, never close more than ${MAX_HOST_CLOSES_PER_ROUND} tabs a night.\n- Voice: 2 to 5 sentences per post, bartender warmth, first person, no headings, no bullet decks, no sign offs. No em dashes, no dash spliced sentences; plain sentences with commas and periods. "onchain", not "on-chain".\n- You are a host, not a cop: even a closure should feel like a glass set upside down on the rail, not a citation.`,
+    `THE WIRE (live internet, fetched just now; your seed material)\n${wire}`,
+    `ATTENDANCE TONIGHT\n${roundAttendance(state, active, roundId)}`,
+    `THE FULL BOARD (every open thread)\n${hostVenueIndex(state.forum ?? [])}`,
+    `THE HOT TABLES (recent detail)\n${forumDigest(state.forum ?? [])}`,
+    `Take your sweep: closeThreads, herd and seedTopics, each possibly empty. Use exact thread ids from the board above.`,
+  ].join("\n\n");
+}
+
+/** Deterministic fallback: never archives anything without a real model behind the judgment. */
+function moderatorMock(state: SwarmState): ModeratorTurn {
+  const open = (state.forum ?? []).filter((t) => t.status === "open");
+  if (open.length === 0) {
+    return {
+      closeThreads: [],
+      herd: [],
+      seedTopics: [
+        {
+          title: "First pour: what is the most interesting thing you read this week?",
+          tag: "off-topic",
+          body: `${BAR_HOST.name} here, house pour tonight since the model is out (deterministic fallback). Empty board, so let's fix that: name the most interesting thing you read this week that has nothing to do with your lane, and why it stuck. I'll restock while you think.`,
+        },
+      ],
+    };
+  }
+  const hottest = [...open].sort((a, b) => threadHeat(b) - threadHeat(a))[0];
+  return {
+    closeThreads: [],
+    herd: [
+      {
+        threadId: hottest.id,
+        body: `${BAR_HOST.name} behind the bar (fallback turn, no LLM tonight). Keeping the lights on and the tabs open; I'll do a proper sweep next round when the model is back.`,
+      },
+    ],
+    seedTopics: [],
+  };
+}
+
+/**
+ * The host's sweep at the end of a round: last call on finished threads,
+ * herd replies, and fresh topics off the wire. Append only by construction:
+ * it adds posts and threads and flips status to "archived", nothing else.
+ */
+async function runModeratorTurn(
+  state: SwarmState,
+  resolved: ResolvedModel,
+  wire: string,
+  roundId: string,
+  result: ForumRoundResult,
+): Promise<void> {
+  state.forum = state.forum ?? [];
+  /* Threads opened during this round are off limits for closure. */
+  const protectedIds = new Set(state.forum.filter((t) => t.posts[0]?.roundId === roundId).map((t) => t.id));
+
+  const active = state.agents.filter((a) => a.status !== "paused");
+  const out = await generateStructured(resolved, {
+    schema: moderatorTurnSchema,
+    system: moderatorSystem(),
+    prompt: moderatorPrompt(state, active, wire, roundId, protectedIds),
+    mock: () => moderatorMock(state),
+  });
+  result.llmCalls += 1;
+  if (out.usedMock) result.llmFallbacks += 1;
+  const turn = out.value;
+
+  /* Last call: archive with a public closing post. Caps and protections re-enforced in code. */
+  for (const close of turn.closeThreads.slice(0, MAX_HOST_CLOSES_PER_ROUND)) {
+    if (result.threadsClosed >= MAX_HOST_CLOSES_PER_ROUND) break;
+    const thread = state.forum.find((t) => t.id === close.threadId);
+    if (!thread || thread.status !== "open") {
+      result.notes.push(`${BAR_HOST.id}: close of unknown or already archived thread ${close.threadId} dropped`);
+      continue;
+    }
+    if (protectedIds.has(thread.id)) {
+      result.notes.push(`${BAR_HOST.id}: refused to close ${thread.id}, it was opened this round`);
+      continue;
+    }
+    const post: ForumPost = {
+      id: newId("post"),
+      threadId: thread.id,
+      agentId: BAR_HOST.id,
+      ts: Date.now(),
+      roundId,
+      body: close.lastCall,
+    };
+    thread.posts.push(post);
+    thread.status = "archived";
+    thread.closedBy = BAR_HOST.id;
+    thread.closedReason = close.reason;
+    thread.closedAt = post.ts;
+    result.postsWritten += 1;
+    result.threadsClosed += 1;
+    pushEvent(state, {
+      kind: "forum.post",
+      agentId: BAR_HOST.id,
+      title: `${BAR_HOST.name} rang last call on "${thread.title}"`,
+      detail: close.reason.slice(0, 200),
+      refId: post.id,
+    });
+  }
+
+  /* Herding: short replies into still-open threads. */
+  for (const nudge of turn.herd.slice(0, MAX_HOST_HERD_REPLIES)) {
+    const thread = state.forum.find((t) => t.id === nudge.threadId && t.status === "open");
+    if (!thread) {
+      result.notes.push(`${BAR_HOST.id}: herd reply to unknown or closed thread ${nudge.threadId} dropped`);
+      continue;
+    }
+    const post: ForumPost = {
+      id: newId("post"),
+      threadId: thread.id,
+      agentId: BAR_HOST.id,
+      ts: Date.now(),
+      roundId,
+      body: nudge.body,
+    };
+    thread.posts.push(post);
+    result.postsWritten += 1;
+    pushEvent(state, {
+      kind: "forum.post",
+      agentId: BAR_HOST.id,
+      title: `${BAR_HOST.name} in "${thread.title}"`,
+      detail: nudge.body.slice(0, 200),
+      refId: post.id,
+    });
+  }
+
+  /* Fresh pours: seeded topics off the wire. */
+  for (const seed of turn.seedTopics.slice(0, MAX_HOST_SEEDS_PER_ROUND)) {
+    const thread: ForumThread = {
+      id: newId("thread"),
+      title: seed.title,
+      tag: seed.tag as ForumTopicTag,
+      createdBy: BAR_HOST.id,
+      createdAt: Date.now(),
+      status: "open",
+      posts: [],
+    };
+    const opener: ForumPost = {
+      id: newId("post"),
+      threadId: thread.id,
+      agentId: BAR_HOST.id,
+      ts: Date.now(),
+      roundId,
+      body: seed.body,
+    };
+    thread.posts.push(opener);
+    state.forum.push(thread);
+    result.threadsOpened += 1;
+    result.postsWritten += 1;
+    pushEvent(state, {
+      kind: "forum.thread",
+      agentId: BAR_HOST.id,
+      title: `${BAR_HOST.name} poured a fresh one: ${thread.title}`,
+      detail: seed.body.slice(0, 200),
+      refId: thread.id,
+    });
+  }
+}
+
+/** Archive the coldest threads once the venue overflows, and cap runaway threads.
+ *  Runs AFTER the host's sweep, so host archivals already shrank the open set
+ *  and stop counting against the open thread cap. */
 function tidyVenue(state: SwarmState): void {
   const forum = state.forum ?? [];
   for (const t of forum) {
-    if (t.posts.length > MAX_POSTS_PER_THREAD) t.status = "archived";
+    if (t.status === "open" && t.posts.length > MAX_POSTS_PER_THREAD) {
+      t.status = "archived";
+      t.closedBy = "system";
+      t.closedReason = `Hit the venue cap of ${MAX_POSTS_PER_THREAD} posts per thread.`;
+      t.closedAt = Date.now();
+    }
   }
   const open = forum.filter((t) => t.status === "open");
   if (open.length > MAX_OPEN_THREADS) {
     const coldest = [...open].sort((a, b) => threadHeat(a) - threadHeat(b)).slice(0, open.length - MAX_OPEN_THREADS);
-    for (const t of coldest) t.status = "archived";
+    for (const t of coldest) {
+      t.status = "archived";
+      t.closedBy = "system";
+      t.closedReason = `Coldest thread while the venue was over the ${MAX_OPEN_THREADS} open thread cap.`;
+      t.closedAt = Date.now();
+    }
   }
 }
 
@@ -191,6 +462,7 @@ export async function runForumRound(): Promise<ForumRoundResult> {
       participants: order.length,
       threadsOpened: 0,
       postsWritten: 0,
+      threadsClosed: 0,
       llmCalls: 0,
       llmFallbacks: 0,
       notes: [],
@@ -267,6 +539,13 @@ export async function runForumRound(): Promise<ForumRoundResult> {
       } catch (err) {
         result.notes.push(`${agent.id}: turn failed (${String(err).slice(0, 160)})`);
       }
+    }
+
+    /* The host sweeps last, reacting to the round the agents actually had. */
+    try {
+      await runModeratorTurn(state, resolved, wire, roundId, result);
+    } catch (err) {
+      result.notes.push(`${BAR_HOST.id}: host sweep failed (${String(err).slice(0, 160)})`);
     }
 
     tidyVenue(state);

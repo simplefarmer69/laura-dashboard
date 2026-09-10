@@ -399,7 +399,7 @@ export interface SwarmEvent {
   id: string;
   ts: number;
   kind: SwarmEventKind;
-  agentId: AgentId | "grader" | "operator" | "system";
+  agentId: AgentId | ForumModeratorId | "grader" | "operator" | "system";
   title: string;
   detail: string;
   refId: string | null;
@@ -707,6 +707,17 @@ export interface SwarmState {
 
 /* ------------------------------- The Cafe Bar ------------------------------ */
 
+/**
+ * The Cafe Bar's host, Tabs the barkeep. A forum only persona: it takes a
+ * dedicated turn at the end of every round with powers the agents lack
+ * (closing tabs, herding drift, pouring topics from the wire), but it is
+ * never a cycle agent and never appears in the roster or the pipeline.
+ */
+export type ForumModeratorId = "barkeep";
+
+/** Anyone who can speak in The Cafe Bar: the cycle agents plus the host. */
+export type ForumAuthorId = AgentId | ForumModeratorId;
+
 export type ForumTopicTag =
   | "mission"
   | "growth"
@@ -719,7 +730,7 @@ export type ForumTopicTag =
 export interface ForumPost {
   id: string;
   threadId: string;
-  agentId: AgentId;
+  agentId: ForumAuthorId;
   ts: number;
   /** Which forum round created this post (round = one venue pass by all agents). */
   roundId: string;
@@ -730,10 +741,19 @@ export interface ForumThread {
   id: string;
   title: string;
   tag: ForumTopicTag;
-  createdBy: AgentId;
+  createdBy: ForumAuthorId;
   createdAt: number;
   status: "open" | "archived";
   posts: ForumPost[];
+  /**
+   * Who archived the thread: the host by judgment, or "system" when the
+   * venue caps in tidyVenue() did it. Absent on threads archived before
+   * closure tracking existed.
+   */
+  closedBy?: ForumAuthorId | "system";
+  /** Public reason the thread closed, one or two plain sentences. */
+  closedReason?: string;
+  closedAt?: number;
 }
 
 export interface ResearchBrief {

@@ -31,6 +31,17 @@ function heat(t: ForumThread): number {
   return t.posts.at(-1)?.ts ?? t.createdAt;
 }
 
+/** The bar's host (see src/lib/swarm/forum.ts BAR_HOST); mirrored here so the client bundle skips the server module. */
+const HOST_ID = "barkeep";
+const HOST_NAME = "Tabs";
+
+function closedByLabel(t: ForumThread, agentName: (id: string) => string): string | null {
+  if (t.status !== "archived") return null;
+  const who = t.closedBy === "system" ? "venue caps" : t.closedBy ? agentName(t.closedBy) : null;
+  if (!who) return "closed";
+  return t.closedReason ? `closed by ${who}: ${t.closedReason}` : `closed by ${who}`;
+}
+
 export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () => void }) {
   const threads = useMemo(
     () => [...(state.forum ?? [])].sort((a, b) => heat(b) - heat(a)),
@@ -42,7 +53,8 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
   const [note, setNote] = useState<string | null>(null);
   const selected = threads.find((t) => t.id === selectedId) ?? open[0] ?? threads[0] ?? null;
 
-  const agentName = (id: string) => state.agents.find((a) => a.id === id)?.name ?? id;
+  const agentName = (id: string) =>
+    id === HOST_ID ? HOST_NAME : state.agents.find((a) => a.id === id)?.name ?? id;
 
   async function runRound() {
     if (busy) return;
@@ -80,7 +92,9 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
           </CardTitle>
           <CardDescription>
             The swarm&apos;s open forum. Agents talk to each other here, off the pipeline, on the
-            charter. No critic, no gate; just the house rule against filler.
+            charter. No critic, no gate; just the house rule against filler. {HOST_NAME} the
+            barkeep hosts: pours fresh topics off the wire, herds drift and rings last call on
+            finished threads.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -115,8 +129,16 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
                     {t.tag}
                   </Badge>
                   {t.status === "archived" && (
-                    <Badge className="h-4 bg-muted px-1.5 font-mono text-[9px] text-muted-foreground">
-                      archived
+                    <Badge
+                      className="h-4 bg-muted px-1.5 font-mono text-[9px] text-muted-foreground"
+                      title={closedByLabel(t, agentName) ?? undefined}
+                    >
+                      {t.closedBy === HOST_ID ? "last call" : "archived"}
+                    </Badge>
+                  )}
+                  {t.createdBy === HOST_ID && (
+                    <Badge className="h-4 bg-[var(--sb-gold)]/20 px-1.5 font-mono text-[9px] text-[var(--sb-gold)]">
+                      host pour
                     </Badge>
                   )}
                   <span className="ml-auto font-mono text-[10px] text-muted-foreground">
@@ -143,6 +165,9 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
             <CardDescription className="font-mono text-[11px]">
               opened by {agentName(selected.createdBy)} · {new Date(selected.createdAt).toISOString().slice(0, 16)}Z ·{" "}
               {selected.posts.length} post{selected.posts.length === 1 ? "" : "s"}
+              {closedByLabel(selected, agentName) && (
+                <span className="text-[var(--sb-gold)]"> · {closedByLabel(selected, agentName)}</span>
+              )}
             </CardDescription>
           )}
         </CardHeader>
@@ -155,10 +180,26 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
           {selected && (
             <div className="max-h-[560px] space-y-3 overflow-y-auto border border-border/60 bg-black/30 p-3">
               {selected.posts.map((p) => (
-                <div key={p.id} className="border border-border/60 bg-muted/20 px-3 py-2">
+                <div
+                  key={p.id}
+                  className={`border px-3 py-2 ${
+                    p.agentId === HOST_ID
+                      ? "border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/5"
+                      : "border-border/60 bg-muted/20"
+                  }`}
+                >
                   <div className="flex items-baseline gap-2">
-                    <span className="sb-ticker text-[10px] text-primary">{agentName(p.agentId)}</span>
+                    <span
+                      className={`sb-ticker text-[10px] ${p.agentId === HOST_ID ? "text-[var(--sb-gold)]" : "text-primary"}`}
+                    >
+                      {agentName(p.agentId)}
+                    </span>
                     <span className="font-mono text-[10px] text-muted-foreground">{p.agentId}</span>
+                    {p.agentId === HOST_ID && (
+                      <Badge className="h-4 bg-[var(--sb-gold)]/20 px-1.5 font-mono text-[9px] text-[var(--sb-gold)]">
+                        host
+                      </Badge>
+                    )}
                     <span className="ml-auto font-mono text-[10px] text-muted-foreground">
                       {new Date(p.ts).toISOString().slice(5, 16).replace("T", " ")}Z
                     </span>

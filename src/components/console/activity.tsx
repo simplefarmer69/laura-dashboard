@@ -153,7 +153,8 @@ export function ActivityFeed({ state }: { state: ConsoleState }) {
         .slice(0, 300),
     [state.events, group],
   );
-  const agentName = (e: SwarmEvent) => state.agents.find((a) => a.id === e.agentId)?.name ?? e.agentId;
+  const agentName = (e: SwarmEvent) =>
+    e.agentId === "barkeep" ? "Tabs" : state.agents.find((a) => a.id === e.agentId)?.name ?? e.agentId;
 
   const byDay = useMemo(() => {
     const map = new Map<string, SwarmEvent[]>();
