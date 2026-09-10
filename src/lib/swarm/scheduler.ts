@@ -90,10 +90,15 @@ async function tick(): Promise<void> {
 
   /* Full launch autonomy: work the launch queue every tick (fails closed on
      wallet, caps and pad bounds; deploys at most one launch per tick). Runs
-     when a spec awaits deploy OR a deployed launch still needs its supply
-     armed — the repair case that turns "waiting" tokens live. */
+     when a spec awaits deploy, a deployed launch still needs its supply
+     armed (the repair case that turns "waiting" tokens live), OR an armed
+     launch still lacks its visibility proof — without that last arm the
+     executor's verify pass never runs once everything is armed and the queue
+     is empty (SPEAKS #278 sat unverified for hours this way). */
   const launchWork = state.launches.some(
-    (l) => l.status === "approved" || (l.status === "deployed" && !l.armedAt),
+    (l) =>
+      l.status === "approved" ||
+      (l.status === "deployed" && (!l.armedAt || (l.tokenAddress && !l.verifiedAt))),
   );
   if (state.settings.autoExecuteLaunches && launchWork) {
     await runLaunchExecutor();
@@ -106,6 +111,7 @@ async function tick(): Promise<void> {
 
   const sinceLastCycle = Date.now() - s.lastCycleAt;
   const due = sinceLastCycle >= intervalMs;
+  const used = cyclesInLast24h(state);
   const triggerEvent =
     !due && sinceLastCycle >= MIN_EVENT_GAP_MS ? pendingTriggerEvent(state, s.lastCycleAt) : null;
 
@@ -115,7 +121,6 @@ async function tick(): Promise<void> {
     if (latestRun && !latestRun.finishedAt && Date.now() - latestRun.startedAt < 15 * 60_000) {
       return;
     }
-    const used = cyclesInLast24h(state);
     if (used >= state.settings.maxLlmCyclesPerDay) {
       /* Budget exhausted: log once per tick, retry when the window rolls. */
       log(`deferring cycle: daily LLM budget spent (${used}/${state.settings.maxLlmCyclesPerDay} in 24h)`);
@@ -160,7 +165,15 @@ async function tick(): Promise<void> {
     const grade = await runGrader();
     s.lastGradeDate = today;
     log(`grade ${grade.date}: ${grade.letter} ${grade.score.toFixed(1)}`);
+    return;
   }
+
+  /* Quiet-path heartbeat: one line per tick proves the loop is alive without
+     needing HTTP traffic. When this line stops, the host froze (see the
+     suspend note in startScheduler) — the loop itself has no other way to die
+     silently. Busy paths above (cycle, defers) log their own lines instead. */
+  const minsToNext = Math.max(0, Math.ceil((intervalMs - sinceLastCycle) / 60_000));
+  log(`tick · next cycle in ~${minsToNext}m · budget ${used}/${state.settings.maxLlmCyclesPerDay} in 24h`);
 }
 
 export function startScheduler(options: { firstTickDelayMs?: number } = {}): void {
@@ -168,12 +181,28 @@ export function startScheduler(options: { firstTickDelayMs?: number } = {}): voi
   globalThis.__lauraScheduler = { started: true, lastCycleAt: 0, lastGradeDate: "" };
   log("autopilot online");
   const loop = async () => {
+    let lastLoopEndedAt = 0;
     for (;;) {
+      /* Host-suspend detection. This deployment's VM is paused by its
+         hypervisor when unattended (kernel logs "crng reseeded due to virtual
+         machine fork" on resume; observed 02:17→07:41 UTC freeze on
+         2026-09-10). While frozen NOTHING in the guest runs — timers, HTTP,
+         even a keepalive curl loop — so no in-process fix can tick through it.
+         What we can do: name the gap on resume so it reads as a suspension,
+         not a scheduler death, and let the first tick catch up (cycle cadence
+         is wall-clock anchored, so an overdue cycle fires immediately). */
+      if (lastLoopEndedAt > 0) {
+        const gapMs = Date.now() - lastLoopEndedAt;
+        if (gapMs > 5 * TICK_MS) {
+          log(`resumed after ${(gapMs / 60_000).toFixed(1)} min without ticks (host suspended); catching up`);
+        }
+      }
       try {
         await tick();
       } catch (err) {
         log(`tick failed: ${String(err)}`);
       }
+      lastLoopEndedAt = Date.now();
       await new Promise((r) => setTimeout(r, TICK_MS));
     }
   };
