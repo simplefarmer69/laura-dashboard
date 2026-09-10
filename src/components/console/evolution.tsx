@@ -61,7 +61,7 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
 
         {decided.length > 0 && (
           <div className="space-y-2 pt-2">
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Decided</h3>
+            <h3 className="sb-label">Decided</h3>
             {decided.slice(0, 10).map((p) => (
               <div
                 key={p.id}
@@ -202,7 +202,7 @@ function LedgerStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border border-border/60 bg-muted/20 py-2">
       <div className="font-mono text-lg">{value}</div>
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+      <div className="sb-label">{label}</div>
     </div>
   );
 }
@@ -252,13 +252,13 @@ function ProposalCard({
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Current</p>
+          <p className="sb-label">Current</p>
           <pre className="max-h-64 overflow-auto rounded-md border border-border/60 bg-muted/30 p-3 font-sans text-xs leading-relaxed whitespace-pre-wrap">
             {proposal.currentStrategy}
           </pre>
         </div>
         <div className="space-y-1">
-          <p className="text-[11px] font-medium text-primary uppercase tracking-wide">Proposed (editable)</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-primary">Proposed (editable)</p>
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}

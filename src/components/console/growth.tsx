@@ -74,19 +74,19 @@ export function Growth({ state }: { state: ConsoleState }) {
           </div>
           <div className="flex flex-wrap items-end gap-6 pt-1">
             <div>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Market cap</p>
+              <p className="sb-label">Market cap</p>
               <p className="sb-glow-text font-mono text-3xl text-primary">{usd(mission.marketCapUsd)}</p>
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">To target</p>
+              <p className="sb-label">To target</p>
               <p className="font-mono text-3xl">{Number.isFinite(mission.multipleToTarget) ? `${mission.multipleToTarget.toFixed(1)}x` : "—"}</p>
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">All-time high (tracked)</p>
+              <p className="sb-label">All-time high (tracked)</p>
               <p className="font-mono text-3xl">{usd(mission.athMarketCapUsd)}</p>
             </div>
             <div>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Next milestone</p>
+              <p className="sb-label">Next milestone</p>
               <p className="font-mono text-3xl">{mission.next ? mission.next.label.split(" ")[0] : "done"}</p>
             </div>
           </div>
@@ -171,7 +171,7 @@ export function Growth({ state }: { state: ConsoleState }) {
               </div>
               {intel.x && intel.x.topMentions.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Top live mentions</p>
+                  <p className="sb-label mb-1">Top live mentions</p>
                   <ul className="space-y-1.5">
                     {intel.x.topMentions.map((t) => (
                       <li key={t.id} className="border-l-2 border-primary/50 pl-3 text-xs">
@@ -186,7 +186,7 @@ export function Growth({ state }: { state: ConsoleState }) {
               )}
               {intel.x && intel.x.leaders.some((l) => l.tweets.length > 0) && (
                 <div>
-                  <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Robinhood leadership · latest</p>
+                  <p className="sb-label mb-1">Robinhood leadership · latest</p>
                   <ul className="space-y-1.5">
                     {intel.x.leaders.map((l) =>
                       l.tweets.slice(0, 1).map((t) => (
@@ -271,7 +271,7 @@ export function Growth({ state }: { state: ConsoleState }) {
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border border-border/60 bg-muted/20 p-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="sb-label">{label}</p>
       <p className="font-mono text-lg">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>

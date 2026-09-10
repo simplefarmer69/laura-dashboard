@@ -128,7 +128,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-md border border-border/60 bg-muted/20 py-1.5">
       <div className="font-mono text-sm">{value}</div>
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
+      <div className="sb-label">{label}</div>
     </div>
   );
 }

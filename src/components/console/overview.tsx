@@ -215,7 +215,7 @@ export function Overview({
 function Chain({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="border border-border/60 bg-muted/20 p-2.5">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className="sb-label">{label}</p>
       <p className="font-mono text-base">{value}</p>
       <p className="text-[11px] text-muted-foreground">{sub}</p>
     </div>
