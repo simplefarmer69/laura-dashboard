@@ -33,7 +33,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="text-sm">Grader targets</CardTitle>
@@ -41,7 +41,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
             Where the grader reads price (DexScreener) and protocol revenue/volume (DefiLlama).
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Token address" hint="ERC-20 graded on price">
             <Input value={form.tokenAddress} onChange={(e) => set("tokenAddress", e.target.value)} className="font-mono text-xs" />
           </Field>
@@ -171,7 +171,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
         <CardHeader>
           <CardTitle className="text-sm">Runtime</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+        <CardContent className="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
           <p>
             LLM provider: <span className="font-mono text-foreground">{state.runtime.llmProvider}</span>
             {state.runtime.llmProvider === "mock" && ". Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable real generation."}

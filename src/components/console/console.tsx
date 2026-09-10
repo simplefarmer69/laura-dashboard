@@ -297,9 +297,9 @@ function ConsoleSkeleton() {
           <div key={i} className={`h-4 ${w} bg-muted/40 ${i === 0 ? "bg-primary/20" : ""}`} />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="sb-skeleton h-80 lg:col-span-1" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
           <div className="sb-skeleton h-28" />
           <div className="sb-skeleton h-28" />
           <div className="sb-skeleton h-28" />

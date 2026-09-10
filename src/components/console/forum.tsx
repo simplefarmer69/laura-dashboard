@@ -72,7 +72,7 @@ export function CafeBar({ state, refresh }: { state: ConsoleState; refresh: () =
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-1">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">

@@ -99,7 +99,7 @@ export function ChatPanel() {
         : "text-muted-foreground";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card className="flex flex-col lg:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm">

@@ -56,7 +56,7 @@ export function AgentsPanel({ state, refresh }: { state: ConsoleState; refresh: 
           </pre>
         </CardContent>
       </Card>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {mergedRoster(state.agents).map((a) => (
           <AgentCard key={a.id} agent={a} refresh={refresh} />
         ))}

@@ -72,7 +72,7 @@ export function ReviewQueue({ state, refresh }: { state: ConsoleState; refresh: 
         </Card>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {drafts.map((d) => (
           <DraftCard key={d.id} draft={d} agentName={agentName(d.agentId)} refresh={refresh} />
         ))}
