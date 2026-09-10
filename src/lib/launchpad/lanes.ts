@@ -28,8 +28,8 @@ export interface LaneInfo {
 }
 
 export const LANE_INFO: Record<PadLane, LaneInfo> = {
-  weth: { quote: "WETH", kind: "crypto", vibe: "the default ETH lane; fits any concept" },
-  stonk: { quote: "STONK", kind: "crypto", vibe: "ecosystem-native $STONKBROKER lane; fits StonkBrokers in-jokes and community themes" },
+  weth: { quote: "WETH", kind: "crypto", vibe: "the default ETH lane; broadest reach (every launcher user holds ETH) and creator fees arrive as WETH; fits any concept" },
+  stonk: { quote: "STONK", kind: "crypto", vibe: "ecosystem-native $STONKBROKER lane; every curve trade IS mission-token volume (the volume grade lever) and creator fees arrive as $STONKBROKER — pick it when the launch serves the mission, ecosystem lore or community themes" },
   usdg: { quote: "USDG", kind: "crypto", vibe: "stable-quoted lane; fits dollar, payroll, savings and irony-about-stability themes" },
   gme: { quote: "GME", kind: "stock", vibe: "GameStop lane; fits meme-stock, diamond-hands, retail-vs-wallstreet lore" },
   nvda: { quote: "NVDA", kind: "stock", vibe: "Nvidia lane; fits AI, GPUs, compute and tech-bubble themes" },
