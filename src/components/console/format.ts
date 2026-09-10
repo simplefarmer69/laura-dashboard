@@ -27,14 +27,11 @@ export function dur(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** One timestamp format everywhere: "10 Sep 14:32 UTC" — locale-independent. */
 export function when(ts: number | null | undefined): string {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const utc = new Date(ts).toUTCString(); // "Thu, 10 Sep 2026 14:32:05 GMT"
+  return `${utc.slice(5, 11)} ${utc.slice(17, 22)} UTC`;
 }
 
 export function gradeTone(letter: string): string {
@@ -47,7 +44,7 @@ export function gradeTone(letter: string): string {
     case "C":
       return "text-[var(--sb-gold)]";
     case "D":
-      return "text-[#ff6600]";
+      return "text-[var(--sb-gold)]";
     default:
       return "text-destructive";
   }

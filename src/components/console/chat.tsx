@@ -28,7 +28,7 @@ function LauraAvatar({ className = "size-7" }: { className?: string }) {
       alt="LAURA"
       width={28}
       height={28}
-      className={`border border-cyan-400/40 bg-black/60 shadow-[0_0_10px_rgba(34,211,238,0.25)] ${className}`}
+      className={`border border-primary/40 bg-black/60 shadow-[0_0_10px_var(--sb-glow)] ${className}`}
     />
   );
 }
@@ -50,7 +50,10 @@ export function ChatPanel() {
   useEffect(() => {
     const load = () =>
       fetch("/api/chat", { cache: "no-store", signal: AbortSignal.timeout(10_000) })
-        .then((r) => r.json())
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
         .then((d) => setBots((d as { bots: BotsStatus }).bots))
         .catch(() => undefined);
     const first = setTimeout(load, 0);

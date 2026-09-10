@@ -36,13 +36,21 @@ interface LaunchpadInfo {
 
 export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: () => Promise<void> }) {
   const [info, setInfo] = useState<LaunchpadInfo | null>(null);
+  const [infoFailed, setInfoFailed] = useState(false);
   useEffect(() => {
     let live = true;
     const load = () =>
       fetch("/api/launchpad", { cache: "no-store", signal: AbortSignal.timeout(20_000) })
-        .then((r) => r.json())
-        .then((d) => live && setInfo(d as LaunchpadInfo))
-        .catch(() => undefined);
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((d) => {
+          if (!live) return;
+          setInfo(d as LaunchpadInfo);
+          setInfoFailed(false);
+        })
+        .catch(() => live && setInfoFailed(true));
     const first = setTimeout(load, 0);
     const id = setInterval(load, 30_000);
     return () => {
@@ -51,6 +59,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
       clearInterval(id);
     };
   }, []);
+  const infoLoading = info === null && !infoFailed;
 
   const launches = useMemo(
     () => [...state.launches].sort((a, b) => b.createdAt - a.createdAt),
@@ -69,10 +78,12 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             {!info ? (
-              <p className="text-muted-foreground">Loading…</p>
+              <p className="sb-ticker text-[11px] text-muted-foreground">
+                {infoLoading ? "reading wallet…" : "wallet state unreachable — retrying"}
+              </p>
             ) : !info.wallet.configured ? (
               <>
-                <Badge variant="outline" className="text-amber-400">awaiting wallet</Badge>
+                <Badge variant="outline" className="text-[var(--sb-gold)]">awaiting wallet</Badge>
                 <p className="text-xs text-muted-foreground">
                   Set <code className="font-mono">SWARM_WALLET_PRIVATE_KEY</code> once the funding wallet arrives.
                   Specs queue up meanwhile — nothing deploys without it.
@@ -83,12 +94,12 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
                 <p className="break-all font-mono text-xs">{info.wallet.address}</p>
                 <p>
                   <span className="text-muted-foreground">Balance </span>
-                  <span className={info.wallet.funded ? "text-[var(--sb-green)]" : "text-amber-400"}>
+                  <span className={info.wallet.funded ? "text-[var(--sb-green)]" : "text-[var(--sb-gold)]"}>
                     {info.wallet.balanceEth === null ? "unreadable" : `${info.wallet.balanceEth.toFixed(5)} ETH`}
                   </span>
                 </p>
                 {!info.wallet.funded && (
-                  <p className="text-xs text-amber-400">Not funded yet — deploys stay locked.</p>
+                  <p className="text-xs text-[var(--sb-gold)]">Not funded yet — deploys stay locked.</p>
                 )}
               </>
             )}
@@ -122,8 +133,10 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
                   {info.pad.address.slice(0, 10)}… on Blockscout <ExternalLink className="size-3" />
                 </a>
               </>
+            ) : infoLoading ? (
+              <p className="sb-ticker text-[11px] text-muted-foreground">reading pad state…</p>
             ) : (
-              <p className="text-muted-foreground">Pad state unavailable.</p>
+              <p className="text-muted-foreground">Pad state unavailable — RPC not answering.</p>
             )}
           </CardContent>
         </Card>
@@ -142,8 +155,8 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
             ) : (
               <p>· Every spec needs operator approval before deploy</p>
             )}
-            <p>· Max {info?.caps.maxDeploysPerDay ?? 3} deploys per 24h</p>
-            <p>· Max {info?.caps.maxSpendEthPerDeploy ?? 0.02} ETH spend per deploy (fee + 2x gas)</p>
+            <p>· Max {info ? info.caps.maxDeploysPerDay : "—"} deploys per 24h</p>
+            <p>· Max {info ? info.caps.maxSpendEthPerDeploy : "—"} ETH spend per deploy (fee + 2x gas)</p>
             <p>· Specs re-validated against live pad bounds at deploy time</p>
             <p>· Logo + community links attach automatically after each deploy</p>
           </CardContent>
@@ -286,7 +299,7 @@ function LaunchCard({
         <p className="text-xs text-muted-foreground">{l.rationale}</p>
         {l.error && <p className="border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">{l.error}</p>}
         {l.status === "deployed" && !l.armedAt && (
-          <p className="border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-400">
+          <p className="border border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/10 px-2 py-1 text-xs text-[var(--sb-gold)]">
             Supply not loaded yet — the executor arms it automatically (registered, not live).
           </p>
         )}
@@ -330,7 +343,7 @@ function LaunchArt({ id, symbol }: { id: string; symbol: string }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   return (
-    <div className="relative size-20 shrink-0 overflow-hidden rounded-md border border-primary/30 bg-black/50 shadow-[0_0_16px_rgba(207,255,4,0.12)]">
+    <div className="relative size-20 shrink-0 overflow-hidden border border-primary/30 bg-black/50 shadow-[0_0_16px_var(--sb-glow)]">
       {!loaded && !failed && <div className="absolute inset-0 animate-pulse bg-muted/40" />}
       {failed ? (
         <div className="flex size-full items-center justify-center font-mono text-xl text-muted-foreground">

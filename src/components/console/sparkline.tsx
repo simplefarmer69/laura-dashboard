@@ -2,7 +2,7 @@ export function Sparkline({
   values,
   width = 160,
   height = 40,
-  className = "stroke-emerald-400",
+  className = "stroke-[var(--sb-green)]",
 }: {
   values: number[];
   width?: number;

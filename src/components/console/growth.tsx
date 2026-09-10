@@ -203,7 +203,7 @@ export function Growth({ state }: { state: ConsoleState }) {
                 </div>
               )}
               {intel.warnings.length > 0 && (
-                <p className="text-xs text-amber-400/90">{intel.warnings.join(" · ")}</p>
+                <p className="text-xs text-[var(--sb-gold)]/90">{intel.warnings.join(" · ")}</p>
               )}
             </div>
           )}

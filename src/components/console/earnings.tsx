@@ -28,7 +28,7 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
           {autoClaim ? (
             <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">AUTO-CLAIM ON</Badge>
           ) : (
-            <Badge variant="outline" className="text-amber-400">claim prepared · sending off</Badge>
+            <Badge variant="outline" className="text-[var(--sb-gold)]">claim prepared · sending off</Badge>
           )}
         </CardTitle>
         <CardDescription>
@@ -102,7 +102,7 @@ function TreasuryOps({ state }: { state: ConsoleState }) {
         {on ? (
           <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">AUTO-BUY ON</Badge>
         ) : (
-          <Badge variant="outline" className="text-amber-400">auto-buy off</Badge>
+          <Badge variant="outline" className="text-[var(--sb-gold)]">auto-buy off</Badge>
         )}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-4">

@@ -120,7 +120,7 @@ export function Overview({
                 ))}
               </ul>
               {metrics.warnings.length > 0 && (
-                <p className="mt-3 text-xs text-amber-400/90">{metrics.warnings.join(" · ")}</p>
+                <p className="mt-3 text-xs text-[var(--sb-gold)]/90">{metrics.warnings.join(" · ")}</p>
               )}
             </CardContent>
           )}
@@ -236,7 +236,7 @@ function Metric({
   spark?: number[];
 }) {
   const toneClass =
-    tone === "up" ? "text-emerald-400" : tone === "down" ? "text-rose-400" : "text-foreground";
+    tone === "up" ? "text-[var(--sb-green)]" : tone === "down" ? "text-[var(--sb-neg)]" : "text-foreground";
   return (
     <Card>
       <CardHeader className="pb-1">

@@ -49,21 +49,22 @@ export function ViewerBanner({ publishedAt }: { publishedAt: number | null }) {
   }, []);
   const stale = publishedAt !== null && now - publishedAt > STALE_AFTER_MS;
   return (
-    <div className="border-b border-cyan-400/25 bg-cyan-950/40">
+    <div className="border-b border-primary/25 bg-primary/10">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 sb-ticker text-[11px] sm:px-6">
-        <span className="flex items-center gap-1.5 text-cyan-300">
+        <span className="flex items-center gap-1.5 text-primary">
           <Eye className="size-3.5" /> LIVE VIEW
         </span>
         <span className="text-muted-foreground">
           watching LAURA work — admin controls are local-only
         </span>
-        <span className="ml-auto text-muted-foreground">
+        <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
           {publishedAt === null ? (
             "waiting for the first snapshot…"
           ) : (
             <>
+              <span className={`size-1.5 rounded-full ${stale ? "bg-[var(--sb-gold)]" : "bg-[var(--sb-green)] sb-pulse"}`} />
               updated {ago(publishedAt, now)}
-              {stale && <span className="text-amber-400/90"> · LAURA&apos;s host may be resting</span>}
+              {stale && <span className="text-[var(--sb-gold)]/90"> · LAURA&apos;s host may be resting</span>}
             </>
           )}
         </span>
