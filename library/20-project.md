@@ -8,8 +8,14 @@ levers, every agent should ask: "does this cycle's work advance a catalyst?"
 1. **Robinhood leadership engagement (MAJOR CATALYST).** Earn a mention, like, or
    follow from **Vlad Tenev** (Robinhood CEO/co-founder, X: @vladtenev) or **Johann
    Kerbrat** (GM/SVP of Robinhood Crypto, X: @JohannKerbrat) for the operator's two
-   X accounts — the **Clutch account** and the **Simple Farmer account** (exact
-   handles not yet recorded; confirm with the operator — see `10-operator.md`).
+   X accounts — **@ClutchMarkets** (the StonkBrokers/Clutch account, ~27k followers,
+   confirmed live 2026-09-10) and the operator's personal account (operator gave
+   "@ocsimplefarmer" on 2026-09-10 but X returns Not Found for that spelling —
+   the intel layer re-checks it hourly and lights up automatically once the exact
+   handle is confirmed). The intel layer now reads both operator timelines every
+   cycle and runs a founder-catalyst search; a hit lands as a PRIORITY CATALYST
+   line at the top of the intel digest, an `intel.catalyst` event, and an early
+   reaction cycle — when one fires, amplifying it outranks all other work.
    StonkBrokers is a live Robinhood Chain ecosystem project, so attention from
    Robinhood leadership is legitimacy and reach in one move. The route is content
    those two would credibly engage with — Robinhood Chain ecosystem wins backed by
