@@ -3,7 +3,7 @@ import { isViewerMode } from "@/lib/viewer/mode";
 import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
-import { schedulerRunning } from "@/lib/swarm/scheduler";
+import { schedulerRunning, startScheduler } from "@/lib/swarm/scheduler";
 import { resolveModel } from "@/lib/swarm/llm";
 import { missionStatus } from "@/lib/mission-status";
 import { xStatus } from "@/lib/publish/x";
@@ -24,6 +24,11 @@ export async function GET() {
       );
     return NextResponse.json(snapshot, { headers: { "cache-control": "no-store" } });
   }
+
+  /* Keep the autopilot on current code without a server restart: instrumentation
+     only runs at boot, so after a scheduler upgrade the first poll here starts
+     the V2 loop (idempotent) and retires any stale pre-V2 loop. */
+  if (process.env.SWARM_AUTOPILOT !== "0") startScheduler({ firstTickDelayMs: 5_000 });
 
   const state = await loadState();
   const model = resolveModel(state.settings.llmModel);

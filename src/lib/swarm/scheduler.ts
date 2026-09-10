@@ -40,7 +40,13 @@ const TRIGGER_KINDS: SwarmEventKind[] = [
 ];
 
 declare global {
+  /* Legacy guard read by scheduler loops started before the 2026-09-10 store
+     fix. Kept declared so this module can clear it: the old loop's tick
+     no-ops when it is undefined, which retires that loop without a server
+     restart (its module snapshot predates the current roster and the
+     rebase-on-save store, so its saves must stop). */
   var __lauraScheduler: { started: boolean; lastCycleAt: number; lastGradeDate: string } | undefined;
+  var __lauraSchedulerV2: { started: boolean; lastCycleAt: number; lastGradeDate: string } | undefined;
 }
 
 function log(msg: string): void {
@@ -48,7 +54,7 @@ function log(msg: string): void {
 }
 
 export function schedulerRunning(): boolean {
-  return globalThis.__lauraScheduler?.started ?? false;
+  return globalThis.__lauraSchedulerV2?.started ?? false;
 }
 
 /**
@@ -78,7 +84,7 @@ function pendingTriggerEvent(state: SwarmState, sinceTs: number): string | null 
 }
 
 async function tick(): Promise<void> {
-  const s = globalThis.__lauraScheduler;
+  const s = globalThis.__lauraSchedulerV2;
   if (!s) return;
   /* Public-viewer feed: push a sanitized snapshot on a ~5-min cadence (the
      guard lives inside; non-fatal on failure, no-op until configured). */
@@ -208,8 +214,16 @@ async function tick(): Promise<void> {
 }
 
 export function startScheduler(options: { firstTickDelayMs?: number } = {}): void {
-  if (globalThis.__lauraScheduler?.started) return;
-  globalThis.__lauraScheduler = { started: true, lastCycleAt: 0, lastGradeDate: "" };
+  if (globalThis.__lauraSchedulerV2?.started) return;
+  /* Retire any pre-V2 loop from an older module snapshot: its tick checks
+     this guard on every pass and no-ops once it is gone. Required after the
+     store fix, because that loop saves through a stale roster and a
+     non-merging store until the process restarts. */
+  if (globalThis.__lauraScheduler) {
+    globalThis.__lauraScheduler = undefined;
+    log("legacy autopilot loop retired (stale module snapshot); V2 taking over");
+  }
+  globalThis.__lauraSchedulerV2 = { started: true, lastCycleAt: 0, lastGradeDate: "" };
   log("autopilot online");
   const loop = async () => {
     let lastLoopEndedAt = 0;
