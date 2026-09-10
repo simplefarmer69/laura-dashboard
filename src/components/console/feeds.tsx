@@ -583,7 +583,7 @@ export function DefillamaPanel({ data }: { data: DefillamaData | null }) {
           <DlStat label="Revenue 24h" value={usd(data?.revenue.total24hUsd, 0)} tone="text-[var(--sb-gold)]" />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
             <p className="mb-1 text-[11px] text-muted-foreground">
               <span className="text-[var(--sb-accent)]">TVL</span> · Robinhood Chain · daily

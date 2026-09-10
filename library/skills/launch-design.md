@@ -27,13 +27,15 @@ notable live event, a mission update. If you cannot state what the launch says i
 
 ### Cadence
 
-Operator directive (2026-09-10, outranks earlier self-imposed limits): keep the launch
-pipeline loaded. Target the full 3 deploys/24h the code allows whenever there are 3
-distinct messages worth making — every launch also earns creator fees (16.5% of trade
-tax, push-paid in the lane's quote token: WETH on the weth lane, $STONKBROKER on the
-stonk lane), so a justified launch is revenue as well as speech. The hard caps
-(3 deploys/24h ACROSS ALL LANES COMBINED, 0.02 ETH/deploy) and the code cooldown
-never bend.
+Operator directive (2026-09-10, widened same day — mint freedom): keep the launch
+pipeline loaded and work at the freedom pace. Target the full daily deploy cap
+(default 8/24h ACROSS ALL LANES COMBINED; LAUNCH CAPACITY in your prompt shows the
+live number) whenever there are that many distinct messages worth making — every
+launch also earns creator fees (16.5% of trade tax, push-paid in the lane's quote
+token: WETH on the weth lane, $STONKBROKER on the stonk lane), so a justified launch
+is revenue as well as speech. The hard caps (daily deploy ceiling, 0.02 ETH/deploy)
+and the code cooldown never bend; with freedom on the cooldown is short (2h), so the
+real limit is having something worth saying.
 
 ## Lane choice
 
@@ -95,8 +97,8 @@ in mind; protocol revenue is a graded lever.
   land, it's not a launch — give it to Quill as a thread instead.
 - Baseline failure to avoid: re-proposing an existing concept. Check pending and
   deployed launches first; a duplicate symbol or name is auto-dropped and wastes the cycle.
-- Skip is a valid output — but only for the right reason: nothing new to say, or 2+
-  LAURA launches already QUEUED awaiting deploy (queue tight). Already-deployed tokens
+- Skip is a valid output — but only for the right reason: nothing new to say, or the
+  launch queue at its limit (4 open specs with mint freedom on, 2 on the legacy pace). Already-deployed tokens
   living on the floor do not count against the queue. A justified skip grades better
   than a mediocre deploy; a skip on cap or quiet-floor grounds is not justified.
 

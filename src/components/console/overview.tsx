@@ -60,7 +60,7 @@ export function Overview({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="flex flex-col gap-4 lg:col-span-1">
       <Card>
         <CardHeader>
@@ -120,7 +120,7 @@ export function Overview({
       <LiveApiCalls calls={feeds.calls} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
         <Metric
           label="$STONKBROKER price"
           value={usd(metrics.priceUsd)}
@@ -240,7 +240,7 @@ export function Overview({
         <FeeBreakdownPanel data={feeBreakdown} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3 xl:grid-cols-4">
         <LauncherFeedPanel data={feeds.launcher} />
         <NftBuysPanel data={feeds.nftBuys} />
         <PolymarketPanel data={feeds.polymarket} />
@@ -251,7 +251,7 @@ export function Overview({
         <SmartLpStudySection data={intel.smartlp} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3">
         <TokenTapePanel data={intel.tokens} />
         <NftTrendsPanel data={intel.nftTrends} buys={feeds.nftBuys} />
       </div>

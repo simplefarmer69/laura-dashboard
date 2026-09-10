@@ -122,7 +122,7 @@ export function Growth({ state }: { state: ConsoleState }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard title="Market cap (daily close)" points={mcapSeries} format={(v) => usd(v)} />
         <ChartCard title="Swarm grade (daily)" points={gradeSeries} format={(v) => v.toFixed(0)} yMin={0} yMax={100} color="var(--sb-green)" />
         <ChartCard title="Protocol revenue · 24h (daily)" points={revenueSeries} format={(v) => usd(v)} color="var(--sb-gold)" />
@@ -136,8 +136,10 @@ export function Growth({ state }: { state: ConsoleState }) {
               <Megaphone className="size-4 text-primary" /> Influence · live internet reads
             </CardTitle>
             {intel && (
-              <Badge variant="outline" className="ml-auto font-mono text-[10px]">
-                {intel.sources.length > 0 ? `sources: ${intel.sources.join(", ")}` : "no sources this cycle"} · {ago(intel.ts)}
+              <Badge variant="outline" className="ml-auto min-w-0 max-w-full font-mono text-[10px]">
+                <span className="truncate">
+                  {intel.sources.length > 0 ? `sources: ${intel.sources.join(", ")}` : "no sources this cycle"} · {ago(intel.ts)}
+                </span>
               </Badge>
             )}
           </div>
@@ -158,7 +160,7 @@ export function Growth({ state }: { state: ConsoleState }) {
                 <Stat label="Holders" value={intel.holderCount !== null ? intel.holderCount.toLocaleString() : "n/a"} sub={intel.holderCount === null ? "Blockscout unreachable" : "Blockscout"} />
                 <Stat label="ETH" value={intel.ethUsd !== null ? usd(intel.ethUsd) : "n/a"} sub={intel.ethUsd24hChangePct !== null ? `${intel.ethUsd24hChangePct >= 0 ? "+" : ""}${intel.ethUsd24hChangePct.toFixed(1)}% 24h` : ""} />
               </div>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {mentionSeries.length > 1 && (
                   <ChartCard title="X mentions / 24h (daily)" points={mentionSeries} format={(v) => v.toFixed(0)} />
                 )}
@@ -210,7 +212,7 @@ export function Growth({ state }: { state: ConsoleState }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">

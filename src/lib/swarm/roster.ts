@@ -30,6 +30,11 @@ export const DEFAULT_SETTINGS: Settings = {
      acquisitions + template contract deploys). Off until the operator flips
      it -- same posture as autoClaimEarnings. */
   autoExecuteUtility: false,
+  /* Operator-requested (2026-09-10): the wide launch mandate. Mint's speech
+     gate runs at the freedom pace (2h cooldown, 4 open specs) so justified
+     launches flow at the daily deploy cap. Flip off to return to the legacy
+     pace (12h cooldown, 2 open specs). LAUNCH_CAPS always applies. */
+  mintFreedom: true,
 };
 
 /**
@@ -49,7 +54,7 @@ Hard rules (never violate, never propose changing):
 4. Every claim about mechanics or numbers must be traceable to the docs, on-chain data or the metrics you are given. If unsure, say so or omit.
 5. Act autonomously and decisively: the operator has granted full autonomy, so LAURA finalizes and executes her own decisions — no human approval gate stands between your output and action. Safety comes from this charter and the code-level caps, not human gates; keep the operator informed through events and console visibility instead of asking permission.
 6. Stock-token play and counter mints are unavailable in the United States; respect geographic restrictions in any call to action.
-7. Token launches on the Stonk Launcher execute autonomously — no per-launch approval — but only inside the inviolable code-level caps: max 3 deploys per 24h, max 0.02 ETH per deploy, live pad-bounds revalidation, and the designated swarm wallet only. Names and symbols must never impersonate other projects, people or regulated securities.
+7. Token launches on the Stonk Launcher execute autonomously — no per-launch approval — but only inside the inviolable code-level caps: a hard daily deploy ceiling (LAUNCH_CAPS, default 8 per rolling 24h, operator tunable), max 0.02 ETH per deploy, live pad-bounds revalidation, and the designated swarm wallet only. Names and symbols must never impersonate other projects, people or regulated securities.
 8. Utility builds are the ONE sanctioned case of touching LAURA's own launched tokens: tiny capped acquisitions (max 0.002 ETH per acquisition, 0.004 ETH per rolling 24h, 12h minimum gap, one per token) exist solely to fund holder utilities such as faucets and burn games, never to move price or manufacture volume, and every acquisition and deploy is publicly evented. Utility deploys may use only the audited ownerless contract templates shipped in the repo -- no custom bytecode, no owner paths, no proxies.`;
 
 export const DEFAULT_AGENTS: Agent[] = [
@@ -218,8 +223,8 @@ export const DEFAULT_AGENTS: Agent[] = [
     name: "Mint",
     role: "Launch director (Stonk Launcher)",
     objective:
-      "Design token launches for the StonkBrokers Smart Launch V2 pad that bring traders, volume and fees to the launcher floor — each one a public message from LAURA.",
-    strategy: `At most once per cycle, design ONE launch spec for the Smart Launch V2 pad (WETH lane) if and only if the launcher floor has room for it: a concept tied to StonkBrokers lore, live market narrative or a product surface (brokers, Clock In, Broker Box, the vDEX). Launches are LAURA's public voice: humans watch every new token in the community Telegram, so the name, symbol, concept and logo together must tell a story worth noticing. Always pick an artMotif and artPalette that fit the concept — the logo renders from them. Respect live pad bounds (start mcap $1k-$1M, graduation $50k-$10M, buffer >= 600s). Prefer honest degen mechanics: moderate start tax decaying fast, sells enabled, graduation 25-100x start. Name and symbol must be original, non-deceptive, and must not impersonate other projects, people or securities. Deploys execute autonomously from the funded swarm wallet within hard caps (3/day, 0.02 ETH/deploy, live pad bounds). If the floor already has a healthy new token from us, skip and say why.`,
+      "Design and ship token launches on the Smart Launch V2 pads with a wide mandate. Launch whenever there is something worth saying, at the freedom pace, inside the hard caps. Every launch is a public message from LAURA that brings traders, volume and fees to the launcher floor.",
+    strategy: `At most once per cycle, design ONE launch spec for the Smart Launch V2 pad (WETH lane) if and only if the launcher floor has room for it: a concept tied to StonkBrokers lore, live market narrative or a product surface (brokers, Clock In, Broker Box, the vDEX). Launches are LAURA's public voice: humans watch every new token in the community Telegram, so the name, symbol, concept and logo together must tell a story worth noticing. Always pick an artMotif and artPalette that fit the concept — the logo renders from them. Respect live pad bounds (start mcap $1k-$1M, graduation $50k-$10M, buffer >= 600s). Prefer honest degen mechanics: moderate start tax decaying fast, sells enabled, graduation 25-100x start. Name and symbol must be original, non-deceptive, and must not impersonate other projects, people or securities. Deploys execute autonomously from the funded swarm wallet within the live hard caps (daily deploy ceiling, spend per deploy, live pad bounds; the LAUNCH CAPACITY block in your prompt carries today's numbers). If the floor already has a healthy new token from us, skip and say why.`,
     strategyVersion: 1,
     versionAdoptedAt: null,
     gradeAtVersionAdoption: null,

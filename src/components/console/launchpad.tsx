@@ -81,7 +81,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -215,7 +215,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
         </Card>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {launches.map((l) => (
           <LaunchCard key={l.id} launch={l} explorer={info?.explorer ?? "https://robinhoodchain.blockscout.com"} walletReady={info?.wallet.funded ?? false} refresh={refresh} />
         ))}
@@ -228,7 +228,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
             <CardDescription>Public Stonk Launcher grid: the competition and context Mint sees each cycle.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
               {info.grid.map((t) => (
                 <div key={t.token} className="flex items-baseline justify-between gap-2 border-b border-border/40 py-1">
                   <span className="truncate">

@@ -33,7 +33,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="text-sm">Grader targets</CardTitle>
@@ -41,7 +41,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
             Where the grader reads price (DexScreener) and protocol revenue/volume (DefiLlama).
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Token address" hint="ERC-20 graded on price">
             <Input value={form.tokenAddress} onChange={(e) => set("tokenAddress", e.target.value)} className="font-mono text-xs" />
           </Field>
@@ -147,6 +147,20 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               onCheckedChange={(v) => set("autoClaimEarnings", Boolean(v))}
             />
           </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Mint freedom</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Wide launch mandate: a short cooldown between launches and a deeper launch queue, so
+                justified launches flow at the daily deploy cap. Hard caps still bound deploys per day
+                and spend per deploy. Off returns Mint to the slow pace.
+              </p>
+            </div>
+            <Switch
+              checked={form.mintFreedom}
+              onCheckedChange={(v) => set("mintFreedom", Boolean(v))}
+            />
+          </div>
           <Button className="w-full" disabled={busy} onClick={() => void save()}>
             <Save className="size-3.5" /> Save settings
           </Button>
@@ -157,7 +171,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
         <CardHeader>
           <CardTitle className="text-sm">Runtime</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+        <CardContent className="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
           <p>
             LLM provider: <span className="font-mono text-foreground">{state.runtime.llmProvider}</span>
             {state.runtime.llmProvider === "mock" && ". Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable real generation."}

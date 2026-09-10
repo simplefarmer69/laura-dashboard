@@ -17,11 +17,24 @@ const PAD_FULL_ABI = PAD_FULL_ABI_JSON as Abi;
 
 const publicClient = createPublicClient({ chain: ROBINHOOD_CHAIN, transport: http() });
 
-/** Hard operational caps. Deploys beyond these fail closed regardless of approvals. */
+/**
+ * Hard operational caps. Deploys beyond these fail closed regardless of
+ * approvals. Both are env-tunable, read once at process start (a VM restart
+ * applies a change) and clamped so a typo can never blow the rail open:
+ *   LAUNCH_MAX_DEPLOYS_PER_DAY        default 8, clamped 1..24
+ *   LAUNCH_MAX_SPEND_ETH_PER_DEPLOY   default 0.02, clamped 0.005..0.05
+ */
+function capEnv(name: string, def: number, min: number, max: number, round = false): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return def;
+  const v = round ? Math.round(raw) : raw;
+  return Math.min(max, Math.max(min, v));
+}
+
 export const LAUNCH_CAPS = {
-  maxDeploysPerDay: 3,
+  maxDeploysPerDay: capEnv("LAUNCH_MAX_DEPLOYS_PER_DAY", 8, 1, 24, true),
   /** Launch fee + gas budget per deploy */
-  maxSpendEthPerDeploy: 0.02,
+  maxSpendEthPerDeploy: capEnv("LAUNCH_MAX_SPEND_ETH_PER_DEPLOY", 0.02, 0.005, 0.05),
 } as const;
 
 export interface WalletStatus {

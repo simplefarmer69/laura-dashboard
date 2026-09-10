@@ -48,7 +48,12 @@ export async function loadState(): Promise<SwarmState> {
     const base = freshState();
     const agents = base.agents.map((def) => {
       const saved = parsed.agents?.find((a) => a.id === def.id);
-      return saved ? { ...def, ...saved, stats: { ...def.stats, ...saved.stats } } : def;
+      /* role/objective are code-owned display copy: always take the shipped
+         text so roster copy updates reach existing state. strategy stays
+         state-owned (the coach evolves it). */
+      return saved
+        ? { ...def, ...saved, role: def.role, objective: def.objective, stats: { ...def.stats, ...saved.stats } }
+        : def;
     });
     return {
       ...base,

@@ -31,7 +31,7 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
   return (
     <div className="space-y-4">
       <EvolutionLedger state={state} />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-medium">
@@ -138,7 +138,7 @@ function EvolutionLedger({ state }: { state: ConsoleState }) {
   }, [state.events, state.lessons, state.runs]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Evolution this week</CardTitle>
@@ -250,7 +250,7 @@ function ProposalCard({
           Evidence: {proposal.evidence.join(" · ")}
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2">
+      <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="space-y-1">
           <p className="sb-label">Current</p>
           <pre className="max-h-64 overflow-auto rounded-md border border-border/60 bg-muted/30 p-3 font-sans text-xs leading-relaxed whitespace-pre-wrap">
