@@ -54,6 +54,9 @@ export function RunsPanel({ state }: { state: ConsoleState }) {
             </div>
             <CardDescription>
               {r.draftsCreated} drafts · {r.proposalsCreated} proposals
+              {r.llmCalls != null
+                ? ` · ${r.llmCalls} LLM calls${(r.llmFallbacks ?? 0) > 0 ? `, ${r.llmFallbacks} fallbacks` : ""}${(r.llmRepairs ?? 0) > 0 ? `, ${r.llmRepairs} schema repairs` : ""}`
+                : ""}
               {r.error ? ` · ${r.error}` : ""}
             </CardDescription>
           </CardHeader>
