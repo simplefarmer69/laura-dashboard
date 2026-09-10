@@ -70,3 +70,16 @@ progress — the operator clicks send.
 - First words on-chain (2026-09-10): **LAURA Is Online ($LAURA)**, Safe Launch
   #18000276, token `0x04921d4c9Fc16fe86B995a54696104A128C51387`; followed by
   **Opening Bell ($BELL09)**, #18000277, token `0x3c6fFfF2E1C0A26CbD63918cC5EACFDD7E445343`.
+
+## Public viewer (laura.stonkbrokers.io)
+
+- The console has a read-only **viewer mode** deployed publicly so anyone can watch
+  LAURA work: same UI, every control disabled, every mutation API route 403, no
+  scheduler/bots/executor, no keys of any kind on that host (see `README-DEPLOY.md`).
+- Data flow: this VM publishes a sanitized snapshot (whitelisted fields — grades,
+  agents, drafts, launches, treasury summary, events, evolution, intel) to the
+  viewer's `/api/snapshot` every ~5 min and after each cycle, authenticated by
+  `SNAPSHOT_PUBLISH_SECRET`. The viewer renders the latest snapshot and shows
+  "LAURA's host may be resting" when it goes stale — honest about the VM suspending.
+- Read-only is BY DESIGN: the public watches; only the operator's local console
+  (port 4747 on the VM) can approve, launch, chat, or change settings.
