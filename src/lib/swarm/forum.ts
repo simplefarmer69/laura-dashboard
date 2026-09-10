@@ -429,6 +429,23 @@ function tidyVenue(state: SwarmState): void {
   }
 }
 
+/**
+ * The cycle intel digest carries pipeline directives ("amplify this NOW",
+ * "align messaging with and amplify operator accounts"). Those are work
+ * orders for the draft pipeline; the bar is off shift, so strip the
+ * imperatives and keep the facts before the digest joins the wire.
+ */
+function barIntel(intel: string): string {
+  return intel
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^PRIORITY CATALYST\s*[—-]\s*/, "Catalyst on the wire: ")
+        .replace(/\s*[—-]\s*(amplify|align messaging)[^"\n]*$/i, ""),
+    )
+    .join("\n");
+}
+
 let roundRunning = false;
 
 export function isForumRoundRunning(): boolean {
@@ -448,7 +465,7 @@ export async function runForumRound(): Promise<ForumRoundResult> {
     const active = state.agents.filter((a) => a.status !== "paused");
     /* One wire per round: the latest intel snapshot plus live off-protocol
        feeds, fetched once so all twelve turns share tonight's material. */
-    const intel = intelDigest(state.intelHistory?.at(-1) ?? null, state.intelHistory ?? []);
+    const intel = barIntel(intelDigest(state.intelHistory?.at(-1) ?? null, state.intelHistory ?? []));
     const offProtocol = await barWireDigest();
     const wire = `${intel}\n${offProtocol}`;
     /* Rotate speaking order each round so the same agent doesn't always frame the room. */
