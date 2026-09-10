@@ -4,7 +4,7 @@ import { loadState, newId, pushEvent, saveState } from "@/lib/store";
 import { checkMilestones } from "@/lib/mission";
 import { missionStatus } from "@/lib/mission-status";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
-import { fetchDocsExcerpt, priceTrendDigest, runsDigest } from "@/lib/swarm/context";
+import { fetchDocsExcerpt, priceTrendDigest, recentOutputDigest, reviewerFeedback, runsDigest } from "@/lib/swarm/context";
 import { collectIntel, intelDigest } from "@/lib/swarm/intel";
 import { worldContext } from "@/lib/swarm/worldfeeds";
 import { forumDigest } from "@/lib/swarm/forum";
@@ -35,6 +35,12 @@ import {
   researcherMock,
   researcherPrompt,
   researchSchema,
+  SAGE_LEDGER_FILE,
+  sageAuditTarget,
+  sageMock,
+  sagePassForRun,
+  sagePrompt,
+  sageSchema,
   scoutMock,
   scoutPrompt,
   spokenLaunchesDigest,
@@ -44,12 +50,13 @@ import {
   watcherMock,
   watcherPrompt,
   type CycleContext,
+  type SageInputs,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
 import { launchCapacityDigest } from "@/lib/launchpad/treasury";
 import { isDuplicateLaunch } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
-import { libraryDigest } from "@/lib/swarm/library";
+import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from "@/lib/swarm/library";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
@@ -1077,6 +1084,169 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}`,
         durationMs: out.ms,
       });
+    }
+
+    /* 6. Sage: the collective intelligence pass. Strided at 2x the cycle
+       cadence (at most one extra LLM call every other cycle) and exactly ONE
+       call when it runs. It runs last so the pass sees the finished cycle,
+       and its writes flow only through the allowlisted channels: the library
+       write path (operator docs denied in code), the coach's writeSkill
+       machinery, and the notebook. Never code, caps, guards or executors. */
+    const sage = agentById(state, "sage");
+    const sageStrideMs = 2 * state.settings.cycleIntervalMinutes * 60_000;
+    if (sage.status === "paused") {
+      step({ agentId: "sage", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (sage.lastRunAt !== null && Date.now() - sage.lastRunAt < sageStrideMs) {
+      step({
+        agentId: "sage",
+        label: "Collective intelligence",
+        status: "skipped",
+        summary: `Stride: last pass ${((Date.now() - sage.lastRunAt) / 60_000).toFixed(0)}m ago (< ${Math.round(sageStrideMs / 60_000)}m); shared context compounds on a slower clock than the cycle`,
+        durationMs: 0,
+      });
+    } else {
+      try {
+        const pass = sagePassForRun(sage.stats.runs);
+        const auditAgent = pass === "audit" ? sageAuditTarget(state.agents, sage.stats.runs) : null;
+        const frictions =
+          state.events
+            .filter(
+              (e) =>
+                e.kind === "novelty.rejected" ||
+                e.kind === "critic.vetoed" ||
+                e.kind === "swarm.health" ||
+                e.kind === "error",
+            )
+            .slice(-12)
+            .map((e) => `- [${e.kind}] ${e.title}: ${e.detail.slice(0, 200)}`)
+            .join("\n") || "No recent frictions recorded.";
+        const inputs: SageInputs = {
+          pass,
+          ledger: await libraryDocText(SAGE_LEDGER_FILE),
+          frictions,
+          forum: cafe,
+          audit: auditAgent
+            ? {
+                agent: auditAgent,
+                recentOutput: recentOutputDigest(state.drafts, auditAgent.id, 6),
+                feedback: reviewerFeedback(state.drafts, auditAgent.id, 6),
+              }
+            : null,
+          libraryIndex: await libraryFileIndex(),
+        };
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: sageSchema,
+              system: agentSystem(sage),
+              prompt: sagePrompt(ctx, inputs),
+              mock: () => sageMock(inputs),
+            }),
+          ),
+        );
+        const s = out.value.value;
+        const writes: string[] = [];
+        /* The pass memo lands as a research draft so the console shows the finding. */
+        const autoApprove = state.settings.autoApproveProposals;
+        const memo: Draft = {
+          id: newId("draft"),
+          cycleId: run.id,
+          agentId: "sage",
+          kind: "research",
+          channel: "Library",
+          title: s.title,
+          body: s.insight,
+          rationale: `Collective intelligence pass (${pass}): shared context every agent receives through the digest.`,
+          status: autoApprove ? "approved" : "pending",
+          createdAt: Date.now(),
+          reviewedAt: autoApprove ? Date.now() : null,
+          reviewerNote: autoApprove ? AUTO_APPROVE_NOTE : null,
+        };
+        state.drafts.push(memo);
+        sage.stats.drafts += 1;
+        if (autoApprove) sage.stats.approved += 1;
+        run.draftsCreated += 1;
+        pushEvent(state, {
+          kind: "draft.created",
+          agentId: "sage",
+          title: `Sage (${pass} pass): ${s.title}`,
+          detail: s.insight.slice(0, 200),
+          refId: memo.id,
+        });
+        if (s.libraryEdit && !out.value.usedMock) {
+          try {
+            const res = await writeLibraryDoc({ file: s.libraryEdit.file, body: s.libraryEdit.body });
+            writes.push(`library/${res.file} ${res.created ? "created" : "updated"}`);
+            pushEvent(state, {
+              kind: "library.updated",
+              agentId: "sage",
+              title: `Library doc ${res.created ? "created" : "updated"}: ${res.file}`,
+              detail: s.libraryEdit.rationale,
+              refId: memo.id,
+            });
+          } catch (err) {
+            pushEvent(state, {
+              kind: "error",
+              agentId: "sage",
+              title: `Library edit rejected: ${s.libraryEdit.file}`,
+              detail: String(err),
+              refId: run.id,
+            });
+          }
+        }
+        if (s.skillEdit && !out.value.usedMock) {
+          try {
+            const res = await writeSkill({
+              name: s.skillEdit.name,
+              description: s.skillEdit.description,
+              agents: s.skillEdit.agents,
+              body: s.skillEdit.body,
+            });
+            writes.push(`skill ${res.file} ${res.created ? "created" : "updated"}`);
+            pushEvent(state, {
+              kind: "skill.updated",
+              agentId: "sage",
+              title: `Skill ${res.created ? "created" : "updated"}: ${s.skillEdit.name}`,
+              detail: `${s.skillEdit.rationale} (file ${res.file}; applies to ${s.skillEdit.agents.join(", ")})`,
+              refId: memo.id,
+            });
+          } catch (err) {
+            pushEvent(state, {
+              kind: "error",
+              agentId: "sage",
+              title: `Skill edit rejected: ${s.skillEdit.name}`,
+              detail: String(err),
+              refId: run.id,
+            });
+          }
+        }
+        if (!out.value.usedMock) {
+          for (const rec of await recordNotes(run.id, s.notebook)) {
+            writes.push(`notebook "${rec.entry.topic}"`);
+            pushEvent(state, {
+              kind: "note.recorded",
+              agentId: "sage",
+              title: `Notebook ${rec.replaced ? "updated" : "entry"}: ${rec.entry.topic}`,
+              detail: rec.entry.text,
+              refId: rec.entry.id,
+            });
+          }
+        }
+        markRan(sage);
+        step({
+          agentId: "sage",
+          label: "Collective intelligence",
+          status: "ok",
+          summary: `${pass} pass: ${s.title}${writes.length > 0 ? ` · wrote ${writes.join(", ")}` : ""}${out.value.usedMock ? " (fallback: no writes)" : ""}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        sage.status = "error";
+        sage.lastError = String(err);
+        step({ agentId: "sage", label: "Collective intelligence", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "sage", title: "Sage failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
     }
   } catch (err) {
     run.error = String(err);

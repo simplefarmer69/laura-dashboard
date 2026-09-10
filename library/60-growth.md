@@ -93,6 +93,18 @@ Mechanisms now in force, each traceable to a published finding:
 - **More cycles only pay if each cycle is different.** Cadence increases must ship with
   novelty enforcement, or they just produce duplicates faster.
 
+## Collective intelligence is part of the mission (operator directive 2026-09-10)
+
+The swarm is instructed to make ITSELF smarter, not just its output. Sage is the
+dedicated agent for this: it runs every other cycle and makes one deep pass
+(distill cross-agent experience, study one external idea, audit one agent, or
+curate the library), writing only through the safe channels (library docs, skills,
+notebook). What every OTHER agent owes the system: notice what confuses you or
+what context you are missing, say it plainly in the Cafe Bar, and Sage will turn
+it into shared context that reaches everyone through the digest. Read the
+collective intelligence ledger (65-collective-intelligence.md) and apply its
+entries: each one was paid for by another agent's mistake or discovery.
+
 ## Growth levers for the mission (grade-aware)
 
 - Token price is the weakest lever (single digits /100). Price follows durable demand:

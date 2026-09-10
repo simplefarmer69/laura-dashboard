@@ -86,9 +86,11 @@ function docsSection(docs: LibraryDoc[], budget: number): string {
  * least its head. Default raised 14k → 22k when per-doc budgeting landed, so
  * the operator and project docs keep the same depth they had while the other
  * docs gain their heads; raised 22k → 23k when 25-stonkbrokers-official.md
- * joined, covering its 1k floor so no existing doc lost depth.
+ * joined, covering its 1k floor so no existing doc lost depth; raised
+ * 23k → 24k when 65-collective-intelligence.md (Sage's ledger) joined, for
+ * the same reason.
  */
-export async function libraryDigest(maxChars = 23_000): Promise<string> {
+export async function libraryDigest(maxChars = 24_000): Promise<string> {
   const [docs, notebook, skills] = await Promise.all([libraryDocs(), notebookDigest(), skillsIndex()]);
   /* Notebook: keep the TAIL (newest entries last is the file's order). */
   const notebookBudget = 4_500;
@@ -104,4 +106,73 @@ export async function libraryDigest(maxChars = 23_000): Promise<string> {
   const docsBudget = Math.max(3_000, maxChars - notebookSec.length - skillsSec.length - SEP.length * 2);
   const docsSec = docsSection(docs, docsBudget);
   return [docsSec, skillsSec, notebookSec].join(SEP);
+}
+
+/* --------------------------- Self-editing (sage) ---------------------------- */
+
+/**
+ * Docs Sage may never write: the operator's own directives and the project
+ * ground truth. Protection is code-level, mirroring how writeSkill constrains
+ * the coach; the deny decision never depends on the model behaving.
+ */
+const PROTECTED_DOCS = new Set(["10-operator.md", "20-project.md"]);
+/** Hard cap on library docs so self-editing can grow the shelf but never flood
+ * the per-doc digest budgets (10 operator-authored docs + Sage's ledger ship
+ * in the repo; 14 leaves modest self-edit headroom). */
+const MAX_LIBRARY_FILES = 14;
+/** Numbered kebab-case markdown names only; no separators means no traversal. */
+const DOC_FILE_RE = /^[1-9][0-9]-[a-z0-9][a-z0-9-]{1,58}\.md$/;
+
+export interface LibraryDocEdit {
+  file: string;
+  body: string;
+}
+
+/**
+ * Sage's code-free lever on shared context: create or replace one library doc.
+ * Constrained by construction, same posture as the coach's writeSkill: the
+ * filename must match the numbered-doc pattern (no traversal possible), writes
+ * never leave /library, the operator's directive docs are denied outright, and
+ * the doc count is capped. Code, caps, guards and everything outside the
+ * library stay out of reach.
+ */
+export async function writeLibraryDoc(edit: LibraryDocEdit): Promise<{ file: string; created: boolean }> {
+  const file = edit.file.trim().toLowerCase();
+  if (!DOC_FILE_RE.test(file)) {
+    throw new Error(`library doc name "${edit.file}" must be a numbered kebab-case .md name like 65-collective-intelligence.md`);
+  }
+  if (PROTECTED_DOCS.has(file)) {
+    throw new Error(`"${file}" carries operator directives and is protected from agent edits`);
+  }
+  const target = path.resolve(LIBRARY_DIR, file);
+  if (path.dirname(target) !== path.resolve(LIBRARY_DIR)) throw new Error("library doc path escaped the library dir");
+
+  await fs.mkdir(LIBRARY_DIR, { recursive: true });
+  const existing = (await fs.readdir(LIBRARY_DIR)).filter((f) => f.endsWith(".md"));
+  const created = !existing.includes(file);
+  if (created && existing.length >= MAX_LIBRARY_FILES) {
+    throw new Error(
+      `library doc cap reached (${MAX_LIBRARY_FILES} files): update an existing doc instead of creating "${file}"`,
+    );
+  }
+  const body = edit.body.trim();
+  if (body.length < 80) throw new Error("library doc body too short to be useful shared context");
+  await fs.writeFile(target, `${body}\n`, "utf8");
+  cache = null; // next libraryDocs() re-reads from disk
+  return { file, created };
+}
+
+/** Full current text of one library doc, empty string when it does not exist yet. */
+export async function libraryDocText(file: string): Promise<string> {
+  const doc = (await libraryDocs()).find((d) => d.file === file);
+  return doc?.text ?? "";
+}
+
+/** One line per doc with sizes and protection state, for Sage's curate pass. */
+export async function libraryFileIndex(): Promise<string> {
+  const docs = await libraryDocs();
+  if (docs.length === 0) return "Library empty.";
+  return docs
+    .map((d) => `- ${d.file}: ${d.text.length.toLocaleString()} chars${PROTECTED_DOCS.has(d.file) ? " [PROTECTED: operator-owned, no agent edits]" : ""}`)
+    .join("\n");
 }

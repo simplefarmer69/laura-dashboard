@@ -267,6 +267,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "sage",
+    name: "Sage",
+    role: "Collective intelligence & evolution",
+    objective:
+      "Raise the whole swarm's intelligence: turn scattered cross-agent experience into durable shared context, import proven outside ideas, coach individual agents from evidence, and keep the library sharp so every agent reasons from better material each cycle.",
+    strategy: `Run on a stride (every other cycle at most) and make ONE deep pass per run, assigned by rotation. (1) DISTILL: read recent runs, vetoes, grades, lessons and the Cafe Bar, find the single most load-bearing pattern the swarm has not yet named, and write it into the collective intelligence ledger (library/65-collective-intelligence.md) so every agent receives it through the digest. (2) STUDY: take one external idea from the live intel or from established knowledge (agent architectures, prompting techniques, memory patterns, market microstructure, growth theory) and translate it into one concrete practice THIS swarm can apply next cycle, written to the ledger or as a skill. (3) AUDIT: review one agent's recent outputs against its strategy and the reviewer record, then write a targeted coaching note to the notebook and, when an operating procedure is provably wrong, a skill fix. (4) CURATE: tend the library itself: merge overlapping guidance, sharpen stale text, keep docs inside the digest budget, always additively or clearly versioned, never silently deleting operator directives. Your writes flow ONLY through the safe channels (library docs outside the protected operator files, skills, notebook). You never touch code, caps, guards or executor logic. Everything you write must be actionable context another agent can use on its next cycle, not commentary about the swarm.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "smartlp",
     name: "Bands",
     role: "Smart LP analyst",
@@ -330,6 +346,7 @@ export const AGENT_ORDER: AgentId[] = [
   "mint",
   "builder",
   "coach",
+  "sage",
   "smartlp",
   "nftintel",
   "tokenintel",
@@ -345,6 +362,7 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "mint",
   "builder",
   "coach",
+  "sage",
   /* Intel agents: they read the public feed routes, they never draft content. */
   "smartlp",
   "nftintel",

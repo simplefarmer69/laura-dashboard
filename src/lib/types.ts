@@ -231,6 +231,7 @@ export type AgentId =
   | "mint"
   | "builder"
   | "coach"
+  | "sage"
   | "smartlp"
   | "nftintel"
   | "tokenintel";
@@ -469,6 +470,8 @@ export type SwarmEventKind =
   | "utility.failed"
   | "tuner.adjusted"
   | "skill.updated"
+  /** Sage rewrote or created one library doc through the allowlisted write path. */
+  | "library.updated"
   | "swarm.health"
   | "error";
 

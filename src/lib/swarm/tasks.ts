@@ -45,6 +45,41 @@ export const draftSchema = z.object({
 
 export const draftsSchema = z.object({ drafts: z.array(draftSchema).min(1).max(3) });
 
+/**
+ * Shared shape for skill self-edits (coach and sage): create or replace ONE
+ * skill file in /library/skills. writeSkill constrains the write in code
+ * (slugged filename, dir-escape check, file-count cap); this schema only
+ * shapes the request.
+ */
+const skillEditSchema = z.object({
+  name: z.string().min(3).max(60),
+  description: z.string().min(10).max(200),
+  agents: z
+    .array(
+      z.enum([
+        "all",
+        "scout",
+        "watcher",
+        "researcher",
+        "narrative",
+        "steward",
+        "bd",
+        "analyst",
+        "growth",
+        "vault",
+        "critic",
+        "mint",
+        "builder",
+        "coach",
+        "sage",
+      ]),
+    )
+    .min(1)
+    .max(15),
+  body: z.string().min(50).max(5000),
+  rationale: z.string().min(10).max(500),
+});
+
 export const proposalsSchema = z.object({
   lessons: z
     .array(
@@ -66,7 +101,7 @@ export const proposalsSchema = z.object({
   proposals: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder"]),
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage"]),
         proposedStrategy: z.string().min(80).max(4000),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
@@ -78,34 +113,7 @@ export const proposalsSchema = z.object({
    * coach's lever on operating procedures (never code, never caps). Writing an
    * existing skill name replaces that file wholesale.
    */
-  skillEdit: z
-    .object({
-      name: z.string().min(3).max(60),
-      description: z.string().min(10).max(200),
-      agents: z
-        .array(
-          z.enum([
-            "all",
-            "scout",
-            "watcher",
-            "researcher",
-            "narrative",
-            "steward",
-            "bd",
-            "analyst",
-            "growth",
-            "vault",
-            "critic",
-            "mint",
-            "builder",
-            "coach",
-          ]),
-        )
-        .min(1)
-        .max(13),
-      body: z.string().min(50).max(5000),
-      rationale: z.string().min(10).max(500),
-    })
+  skillEdit: skillEditSchema
     .nullable()
     /* Optional too: a coach response that omits the key entirely must not
        lose the whole turn to schema validation (observed 2026-09-10). */
@@ -731,6 +739,140 @@ export function coachPrompt(ctx: CycleContext): string {
     })
     .join("\n\n");
   return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
+}
+
+/* ---------------------------------- Sage ----------------------------------- */
+
+/**
+ * Sage's pass rotation: one deep pass per strided run, chosen deterministically
+ * from the run count so the four passes interleave without state or an extra
+ * LLM call. distill and study grow shared context, audit sharpens one agent,
+ * curate keeps the library itself healthy.
+ */
+export const SAGE_PASSES = ["distill", "study", "audit", "curate"] as const;
+export type SagePass = (typeof SAGE_PASSES)[number];
+
+export function sagePassForRun(runs: number): SagePass {
+  return SAGE_PASSES[runs % SAGE_PASSES.length];
+}
+
+/** Deterministic audit-target rotation: every non-sage agent gets its turn under the lens. */
+export function sageAuditTarget(agents: Agent[], runs: number): Agent | null {
+  const pool = agents.filter((a) => a.id !== "sage");
+  if (pool.length === 0) return null;
+  return pool[Math.floor(runs / SAGE_PASSES.length) % pool.length];
+}
+
+/** The ledger doc Sage maintains; every agent receives it through the library digest. */
+export const SAGE_LEDGER_FILE = "65-collective-intelligence.md";
+
+/* Generous caps (library learnings: tight caps cause NoObjectGenerated failures). */
+export const sageSchema = z.object({
+  /** Headline for the pass memo, written as a real finding, not a template label. */
+  title: z.string().min(8).max(160),
+  /** The pass's core output, written FOR the other agents: what to do differently and why. */
+  insight: z.string().min(100).max(8000),
+  /**
+   * Optional write to ONE library doc (full replacement body). The write path
+   * (writeLibraryDoc) enforces the allowlist in code: numbered kebab-case .md
+   * inside /library only, operator docs denied, doc count capped.
+   */
+  libraryEdit: z
+    .object({
+      file: z.string().regex(/^[1-9][0-9]-[a-z0-9][a-z0-9-]{1,58}\.md$/),
+      body: z.string().min(80).max(9000),
+      rationale: z.string().min(10).max(600),
+    })
+    .nullable(),
+  /** Optional skill create/replace, same constrained channel the coach uses. */
+  skillEdit: skillEditSchema.nullable(),
+  /** Durable reference knowledge; an existing topic is replaced, not duplicated. */
+  notebook: z
+    .array(
+      z.object({
+        topic: z.string().min(3).max(120),
+        text: z.string().min(20).max(1500),
+      }),
+    )
+    .max(2),
+});
+
+export type SageOut = z.infer<typeof sageSchema>;
+
+export interface SageInputs {
+  pass: SagePass;
+  /** Full current text of the collective intelligence ledger doc. */
+  ledger: string;
+  /** Recent friction events: novelty rejections, critic vetoes, step errors. */
+  frictions: string;
+  /** The Cafe Bar digest: what agents are confused by or debating right now. */
+  forum: string;
+  /** Audit pass only: the agent under the lens and its record. */
+  audit: { agent: Agent; recentOutput: string; feedback: string } | null;
+  /** Curate pass only: every library doc with its size and protection state. */
+  libraryIndex: string;
+}
+
+function sagePassBlock(inputs: SageInputs): string {
+  switch (inputs.pass) {
+    case "distill":
+      return [
+        `YOUR PASS THIS RUN: DISTILL. Read the operational record above (runs, frictions, grades, lessons, the bar) and find the ONE most load-bearing pattern the swarm keeps living but has not yet named: a class of veto that keeps recurring, a question agents keep asking each other in the bar, a mismatch between what gets graded and what gets produced. Compress it into a durable, actionable entry and write it into the ledger via libraryEdit (file ${SAGE_LEDGER_FILE}): return the FULL updated doc body that keeps every existing entry and adds yours at the top of the insight ledger section, dated. If the doc would exceed roughly 6,000 chars, compress the OLDEST entries into the condensed section rather than deleting them. One sharp insight beats three vague ones.`,
+      ].join("\n\n");
+    case "study":
+      return [
+        `YOUR PASS THIS RUN: STUDY. Pick ONE external idea and translate it into a concrete practice for THIS swarm. Sources: something real from the live intel or world feeds, or established knowledge you already hold about agent architectures, prompting techniques, memory patterns, market microstructure or growth theory. The test is transfer: name the idea, name its source or lineage in one line, then specify exactly how an agent here applies it next cycle (which agent, which step, what changes in its output). Write the practice into the ledger via libraryEdit (file ${SAGE_LEDGER_FILE}, full updated body, keep existing entries, newest at the top, compress oldest past roughly 6,000 chars), or, when the idea is a step-by-step operating procedure for specific agents, ship it as a skillEdit instead. Never study an idea the ledger already contains.`,
+      ].join("\n\n");
+    case "audit":
+      return inputs.audit
+        ? [
+            `YOUR PASS THIS RUN: AUDIT of ${inputs.audit.agent.name} (${inputs.audit.agent.id}).`,
+            `THEIR CURRENT STRATEGY (v${inputs.audit.agent.strategyVersion})\n${inputs.audit.agent.strategy}`,
+            `THEIR RECENT OUTPUT\n${inputs.audit.recentOutput}`,
+            `REVIEWER DECISIONS ON THEIR WORK\n${inputs.audit.feedback}`,
+            `Judge the outputs against the strategy and the mission grade: where does this agent leave value on the table, repeat itself, or misread its inputs? Write ONE targeted coaching note as a notebook entry with topic "Coaching: ${inputs.audit.agent.id}" (replacing any earlier note for the same agent) stating the specific behavior to change and the evidence. If you found a wrong or missing OPERATING PROCEDURE (not a strategy question, that is the coach's lane), fix it with a skillEdit scoped to that agent. Leave libraryEdit null unless the finding generalizes to the whole swarm.`,
+          ].join("\n\n")
+        : `YOUR PASS THIS RUN: AUDIT, but no target agent is available. Record what you can from the operational record as a notebook entry and return libraryEdit and skillEdit as null.`;
+    case "curate":
+      return [
+        `YOUR PASS THIS RUN: CURATE the library itself.`,
+        `LIBRARY FILE INDEX (sizes matter: every doc shares one digest budget, and oversized docs get trimmed in every agent's prompt)\n${inputs.libraryIndex}`,
+        `Pick the ONE doc whose current text most misleads or bloats the digest (overlapping guidance, stale numbers, buried operating rules) and rewrite it via libraryEdit with the full replacement body. HARD RULES: docs marked PROTECTED are operator-owned and the write path rejects them, never target those; keep every verified fact and every operator directive in whatever you rewrite; make changes additive or clearly versioned (add a line "Revised by Sage on <date>: <what changed>" at the top of any doc you touch); never delete another agent's recorded learnings, condense them instead. If the shelf is genuinely healthy, return libraryEdit null and say why in the insight.`,
+      ].join("\n\n");
+    default: {
+      const _exhaustive: never = inputs.pass;
+      return _exhaustive;
+    }
+  }
+}
+
+export function sagePrompt(ctx: CycleContext, inputs: SageInputs): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `GRADES (last 7)\n${gradeDigest(ctx.grades)}`,
+    `OPERATIONAL RECORD (recent cycles: durations, fallbacks, errors)\n${ctx.opsHealth}`,
+    `RECENT FRICTIONS (vetoes, novelty rejections, failures: raw material for insight)\n${inputs.frictions}`,
+    `THE CAFE BAR (what agents are actually confused by or debating; doctrine tells them to surface confusion here for YOU)\n${inputs.forum}`,
+    `SWARM MEMORY (the coach's lessons; do not duplicate these)\n${lessonsDigest(ctx.lessons)}`,
+    `LIVE INTERNET INTEL\n${ctx.intel}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.sage ?? "None."}`,
+    `LIBRARY (what every agent already receives; your ledger ${SAGE_LEDGER_FILE} is part of it)\n${ctx.library}`,
+    `CURRENT LEDGER TEXT (${SAGE_LEDGER_FILE}, verbatim; libraryEdit bodies for this file must keep its structure and existing entries)\n${inputs.ledger || "The ledger does not exist yet; create it."}`,
+    sagePassBlock(inputs),
+    `WRITE CHANNELS, HARD RULES: your only levers are libraryEdit (numbered .md docs in /library; the operator docs 10-operator.md and 20-project.md are denied in code), skillEdit (/library/skills, 18 file cap, full replacement), and notebook entries. You never touch code, caps, guards, executor logic or safety machinery, and you never propose doing so. Whatever you write becomes prompt context for every agent next cycle, so write instructions an agent can act on, with evidence, not observations. STYLE: plain sentences with commas, colons and periods; never an em dash, never a dash-spliced clause; "onchain" not "on-chain" in prose. The title is a real headline stating the finding, never a template label.`,
+  ].join("\n\n");
+}
+
+export function sageMock(inputs: SageInputs): SageOut {
+  return {
+    title: `Collective intelligence pass held: no model available for the ${inputs.pass} pass`,
+    insight:
+      `Deterministic fallback (no LLM key this run). The ${inputs.pass} pass needs live judgment, and writing generic filler into shared context would make every agent slightly worse, so this run records nothing. The pass rotation stands: the next sage run retries with the same inputs plus fresher data. Frictions and bar threads remain queued as raw material.`,
+    libraryEdit: null,
+    skillEdit: null,
+    notebook: [],
+  };
 }
 
 export function coachMock(ctx: CycleContext): ProposalsOut {
