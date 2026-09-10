@@ -65,6 +65,9 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
                     <span className="shrink-0 font-mono text-muted-foreground">
                       earned {e.earnedQuote.toFixed(6)} · claimable {e.claimableQuote.toFixed(6)} · {e.tradeCount} trades
                       {e.claimedQuote > 0 ? ` · claimed ${e.claimedQuote.toFixed(6)}` : ""}
+                      {e.bonded
+                        ? ` · LP fees ${e.lpStaked ? "staked (to voters)" : `pending ${(e.lpPendingQuote ?? 0).toFixed(6)}`}${(e.lpCollectedQuote ?? 0) > 0 ? `, collected ${(e.lpCollectedQuote ?? 0).toFixed(6)}` : ""}`
+                        : ""}
                     </span>
                   </div>
                 ))}

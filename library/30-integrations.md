@@ -62,19 +62,40 @@ and reconciled to the wei on-chain:
   (event `CreatorQuoteFlushed`, reverts `NothingOwed()` when zero). For a plain EOA
   creator the push never fails, so this ledger normally stays 0 (it is 0 for all 277
   WETH-lane and 79 STONK-lane launches today).
-- **Graduation proceeds are NOT creator income**: at `graduate` → `bond` the raise
-  (`realQuote`) plus the escrowed LP-fee reserve mint into a permanently locked
-  CL/Uniswap-v3 pool. Exception: a zero-raise bond returns the unsold supply to the
-  creator. Degen (`icoBoost`) launches stream the LP share to the ICO Kickstarter
-  per trade instead of escrowing.
+- **Graduation PRINCIPAL is not creator income, but the LP fee stream IS**
+  (verified 2026-09-10 against the Blockscout-verified `SafeLaunchBondLibV2` and
+  `StonkUpLockerCL` sources): at `graduate` → `bond` the raise (`realQuote`) plus
+  the escrowed LP-fee reserve mint into a permanently locked CL/Uniswap-v3 pool,
+  BUT `_lockPosition` mints the lock NFT, which carries the fee-claim right, and
+  transfers it to the CREATOR (`lockNft.transferFrom(pad, creator, lockTokenId)`,
+  FeeMode `CollectTwentyPercent`). The creator then calls
+  `StonkUpLockerCL.collectFees(lockId, 0, 0)` (locker `0xc1AfA59e2aBC1C868C51a1F799a7578EaCfEa076`,
+  shared by the weth and stonk pads; v3-venue locker `0xFc96CF67eCC55bE4AdABc3AecBe6Ad6349f11223`)
+  to collect the pool's accrued swap fees: 80% to the creator, 20% protocol cut.
+  Lock ids are readable from `pad.poolsOf(id)`. While a lock is gauge-staked its
+  swap fees go to the pool's voters (`collectFees` reverts `PositionStaked`);
+  `pendingEmissions`/`claimEmissions` cover the staked $UP path. Exception: a
+  zero-raise bond returns the unsold supply to the creator. Degen (`icoBoost`)
+  launches stream the LP share to the ICO Kickstarter per trade instead of escrowing.
 - Earnings tracking in code: `src/lib/launchpad/earnings.ts` — sums `taxPaid` from
-  `SafeBuy`/`SafeSell` logs × `creatorFeeBpsSnap`, reads `creatorQuoteOwed`, snapshots
-  wallet ETH/WETH/STONK into `state.treasury` every ~10 min from the scheduler tick.
-  Autonomous claiming is gated behind `settings.autoClaimEarnings` (default false).
-- Implication: **creator income scales with trade volume × tax bps**. Tax decays per
-  minute from `startTaxBps` to `postTaxBps`, so early volume under high tax is where a
-  launch earns; a graduated launch stops paying the creator (post-bond LP fees go to
-  the locked-pool machinery, not the creator).
+  `SafeBuy`/`SafeSell` logs × `creatorFeeBpsSnap`, reads `creatorQuoteOwed`, detects
+  bonded-launch LP fees by simulating `collectFees` read-only, and snapshots wallet
+  ETH/WETH/STONK into `state.treasury` every ~10 min from the scheduler tick.
+  Autonomous claiming (ledger flush + LP collect) runs by default
+  (`settings.autoClaimEarnings`, default true) above a configurable dust threshold:
+  `EARNINGS_POLICY.claimMinEthEquiv`, default 0.0005 ETH-equivalent, env override
+  `FEE_CLAIM_MIN_ETH`; non-WETH lanes convert through `SafeLaunchLensV2`
+  `quoteUsdView`/`ethUsdView`. LP collections emit the `fees.claimed` event.
+- Implication: **creator income scales with trade volume × tax bps, and does not
+  end at graduation**. Tax decays per minute from `startTaxBps` to `postTaxBps`,
+  so early volume under high tax is where the curve earns; after bonding the
+  locked pool keeps paying the creator 80% of swap fees for as long as it trades.
+- Live reads 2026-09-10 (launches #276 LAURA / #277 BELL09 / #278 SPEAKS, weth pad):
+  `creatorFeeBps` 1650 / `protocolFeeBps` 1650 / `lpFeeBps` 5000 on BOTH the weth
+  and stonk pads; `creatorQuoteOwed` = 0 wei on all three (push-pay never failed;
+  pad-wide `totalOwed` is 0); none graduated/bonded yet, so `poolsOf` is empty and
+  no LP fee stream exists yet — lifetime curve income so far is the pushed
+  0.000100 WETH sitting in the wallet.
 
 ## Treasury buys — $STONKBROKER swap venue (verified 2026-09-10)
 

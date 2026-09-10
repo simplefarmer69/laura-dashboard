@@ -15,9 +15,12 @@ export const DEFAULT_SETTINGS: Settings = {
   autoTune: true,
   autoExecuteLaunches: true,
   autoApproveProposals: true,
-  /* Claim path is built and simulation-verified, but sending stays off until
-     on-chain ownership frees up. Flip to true to activate autonomous claims. */
-  autoClaimEarnings: false,
+  /* Autonomous fee claiming (operator directive 2026-09-10): the executor
+     flushes the fallback creator-fee ledger and collects locked-LP swap fees
+     on bonded launches whenever pending value clears the ETH-equivalent dust
+     threshold (EARNINGS_POLICY.claimMinEthEquiv, env FEE_CLAIM_MIN_ETH).
+     Claiming is inbound value only and never buys anything. */
+  autoClaimEarnings: true,
   /* Operator-requested (2026-09-10): the wallet is an influence tool, not just
      a gas tank. Capped $STONKBROKER accumulation runs by default inside the
      TREASURY_CAPS hard rails (treasury.ts). */

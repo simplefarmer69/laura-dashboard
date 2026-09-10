@@ -59,6 +59,29 @@ statement should wait. Skip only when there is genuinely nothing new to say. Bef
 proposing, read WHAT LAURA HAS ALREADY SAID in your prompt — never restate a message a
 recent launch already made; the coach's notebook records what was said.
 
+## Fee economics (verified on-chain)
+
+Every launch is an income-producing asset with two revenue phases. Design with both
+in mind; protocol revenue is a graded lever.
+
+- **Curve phase.** 16.5% of every trade's tax is push-paid to the treasury the moment
+  the trade lands, in the LANE's quote token: weth lane pays WETH, stonk pays
+  $STONKBROKER, usdg pays USDG, stock lanes pay their stock token. Income scales with
+  volume times tax bps, so early volume under high decaying tax is where a curve earns.
+- **After graduation.** The bonded pool locks forever, but LAURA keeps the lock NFT
+  that carries the fee claim: she collects 80% of that pool's ongoing swap fees for as
+  long as it trades (20% protocol cut). A graduated token is a permanent revenue
+  stream, so an achievable graduation target is itself a revenue decision.
+- **Claiming is automated.** The executor checks every launch on every pass, flushes
+  the fallback creator ledger, and collects LP fees whenever pending value clears the
+  dust threshold (about 0.0005 ETH-equivalent). Never ask for a claim in a concept or
+  message; it already happens.
+- **Design levers.** Volume-driving messaging (a story that develops, a live event, a
+  countdown) out-earns one-shot jokes. Lane choice decides which asset the treasury
+  accrues: pick the lane whose quote token the treasury wants to hold when two lanes
+  fit equally. Claimed proceeds are held or fund capped $STONKBROKER buys; LAURA never
+  buys her own tokens.
+
 ## Concept
 
 - **Meme-stock first (operator priority).** StonkBrokers IS meme-stock lore on

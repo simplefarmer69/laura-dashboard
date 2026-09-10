@@ -152,10 +152,16 @@ export async function collectOnchainDigest(
     const launchLines = t.launches
       .map(
         (e) =>
-          `$${e.symbol}: earned ${e.earnedQuote.toFixed(6)} ${e.lane === "weth" ? "WETH" : "STONK"} over ${e.tradeCount} trades${e.claimableQuote > 0 ? `, ${e.claimableQuote.toFixed(6)} claimable via flush` : ""}${e.graduated ? ", graduated (earning stopped)" : ""}`,
+          `$${e.symbol}: earned ${e.earnedQuote.toFixed(6)} ${QUOTE_TOKENS[e.lane].symbol} over ${e.tradeCount} trades${e.claimableQuote > 0 ? `, ${e.claimableQuote.toFixed(6)} claimable via flush` : ""}${e.bonded ? `, bonded: locked-LP fees continue via the lock NFT (pending ${(e.lpPendingQuote ?? 0).toFixed(6)}, collected ${(e.lpCollectedQuote ?? 0).toFixed(6)})` : e.graduated ? ", graduated (bond pending)" : ""}`,
       )
       .join(" · ");
-    lines.push(`CREATOR FEES (lifetime ${t.totalEarnedQuote.toFixed(6)}): ${launchLines || "no deployed launches tracked"}.`);
+    const lpRevenue =
+      (t.totalLpCollectedQuote ?? 0) > 0 || (t.totalLpPendingQuote ?? 0) > 0
+        ? ` LP fees collected ${(t.totalLpCollectedQuote ?? 0).toFixed(6)}, pending ${(t.totalLpPendingQuote ?? 0).toFixed(6)}.`
+        : "";
+    lines.push(
+      `CREATOR FEES (lifetime ${t.totalEarnedQuote.toFixed(6)}, push-paid per trade in each lane's quote token; the executor auto-claims anything above the dust threshold): ${launchLines || "no deployed launches tracked"}.${lpRevenue}`,
+    );
   } else {
     lines.push("TREASURY: no snapshot yet (earnings tick has not run).");
   }

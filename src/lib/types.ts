@@ -365,6 +365,8 @@ export type SwarmEventKind =
   | "launch.failed"
   | "earnings.accrued"
   | "earnings.claimed"
+  /** Locked-LP swap fees collected from a bonded launch's pool via the lock NFT (StonkUpLockerCL.collectFees). */
+  | "fees.claimed"
   /** Watcher's per-cycle on-chain state read (treasury, pools, LP, earnings). */
   | "onchain.observed"
   /** A Robinhood founder engaged an operator account or a stock-token theme — priority catalyst. */
@@ -507,6 +509,26 @@ export interface LaunchEarnings {
   /** Log-scan cursor: block the launch deployed at and last block scanned */
   deployBlock: number;
   scannedToBlock: number;
+  /**
+   * Locked-LP fee stream (exists only once the launch is bonded): the pad
+   * permanently locks the graduation pool but mints the lock NFT, which
+   * carries the fee-claim right, to the CREATOR. LAURA holds it and collects
+   * 80% of the pool's swap fees via StonkUpLockerCL.collectFees (20% protocol
+   * cut, FeeMode CollectTwentyPercent). Absent on entries written before this
+   * capability existed.
+   */
+  lockIds?: string[];
+  /** True when the lock is staked in a gauge (swap fees then go to voters; collect is skipped). */
+  lpStaked?: boolean;
+  /** Uncollected creator share of pool swap fees, quote-token side (simulated collectFees read). */
+  lpPendingQuote?: number;
+  /** Uncollected creator share, launch-token side. */
+  lpPendingToken?: number;
+  /** Cumulative collected via our own collectFees sends, quote side. */
+  lpCollectedQuote?: number;
+  /** Cumulative collected, launch-token side. */
+  lpCollectedToken?: number;
+  lpLastCollectAt?: number | null;
 }
 
 /** One executed mission-token accumulation buy (treasury ETH → $STONKBROKER). */
@@ -644,6 +666,12 @@ export interface TreasurySnapshot {
   stonkBalance: number;
   totalEarnedQuote: number;
   totalClaimableQuote: number;
+  /** Cumulative creator fees flushed by our own claims (protocol revenue actually banked). */
+  totalClaimedQuote?: number;
+  /** Uncollected locked-LP swap fees across bonded launches, quote side (creator's 80% share). */
+  totalLpPendingQuote?: number;
+  /** Cumulative locked-LP swap fees collected, quote side. */
+  totalLpCollectedQuote?: number;
   launches: LaunchEarnings[];
 }
 
