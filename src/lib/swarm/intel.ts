@@ -31,14 +31,13 @@ export const X_LEADERS = [
  * Operator-owned accounts LAURA follows for live direction and amplification
  * targets. ids resolve lazily via /2/users/by/username so the operator can
  * fix a handle here without shipping anything else; unresolvable handles are
- * skipped with a warning until they exist. ClutchMarkets resolved 2026-09-10.
- * "ocsimplefarmer" is the handle the operator gave for their personal account
- * — X currently returns Not Found for it (typo or rename); it lights up
- * automatically once the exact handle is corrected.
+ * skipped with a warning until they exist. Both resolved 2026-09-10:
+ * ClutchMarkets (StonkBrokers official) and OxSimpleFarmer (the StonkBrokers
+ * founder's personal account, confirmed by the operator).
  */
 export const X_TRACKED: { username: string; id: string | null }[] = [
   { username: "ClutchMarkets", id: "1803187737874366464" },
-  { username: "ocsimplefarmer", id: null },
+  { username: "OxSimpleFarmer", id: "1394725411397976072" },
 ];
 
 const X_SEARCH_QUERY = "$STONKBROKER OR StonkBrokers OR stonkbrokers.cash";
@@ -49,7 +48,7 @@ const X_SEARCH_QUERY = "$STONKBROKER OR StonkBrokers OR stonkbrokers.cash";
  * $STONKBROKER rides. Recent-search covers the last 7 days.
  */
 const X_CATALYST_QUERY =
-  '(from:vladtenev OR from:JohannKerbrat) (@ClutchMarkets OR @ocsimplefarmer OR stonkbroker OR "stock token" OR "stock tokens" OR "tokenized stocks" OR "tokenized equities" OR "meme stock")';
+  '(from:vladtenev OR from:JohannKerbrat) (@ClutchMarkets OR @OxSimpleFarmer OR stonkbroker OR "stock token" OR "stock tokens" OR "tokenized stocks" OR "tokenized equities" OR "meme stock")';
 
 interface Cache<T> {
   at: number;
