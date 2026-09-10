@@ -17,6 +17,7 @@ export async function GET() {
   return NextResponse.json({
     ...state,
     metricsHistory: state.metricsHistory.slice(-600),
+    intelHistory: (state.intelHistory ?? []).slice(-200),
     mission: missionStatus(state, state.metricsHistory.at(-1) ?? null),
     /* Evolution ledger: the self-authored knowledge that shows development over time. */
     evolution: {

@@ -1,20 +1,29 @@
 "use client";
 
 import { useMemo } from "react";
-import { Brain, Crown, TrendingUp } from "lucide-react";
+import { Brain, Crown, Megaphone, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, type ChartPoint } from "@/components/console/chart";
 import { ago, usd } from "@/components/console/format";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
 import { MILESTONES } from "@/lib/mission-status";
-import type { MetricsSnapshot } from "@/lib/types";
+import type { IntelSnapshot, MetricsSnapshot } from "@/lib/types";
 
 /** Last snapshot per UTC day so charts stay readable as history grows. */
 function dailySeries(history: MetricsSnapshot[], pick: (m: MetricsSnapshot) => number): ChartPoint[] {
   const byDay = new Map<string, MetricsSnapshot>();
   for (const m of history) byDay.set(new Date(m.ts).toISOString().slice(0, 10), m);
   return [...byDay.entries()].map(([day, m]) => ({ label: day.slice(5), value: pick(m) }));
+}
+
+/** Last intel snapshot per UTC day, values picked with nulls dropped. */
+function dailyIntelSeries(history: IntelSnapshot[], pick: (s: IntelSnapshot) => number | null): ChartPoint[] {
+  const byDay = new Map<string, IntelSnapshot>();
+  for (const s of history) byDay.set(new Date(s.ts).toISOString().slice(0, 10), s);
+  return [...byDay.entries()]
+    .map(([day, s]) => ({ label: day.slice(5), value: pick(s) }))
+    .filter((p): p is ChartPoint => p.value !== null);
 }
 
 export function Growth({ state }: { state: ConsoleState }) {
@@ -30,6 +39,20 @@ export function Growth({ state }: { state: ConsoleState }) {
   const gradeSeries: ChartPoint[] = state.grades.map((g) => ({ label: g.date.slice(5), value: g.score }));
   const mission = state.mission;
   const lessons = [...state.lessons].sort((a, b) => b.ts - a.ts);
+  const intelHistory = useMemo(() => state.intelHistory ?? [], [state.intelHistory]);
+  const intel = intelHistory.at(-1) ?? null;
+  const mentionSeries = useMemo(
+    () => dailyIntelSeries(intelHistory, (s) => s.x?.mentionCount24h ?? null),
+    [intelHistory],
+  );
+  const engagementSeries = useMemo(
+    () => dailyIntelSeries(intelHistory, (s) => s.x?.engagement24h ?? null),
+    [intelHistory],
+  );
+  const holderSeries = useMemo(
+    () => dailyIntelSeries(intelHistory, (s) => s.holderCount),
+    [intelHistory],
+  );
 
   const scoreboard = state.agents
     .filter((a) => a.id !== "coach")
@@ -106,6 +129,87 @@ export function Growth({ state }: { state: ConsoleState }) {
         <ChartCard title="Protocol volume · 24h (daily)" points={volumeSeries} format={(v) => usd(v)} color="#8e8e8a" />
       </div>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Megaphone className="size-4 text-primary" /> Influence · live internet reads
+            </CardTitle>
+            {intel && (
+              <Badge variant="outline" className="ml-auto font-mono text-[10px]">
+                {intel.sources.length > 0 ? `sources: ${intel.sources.join(", ")}` : "no sources this cycle"} · {ago(intel.ts)}
+              </Badge>
+            )}
+          </div>
+          <CardDescription>
+            X mentions and engagement on $STONKBROKER (read-only bearer), Robinhood leadership activity, and
+            holder counts when Blockscout answers. Measured every cycle — influence is a number, not a feeling.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!intel && (
+            <p className="text-xs text-muted-foreground">No intel snapshots yet. They land with the next cycle.</p>
+          )}
+          {intel && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Stat label="X mentions · 24h" value={intel.x ? intel.x.mentionCount24h.toLocaleString() : "n/a"} />
+                <Stat label="X engagement · 24h" value={intel.x ? intel.x.engagement24h.toLocaleString() : "n/a"} sub="likes + RTs + replies" />
+                <Stat label="Holders" value={intel.holderCount !== null ? intel.holderCount.toLocaleString() : "n/a"} sub={intel.holderCount === null ? "Blockscout unreachable" : "Blockscout"} />
+                <Stat label="ETH" value={intel.ethUsd !== null ? usd(intel.ethUsd) : "n/a"} sub={intel.ethUsd24hChangePct !== null ? `${intel.ethUsd24hChangePct >= 0 ? "+" : ""}${intel.ethUsd24hChangePct.toFixed(1)}% 24h` : ""} />
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {mentionSeries.length > 1 && (
+                  <ChartCard title="X mentions / 24h (daily)" points={mentionSeries} format={(v) => v.toFixed(0)} />
+                )}
+                {engagementSeries.length > 1 && (
+                  <ChartCard title="X engagement / 24h (daily)" points={engagementSeries} format={(v) => v.toFixed(0)} color="var(--sb-gold)" />
+                )}
+                {holderSeries.length > 1 && (
+                  <ChartCard title="Holders (daily)" points={holderSeries} format={(v) => v.toFixed(0)} color="var(--sb-green)" />
+                )}
+              </div>
+              {intel.x && intel.x.topMentions.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Top live mentions</p>
+                  <ul className="space-y-1.5">
+                    {intel.x.topMentions.map((t) => (
+                      <li key={t.id} className="border-l-2 border-primary/50 pl-3 text-xs">
+                        <span className="text-foreground/90">{t.text}</span>
+                        <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                          {t.likes}♥ {t.retweets}RT {t.replies}re
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {intel.x && intel.x.leaders.some((l) => l.tweets.length > 0) && (
+                <div>
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Robinhood leadership · latest</p>
+                  <ul className="space-y-1.5">
+                    {intel.x.leaders.map((l) =>
+                      l.tweets.slice(0, 1).map((t) => (
+                        <li key={t.id} className="border-l-2 border-[var(--sb-gold)]/50 pl-3 text-xs">
+                          <span className="font-mono text-[10px] text-[var(--sb-gold)]">@{l.username}</span>{" "}
+                          <span className="text-foreground/90">{t.text}</span>
+                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                            {t.likes.toLocaleString()}♥ · {t.impressions.toLocaleString()} views
+                          </span>
+                        </li>
+                      )),
+                    )}
+                  </ul>
+                </div>
+              )}
+              {intel.warnings.length > 0 && (
+                <p className="text-xs text-amber-400/90">{intel.warnings.join(" · ")}</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
@@ -160,6 +264,16 @@ export function Growth({ state }: { state: ConsoleState }) {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="border border-border/60 bg-muted/20 p-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="font-mono text-lg">{value}</p>
+      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
