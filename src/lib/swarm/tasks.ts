@@ -251,6 +251,11 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `SWARM MEMORY (lessons distilled by the coach; apply them)\n${lessonsDigest(ctx.lessons)}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills[agent.id] ?? "None."}`,
     `LIBRARY (durable build knowledge; trust it)\n${ctx.library}`,
+    ...(agent.id === "bd"
+      ? [
+          `SPECIAL PROJECTS (standing BD lane): court partners who pair their liquidity against $STONKBROKER or launch on the stonk lane, per the special-projects doctrine in the library; every such pair turns partner volume into mission-token volume and partner buys into mission-token buy pressure.`,
+        ]
+      : []),
     `RECENT REVIEWER DECISIONS ON YOUR WORK\n${reviewerFeedback(ctx.drafts, agent.id)}`,
     `YOUR OWN RECENT OUTPUT (do NOT repeat these themes or angles)\n${recentOutputDigest(ctx.drafts, agent.id)}`,
     `WHAT THE REST OF THE SWARM COVERED RECENTLY (differentiate from these too — the critic vetoes cross-agent repeats)\n${swarmCoverageDigest(ctx.drafts, agent.id)}`,
