@@ -15,10 +15,26 @@
  * re-verifying which pad the UI's lane menu actually selects.
  */
 export const LAUNCHPAD = {
-  /** StonkSafeLaunchpadV2 pad singletons, keyed by quote lane (site keys: weth2 / stonk2) */
+  /**
+   * StonkSafeLaunchpadV2 pad singletons, keyed by quote lane. Site keys are
+   * the "2" generation (weth2 / stonk2 / gme2 / nvda2 ...). All addresses
+   * from the launcher's deployments.safelaunch-v2.mainnet.json and verified
+   * OPEN on-chain 2026-09-10 (launchFeeWei() == 0 on every pad, organic
+   * launch counts on each). Stock-quoted lanes (gme/nvda/aapl/spcx/uso)
+   * price their curve through Chainlink equity feeds that publish NOTHING
+   * from Friday close to Monday 00:00 UTC (us_equities_24/5 schedule), so
+   * lane availability is gated in ./lanes.ts - never deploy a stock lane
+   * on a weekend.
+   */
   pads: {
     weth: "0xFCd61B25BbF3AbD6cf0070D6328E351cc30EEC9f",
     stonk: "0x8f6782c5Aa37804d08a9b7bf3984Ff3245Fd6cD4",
+    usdg: "0xd4F20033586977A2511f4A2DB4aF7C79a340D70a",
+    gme: "0x4B9Dcd6CCFAeF0f6D23065Dd78E79d5E20ec8cFD",
+    nvda: "0xEe96d955d5634813374ecE4C74F2C0ff71B1F9fB",
+    aapl: "0xB0453A81Cbf963903409FFF18AD92941e1c7a864",
+    spcx: "0x0c3b4EDED41696eFF0ed70841f132B519d81c947",
+    uso: "0xDb3C81C841ff88db6cDFbDDB0eE049D162A6053B",
   },
   /** SafeLaunchLensV2 — quotes and views; never reimplement curve tax math */
   lens: "0x25b5Df581f4b2Ed450203f375ad8A28b17F115B3",
@@ -38,6 +54,22 @@ export const LAUNCHPAD = {
 } as const;
 
 export type PadLane = keyof typeof LAUNCHPAD.pads;
+
+/**
+ * Literal tuple of the pad lane keys, for zod enums and iteration.
+ * Must stay in step with LAUNCHPAD.pads; the `satisfies` clause plus the
+ * Record<PadLane, ...> tables in ./lanes.ts make a drift a compile error.
+ */
+export const PAD_LANE_KEYS = [
+  "weth",
+  "stonk",
+  "usdg",
+  "gme",
+  "nvda",
+  "aapl",
+  "spcx",
+  "uso",
+] as const satisfies readonly PadLane[];
 
 /** Minimal ABI cut from the official StonkSafeLaunchpadV2.abi.json */
 export const PAD_ABI = [

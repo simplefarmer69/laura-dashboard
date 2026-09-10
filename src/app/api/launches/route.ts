@@ -9,8 +9,9 @@ import { ART_PALETTES, isDuplicateLaunch, launchSpecShape } from "@/lib/launchpa
 export const dynamic = "force-dynamic";
 
 const createSchema = z.object({
-  lane: z.enum(["weth", "stonk"]).default("weth"),
   ...launchSpecShape,
+  /* Manual creates may omit the lane; cycle specs (launchSpecShape) require it. */
+  lane: launchSpecShape.lane.default("weth"),
   concept: z.string().min(10).max(1200),
   rationale: z.string().min(10).max(1200),
   /** The broadcast this launch makes to the Telegram audience — LAURA's words. */

@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Partials, ChannelType } from "discord.js";
 import { askLaura } from "@/lib/chat/laura";
 import { setBotStatus } from "@/lib/chat/status";
+import { recordChatter } from "@/lib/chat/chatter";
 
 /**
  * Discord connector. Set DISCORD_BOT_TOKEN (Discord Developer Portal) and
@@ -28,6 +29,15 @@ export function startDiscord(token: string): void {
     try {
       if (msg.author.bot || !client.user) return;
       const isDm = msg.channel.type === ChannelType.DM;
+      /* Server chatter (never DMs) feeds the swarm's community context. */
+      if (!isDm && msg.content?.trim()) {
+        recordChatter({
+          ts: Date.now(),
+          channel: `dc:${msg.channelId}`,
+          user: msg.author.username ?? "anon",
+          text: msg.content,
+        });
+      }
       const mentioned = msg.mentions.users.has(client.user.id);
       if (!isDm && !mentioned) return;
 
