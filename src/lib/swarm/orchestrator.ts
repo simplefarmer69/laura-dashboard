@@ -25,6 +25,7 @@ import {
   type CycleContext,
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
+import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { coachProposalBudget, mintGate, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { utcDate } from "@/lib/grader/score";
 import type {
@@ -312,6 +313,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           }
         }
         if (spec) {
+          const autonomous = state.settings.autoExecuteLaunches;
           const launch: LaunchProposal = {
             id: newId("launch"),
             cycleId: run.id,
@@ -329,17 +331,21 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             bufferSecs: spec.bufferSecs,
             concept: spec.concept,
             rationale: spec.rationale,
-            status: "pending",
-            reviewedAt: null,
-            reviewerNote: null,
+            artMotif: spec.artMotif,
+            artPalette: spec.artPalette,
+            status: autonomous ? "approved" : "pending",
+            reviewedAt: autonomous ? Date.now() : null,
+            reviewerNote: autonomous ? "Auto-approved: operator granted full launch autonomy" : null,
             txHash: null,
             tokenAddress: null,
             launchId: null,
             deployedAt: null,
             error: null,
+            imageHash: null,
           };
           state.launches.push(launch);
           mint.stats.drafts += 1;
+          if (autonomous) mint.stats.approved += 1;
           pushEvent(state, {
             kind: "launch.proposed",
             agentId: "mint",
@@ -347,6 +353,25 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             detail: spec.concept,
             refId: launch.id,
           });
+          if (autonomous) {
+            pushEvent(state, {
+              kind: "launch.approved",
+              agentId: "system",
+              title: `Auto-approved ${spec.name} ($${spec.symbol})`,
+              detail: "Full launch autonomy is on; deploys when the wallet is funded, within hard caps.",
+              refId: launch.id,
+            });
+          }
+          try {
+            await ensureLaunchArt(launch.id, {
+              name: launch.name,
+              symbol: launch.symbol,
+              motif: launch.artMotif,
+              palette: launch.artPalette,
+            });
+          } catch {
+            /* art regenerates on demand at deploy time */
+          }
           step({
             agentId: "mint",
             label: "Launch spec",

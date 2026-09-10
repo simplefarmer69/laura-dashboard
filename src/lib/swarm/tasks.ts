@@ -241,6 +241,12 @@ export const launchSchema = z.object({
       bufferSecs: z.number().min(600).max(3600),
       concept: z.string().max(1200),
       rationale: z.string().max(1200),
+      artMotif: z
+        .string()
+        .min(2)
+        .max(80)
+        .describe("Visual motif for the logo, e.g. bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot"),
+      artPalette: z.enum(["emerald", "amber", "crimson", "violet", "cyan", "gold"]),
     })
     .nullable(),
   skipReason: z.string().max(300).nullable(),
@@ -256,7 +262,7 @@ export function mintPrompt(ctx: CycleContext, floor: string, pendingLaunches: nu
     `LAUNCHER FLOOR (live tokens on the pad right now)\n${floor}`,
     `PENDING LAURA LAUNCHES AWAITING REVIEW OR DEPLOY: ${pendingLaunches}`,
     `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
-    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive. If 2+ LAURA launches are already pending, skip.`,
+    `Design at most ONE launch spec for the Smart Launch V2 pad (WETH lane), or return launch: null with a skipReason. Pad bounds: start mcap $1,000-$1,000,000; graduation $50,000-$10,000,000 and at least 2x start; start tax 0-9900 bps decaying by taxDecayPerMinuteBps each minute; buffer >= 600s. The concept must connect to StonkBrokers lore or live market narrative, and the name/symbol must be original and non-deceptive. Your launches are LAURA speaking in public: humans watch every new token in the community Telegram, so make the name + symbol + concept read as a message worth clicking. Choose artMotif (one word from: bell, chart, rocket, bull, clock, wave, bolt, diamond, shield, moon, flame, crown, eye, star, key, globe, robot) and artPalette to match the concept — the token logo is rendered from them and shown next to your token on the launcher. If 2+ LAURA launches are already pending, skip.`,
   ].join("\n\n");
 }
 
@@ -281,6 +287,8 @@ export function mintMock(ctx: CycleContext, pendingLaunches: number): LaunchOut 
         "A tribute to the launcher's VRNG Opening Bell buyback: the token that celebrates the moment the Buyback Bar fills and the bell rings. Ties directly into the launcher's own mechanic, so its story is the floor's story.",
       rationale:
         "Deterministic fallback spec (no LLM key). Fee flow from a curve token feeds the Buyback Bar and the launcher fee waterfall, which counts toward protocol revenue and volume - the two lagging grade levers.",
+      artMotif: "bell",
+      artPalette: "gold",
     },
     skipReason: null,
   };

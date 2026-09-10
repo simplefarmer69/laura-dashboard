@@ -30,6 +30,7 @@ interface LaunchpadInfo {
   }[];
   caps: { maxDeploysPerDay: number; maxSpendEthPerDeploy: number };
   explorer: string;
+  autoExecute: boolean;
 }
 
 export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: () => Promise<void> }) {
@@ -127,13 +128,23 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Guardrails</CardTitle>
+            <CardTitle className="flex items-center justify-between text-sm">
+              Guardrails
+              {info?.autoExecute && (
+                <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">FULL AUTONOMY</Badge>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-muted-foreground">
-            <p>· Every spec needs operator approval before deploy</p>
+            {info?.autoExecute ? (
+              <p>· Specs auto-approve and deploy the moment the wallet is funded</p>
+            ) : (
+              <p>· Every spec needs operator approval before deploy</p>
+            )}
             <p>· Max {info?.caps.maxDeploysPerDay ?? 3} deploys per 24h</p>
             <p>· Max {info?.caps.maxSpendEthPerDeploy ?? 0.02} ETH spend per deploy (fee + 2x gas)</p>
             <p>· Specs re-validated against live pad bounds at deploy time</p>
+            <p>· Logo + community links attach automatically after each deploy</p>
           </CardContent>
         </Card>
       </div>
@@ -236,13 +247,26 @@ function LaunchCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-base">
-              {l.name} <span className="font-mono text-sm text-primary">${l.symbol}</span>
-            </CardTitle>
-            <CardDescription>
-              designed by Mint · {ago(l.createdAt)} · {l.lane.toUpperCase()} lane
-            </CardDescription>
+          <div className="flex items-start gap-3">
+            {/* Procedural token art — the logo humans see next to the token */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/launches/${l.id}/image`}
+              alt={`${l.symbol} token logo`}
+              width={56}
+              height={56}
+              className="size-14 shrink-0 border border-border/60"
+              loading="lazy"
+            />
+            <div>
+              <CardTitle className="text-base">
+                {l.name} <span className="font-mono text-sm text-primary">${l.symbol}</span>
+              </CardTitle>
+              <CardDescription>
+                designed by Mint · {ago(l.createdAt)} · {l.lane.toUpperCase()} lane
+                {l.artMotif ? ` · ${l.artMotif}/${l.artPalette ?? "emerald"}` : ""}
+              </CardDescription>
+            </div>
           </div>
           {statusBadge(l.status)}
         </div>
@@ -271,6 +295,7 @@ function LaunchCard({
             <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/tx/${l.txHash}`} target="_blank" rel="noreferrer">
               tx {l.txHash.slice(0, 14)}… <ExternalLink className="size-3" />
             </a>
+            {l.imageHash && <p className="text-muted-foreground">logo live on launcher · {l.imageHash.slice(0, 14)}…</p>}
           </div>
         )}
         {(l.status === "pending" || l.status === "approved") && (

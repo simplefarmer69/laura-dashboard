@@ -110,22 +110,35 @@ Until the access token pair exists the button stays locked and "Mark published"
 covers manual posting. Publishing is always operator-clicked; the swarm never
 posts on its own.
 
-### Launchpad (on-chain deploys)
+### Launchpad (autonomous on-chain deploys)
 
-Mint proposes at most one token launch per cycle against the live
+Mint designs at most one token launch per cycle against the live
 [Stonk Launcher](https://www.stonkbrokers.cash/launcher) Smart Launch V2 pad
 (`0xFCd6…EC9f`, WETH lane, chain 4663), using the official ABI from the
-StonkBrokers integration docs. Specs are validated against the pad's on-chain
-bounds and sit in the **Launchpad** tab until an operator approves them. The
-deploy button stays locked until the swarm wallet exists and holds ETH:
+StonkBrokers integration docs. Launches are LAURA's public voice — humans
+watch every new token in the community Telegram — so each spec carries a
+visual identity (`artMotif` + `artPalette`) that renders into a procedural
+256px WebP logo (terminal-neon, seeded by the spec, `src/lib/launchpad/art.ts`).
+
+With `autoExecuteLaunches` on (the default — the operator granted full launch
+autonomy), specs auto-approve and the scheduler deploys the queue the moment
+the swarm wallet is funded:
 
 ```bash
 SWARM_WALLET_PRIVATE_KEY=0x...   # the funded operations wallet (never commit this)
 ```
 
-Hard caps enforced in code, not prompts: operator approval per launch, max 3
-deploys per 24 h, max 0.02 ETH spend per deploy (fee + 2x gas), spec
-re-validated against live pad bounds at deploy time.
+After each deploy the executor brands the token through the launcher's own
+API: uploads the logo (`POST /api/launcher/token-image`), attaches it with a
+creator-wallet signature (`POST /api/safe-launch/token-logo`), and — when
+`TOKEN_PROFILE_X` / `TOKEN_PROFILE_WEBSITE` / `TOKEN_PROFILE_TELEGRAM` are set —
+signs the community links on (`POST /api/safe-launch/token-profile`).
+
+Hard caps enforced in code, not prompts: max 3 deploys per 24 h, max 0.02 ETH
+spend per deploy (fee + 2x gas), one deploy per scheduler tick, 15-minute
+backoff after a failed deploy, spec re-validated against live pad bounds at
+deploy time. Turning `autoExecuteLaunches` off restores per-launch operator
+approval.
 
 ## Layout
 

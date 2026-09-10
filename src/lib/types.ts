@@ -189,6 +189,12 @@ export interface Settings {
   llmModel: string;
   /** Daily data-driven adjustment of cadence and draft budget inside hard rails. */
   autoTune: boolean;
+  /**
+   * Operator-granted launch autonomy: Mint's specs auto-approve and deploy
+   * without per-launch review. Hard caps (deploys/day, spend/deploy, live
+   * pad bounds, funded designated wallet) still apply and fail closed.
+   */
+  autoExecuteLaunches: boolean;
 }
 
 export type SwarmEventKind =
@@ -271,15 +277,22 @@ export interface LaunchProposal {
   bufferSecs: number;
   concept: string;
   rationale: string;
+  /** Visual identity chosen by Mint; rendered procedurally into the token logo */
+  artMotif?: string | null;
+  artPalette?: string | null;
   status: LaunchStatus;
   reviewedAt: number | null;
   reviewerNote: string | null;
+  /** Higher deploys first when autonomy executes the queue */
+  priority?: number;
   /** Populated after deploy */
   txHash: string | null;
   tokenAddress: string | null;
   launchId: string | null;
   deployedAt: number | null;
   error: string | null;
+  /** Launcher content hash once the logo is uploaded and attached */
+  imageHash?: string | null;
 }
 
 export interface SwarmState {

@@ -1,6 +1,7 @@
 import os from "node:os";
 import { loadState } from "@/lib/store";
 import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
+import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { utcDate } from "@/lib/grader/score";
 
 /**
@@ -48,6 +49,12 @@ async function tick(): Promise<void> {
 
   const today = utcDate();
   const hasGradeToday = state.grades.some((g) => g.date === today);
+
+  /* Full launch autonomy: work the approved queue every tick (fails closed
+     on wallet, caps and pad bounds; deploys at most one launch per tick). */
+  if (state.settings.autoExecuteLaunches && state.launches.some((l) => l.status === "approved")) {
+    await runLaunchExecutor();
+  }
 
   if (Date.now() - s.lastCycleAt >= intervalMs) {
     const busy = machineBusy();

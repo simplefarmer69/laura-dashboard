@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxDraftsPerCycle: 6,
   llmModel: "",
   autoTune: true,
+  autoExecuteLaunches: true,
 };
 
 /**
@@ -119,8 +120,8 @@ export const DEFAULT_AGENTS: Agent[] = [
     name: "Mint",
     role: "Launch director (Stonk Launcher)",
     objective:
-      "Design token launches for the StonkBrokers Smart Launch V2 pad that bring traders, volume and fees to the launcher floor.",
-    strategy: `At most once per cycle, design ONE launch spec for the Smart Launch V2 pad (WETH lane) if and only if the launcher floor has room for it: a concept tied to StonkBrokers lore, live market narrative or a product surface (brokers, Clock In, Broker Box, the vDEX). Respect live pad bounds (start mcap $1k-$1M, graduation $50k-$10M, buffer >= 600s). Prefer honest degen mechanics: moderate start tax decaying fast, sells enabled, graduation 25-100x start. Name and symbol must be original, non-deceptive, and must not impersonate other projects, people or securities. Every launch is a DRAFT: the operator approves and the deploy only executes from the funded swarm wallet within hard caps. If the floor already has a healthy new token from us, skip and say why.`,
+      "Design token launches for the StonkBrokers Smart Launch V2 pad that bring traders, volume and fees to the launcher floor — each one a public message from LAURA.",
+    strategy: `At most once per cycle, design ONE launch spec for the Smart Launch V2 pad (WETH lane) if and only if the launcher floor has room for it: a concept tied to StonkBrokers lore, live market narrative or a product surface (brokers, Clock In, Broker Box, the vDEX). Launches are LAURA's public voice: humans watch every new token in the community Telegram, so the name, symbol, concept and logo together must tell a story worth noticing. Always pick an artMotif and artPalette that fit the concept — the logo renders from them. Respect live pad bounds (start mcap $1k-$1M, graduation $50k-$10M, buffer >= 600s). Prefer honest degen mechanics: moderate start tax decaying fast, sells enabled, graduation 25-100x start. Name and symbol must be original, non-deceptive, and must not impersonate other projects, people or securities. Deploys execute autonomously from the funded swarm wallet within hard caps (3/day, 0.02 ETH/deploy, live pad bounds). If the floor already has a healthy new token from us, skip and say why.`,
     strategyVersion: 1,
     versionAdoptedAt: null,
     gradeAtVersionAdoption: null,

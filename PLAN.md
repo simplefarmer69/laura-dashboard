@@ -218,16 +218,26 @@ is in place.
 - Next: feed reviewer edit-distance (how much operators rewrite drafts before
   approving) and per-channel attribution into the same controller.
 
-### Phase 3.5 — Launch pipeline *(built, deploy-gated)*
+### Phase 3.5 — Launch pipeline *(built, autonomous, wallet-gated)*
 - Done: **Mint**, the launch director, designs at most one Smart Launch V2 spec per
   cycle (concept, name/symbol, supply, start/graduation mcap, tax curve) with the live
   launcher floor as context. Specs are validated against the pad's on-chain `bounds()`
   and queue in the Launchpad tab.
-- Done: gated deploy service against the official `StonkSafeLaunchpadV2` ABI
-  (`createLaunch`, WETH lane pad `0xFCd6…EC9f`): operator approval required, wallet
-  must be configured and funded, max 3 deploys/24 h, max 0.02 ETH per deploy,
-  simulate-before-send, tx + token address + launch id recorded and linked to
-  Blockscout.
+- Done: deploy service against the official `StonkSafeLaunchpadV2` ABI
+  (`createLaunch`, WETH lane pad `0xFCd6…EC9f`): wallet must be configured and funded,
+  max 3 deploys/24 h, max 0.02 ETH per deploy, simulate-before-send, tx + token
+  address + launch id recorded and linked to Blockscout.
+- Done: **launches as a communication channel.** Every spec carries an `artMotif` +
+  `artPalette`; a procedural generator (`art.ts`) renders a 256px terminal-neon WebP
+  logo under the launcher's 48KB cap. After deploy the executor uploads it via the
+  launcher's own API (`token-image` → creator-signed `token-logo`, message format
+  matched to the site client byte-for-byte) and signs on X/website/Telegram links
+  (`token-profile`) when `TOKEN_PROFILE_*` env vars exist.
+- Done: **full launch autonomy** (`autoExecuteLaunches`, granted by the operator).
+  Mint's specs auto-approve; the scheduler's launch executor deploys the queue —
+  priority first, then oldest — one per tick with a 15-minute backoff on failure,
+  the moment the wallet is funded. LAURA's self-introduction launch sits at
+  priority 10 so her first on-chain word is hello.
 - Next (with wallet): first deploys, then curve monitoring (`/api/launcher/token/…`)
   so Mint learns which concepts hold holders and feed the Buyback Bar.
 

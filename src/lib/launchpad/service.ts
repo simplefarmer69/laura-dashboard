@@ -26,7 +26,7 @@ export interface WalletStatus {
   funded: boolean;
 }
 
-function getAccount() {
+export function getAccount() {
   const key = process.env.SWARM_WALLET_PRIVATE_KEY;
   if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) return null;
   return privateKeyToAccount(key as `0x${string}`);

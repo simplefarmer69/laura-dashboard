@@ -1,0 +1,107 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { newId, pushEvent, updateState } from "@/lib/store";
+import type { LaunchProposal } from "@/lib/types";
+import { ensureLaunchArt } from "@/lib/launchpad/art";
+
+export const dynamic = "force-dynamic";
+
+const createSchema = z.object({
+  lane: z.enum(["weth", "stonk"]).default("weth"),
+  name: z.string().min(3).max(48),
+  symbol: z.string().min(2).max(10).regex(/^[A-Z0-9]+$/),
+  supplyTokens: z.number().min(1_000_000).max(1e12),
+  startMcapUsd: z.number().min(1000).max(1_000_000),
+  gradMcapUsd: z.number().min(50_000).max(10_000_000),
+  startTaxBps: z.number().min(0).max(9900),
+  taxDecayPerMinuteBps: z.number().min(0).max(2000),
+  postTaxBps: z.number().min(0).max(500),
+  sellsEnabled: z.boolean(),
+  bufferSecs: z.number().min(600).max(3600),
+  concept: z.string().min(10).max(1200),
+  rationale: z.string().min(10).max(1200),
+  artMotif: z.string().min(2).max(80),
+  artPalette: z.enum(["emerald", "amber", "crimson", "violet", "cyan", "gold"]),
+  priority: z.number().min(0).max(100).optional(),
+  approve: z.boolean().default(false),
+});
+
+/** Creates a launch spec directly (operator- or LAURA-designed outside a cycle). */
+export async function POST(req: NextRequest) {
+  const parsed = createSchema.safeParse(await req.json());
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+  const p = parsed.data;
+
+  const result = await updateState<{ ok: true; launch: LaunchProposal } | { ok: false; error: string }>((state) => {
+    const dupe = state.launches.some(
+      (l) =>
+        l.status !== "rejected" &&
+        l.status !== "failed" &&
+        (l.symbol === p.symbol || l.name.trim().toLowerCase() === p.name.trim().toLowerCase()),
+    );
+    if (dupe) return { ok: false, error: `A non-rejected launch already uses ${p.name} or $${p.symbol}` };
+
+    const launch: LaunchProposal = {
+      id: newId("launch"),
+      cycleId: "manual",
+      createdAt: Date.now(),
+      lane: p.lane,
+      name: p.name,
+      symbol: p.symbol,
+      supplyTokens: p.supplyTokens,
+      startMcapUsd: p.startMcapUsd,
+      gradMcapUsd: p.gradMcapUsd,
+      startTaxBps: p.startTaxBps,
+      taxDecayPerMinuteBps: p.taxDecayPerMinuteBps,
+      postTaxBps: p.postTaxBps,
+      sellsEnabled: p.sellsEnabled,
+      bufferSecs: p.bufferSecs,
+      concept: p.concept,
+      rationale: p.rationale,
+      artMotif: p.artMotif,
+      artPalette: p.artPalette,
+      priority: p.priority ?? 0,
+      status: p.approve ? "approved" : "pending",
+      reviewedAt: p.approve ? Date.now() : null,
+      reviewerNote: p.approve ? "Approved at creation" : null,
+      txHash: null,
+      tokenAddress: null,
+      launchId: null,
+      deployedAt: null,
+      error: null,
+      imageHash: null,
+    };
+    state.launches.push(launch);
+    pushEvent(state, {
+      kind: "launch.proposed",
+      agentId: "operator",
+      title: `Launch spec created: ${p.name} ($${p.symbol})`,
+      detail: p.concept,
+      refId: launch.id,
+    });
+    if (p.approve) {
+      pushEvent(state, {
+        kind: "launch.approved",
+        agentId: "operator",
+        title: `Approved launch: ${p.name} ($${p.symbol})`,
+        detail: "Approved at creation; deploys when the wallet is funded, within hard caps.",
+        refId: launch.id,
+      });
+    }
+    return { ok: true, launch };
+  });
+
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
+  const launch = result.launch;
+  try {
+    await ensureLaunchArt(launch.id, {
+      name: launch.name,
+      symbol: launch.symbol,
+      motif: launch.artMotif,
+      palette: launch.artPalette,
+    });
+  } catch {
+    /* art regenerates on demand */
+  }
+  return NextResponse.json(launch, { status: 201 });
+}
