@@ -112,6 +112,19 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               onCheckedChange={(v) => set("autoApplyStrategyProposals", Boolean(v))}
             />
           </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Auto-approve all proposals</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Full autonomy: drafts, strategy proposals and launch specs approve on creation, and any
+                pending backlog is swept to approved. Launch hard caps and external publishing stay gated.
+              </p>
+            </div>
+            <Switch
+              checked={form.autoApproveProposals}
+              onCheckedChange={(v) => set("autoApproveProposals", Boolean(v))}
+            />
+          </div>
           <Button className="w-full" disabled={busy} onClick={() => void save()}>
             <Save className="size-3.5" /> Save settings
           </Button>

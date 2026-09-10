@@ -56,8 +56,13 @@ export function ReviewQueue({ state, refresh }: { state: ConsoleState; refresh: 
             </Button>
           );
         })}
+        {state.settings.autoApproveProposals && (
+          <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">FULL AUTONOMY</Badge>
+        )}
         <p className="ml-auto text-xs text-muted-foreground">
-          Approve to mark ready, then mark Published once you post it on the channel yourself.
+          {state.settings.autoApproveProposals
+            ? "New drafts approve automatically; you can still reject or edit, and publishing stays a separate step."
+            : "Approve to mark ready, then mark Published once you post it on the channel yourself."}
         </p>
       </div>
 

@@ -30,11 +30,14 @@ export function Evolution({ state, refresh }: { state: ConsoleState; refresh: ()
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">
+          <h2 className="flex items-center gap-2 text-sm font-medium">
             Pending proposals <span className="font-mono text-muted-foreground">{pending.length}</span>
+            {state.settings.autoApproveProposals && (
+              <Badge className="bg-[var(--sb-green)]/15 text-[var(--sb-green)]">FULL AUTONOMY</Badge>
+            )}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Auto-apply is {state.settings.autoApplyStrategyProposals ? "on" : "off"} (Settings)
+            Auto-apply is {state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? "on" : "off"} (Settings)
           </p>
         </div>
         {pending.length === 0 && (
