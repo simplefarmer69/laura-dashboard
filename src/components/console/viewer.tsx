@@ -122,46 +122,23 @@ export function describeActivity(activity: RuntimeActivity, now: number): { text
   }
 }
 
-const ACTIVITY_TONE: Record<"live" | "quiet" | "warn", string> = {
-  live: "text-[var(--sb-green)]",
-  quiet: "text-muted-foreground",
-  warn: "text-[var(--sb-gold)]/90",
-};
-
-/** The public header strip: what this is, where it runs, and how fresh the data is. */
-export function ViewerBanner({
-  publishedAt,
-  host,
-  activity,
-}: {
-  publishedAt: number | null;
-  host?: HostInfo | null;
-  activity?: RuntimeActivity | null;
-}) {
+/** The public header strip: what this is and how fresh the data is. Host and
+ *  phase details were removed on operator request (2026-09-11): the banner
+ *  now carries only the LIVE VIEW marker and the snapshot freshness dot. */
+export function ViewerBanner({ publishedAt }: { publishedAt: number | null }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(id);
   }, []);
   const stale = publishedAt !== null && now - publishedAt > STALE_AFTER_MS;
-  /* The phase is only trustworthy while the snapshot is fresh; a stale one
-     says how old it is and nothing about what LAURA is doing right now. */
-  const phase = activity && !stale ? describeActivity(activity, now) : null;
   return (
     <div className="border-b border-primary/25 bg-primary/10">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 sb-ticker text-[11px] sm:px-6">
         <span className="flex items-center gap-1.5 text-primary">
           <Eye className="size-3.5" /> LIVE VIEW
         </span>
-        <span className="text-muted-foreground">
-          watching LAURA work; admin controls are local-only
-        </span>
-        {host && (
-          <span className="hidden font-mono text-muted-foreground/90 sm:inline" title={host.builtAt ? `built ${host.builtAt}` : undefined}>
-            host: {describeHost(host)}
-          </span>
-        )}
-        {phase && <span className={`font-mono ${ACTIVITY_TONE[phase.tone]}`}>{phase.text}</span>}
+        <span className="text-muted-foreground">watching LAURA work</span>
         <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
           {publishedAt === null ? (
             "waiting for the first snapshot…"

@@ -186,11 +186,7 @@ export function Console() {
           </div>
         </div>
         {VIEWER_MODE && (
-          <ViewerBanner
-            publishedAt={state?.viewer?.publishedAt ?? null}
-            host={state?.runtime.host ?? null}
-            activity={state?.runtime.activity ?? null}
-          />
+          <ViewerBanner publishedAt={state?.viewer?.publishedAt ?? null} />
         )}
       </header>
 
