@@ -9,7 +9,7 @@ import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
 import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { runBuilderTick } from "@/lib/builder/executor";
-import { maybePublishSnapshot } from "@/lib/viewer/publish";
+import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import { clearFlag, flagPending, RESTART_FLAG } from "@/lib/ops";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
@@ -259,7 +259,13 @@ async function tick(): Promise<void> {
          window bounds them to at most one per hour on its own. */
       if (Date.now() - lastForumPostAt(state) > FORUM_QUIET_MS && !isForumRoundRunning()) {
         log("Cafe Bar quiet for over an hour; opening a forum round before the next cycle");
-        const round = await runForumRound();
+        const stopLive = startLivePublishing();
+        let round: Awaited<ReturnType<typeof runForumRound>>;
+        try {
+          round = await runForumRound();
+        } finally {
+          stopLive();
+        }
         s.lastCycleAt = Date.now();
         log(
           `forum round ${round.roundId} done: ${round.threadsOpened} thread(s), ${round.postsWritten} post(s), ${round.llmCalls} LLM call(s)${round.notes.length ? `, notes: ${round.notes.slice(0, 2).join("; ")}` : ""}`,
@@ -268,7 +274,13 @@ async function tick(): Promise<void> {
         return;
       }
       log(triggerEvent ? `starting event-driven cycle (${triggerEvent})` : "starting scheduled cycle");
-      const run = await runCycle(triggerEvent ? "event" : "scheduler");
+      const stopLive = startLivePublishing();
+      let run: Awaited<ReturnType<typeof runCycle>>;
+      try {
+        run = await runCycle(triggerEvent ? "event" : "scheduler");
+      } finally {
+        stopLive();
+      }
       s.lastCycleAt = Date.now();
       s.lastGradeDate = today;
       log(

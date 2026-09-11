@@ -12,15 +12,21 @@ import { isViewerMode } from "@/lib/viewer/mode";
  *                           on the viewer deployment's env.
  *
  * Cadence: at most every PUBLISH_INTERVAL_MS on scheduler ticks, plus a
- * forced push right after each cycle. Failures are logged and swallowed —
- * publishing must never hurt the swarm.
+ * forced push right after each cycle, plus LIVE_PUBLISH_MS pushes while a
+ * cycle or Cafe Bar round is in flight (the tick loop is blocked for those
+ * ~20 minutes, so without this the public site saw every round as one
+ * burst of 80 posts). Failures are logged and swallowed — publishing must
+ * never hurt the swarm.
  */
 
 const PUBLISH_INTERVAL_MS = 5 * 60_000;
+const LIVE_PUBLISH_MS = 4 * 60_000;
 const ATTEMPTS = 2;
 
 interface PublisherState {
   lastAttemptAt: number;
+  /** A publish is building/sending right now; overlapping calls skip. */
+  inFlight?: boolean;
   warnedUnconfigured: boolean;
   /** Last failure signature (e.g. "HTTP 401") — repeats of the same failure
       stay silent so a misconfigured secret doesn't spam a line every 5 min. */
@@ -86,8 +92,31 @@ export async function maybePublishSnapshot(options: { force?: boolean } = {}): P
   }
   const now = Date.now();
   if (!options.force && now - state.lastAttemptAt < PUBLISH_INTERVAL_MS) return;
+  if (state.inFlight) return;
   state.lastAttemptAt = now;
+  state.inFlight = true;
+  try {
+    await publishOnce(state, url, secret);
+  } finally {
+    state.inFlight = false;
+  }
+}
 
+/**
+ * Keep the public site current while a long unit of work (cycle, Cafe Bar
+ * round) holds the tick loop: pushes a snapshot every LIVE_PUBLISH_MS until
+ * the returned stop function runs. Posts, steps and drafts then appear on
+ * the viewer within minutes of being written instead of at the end.
+ */
+export function startLivePublishing(): () => void {
+  if (isViewerMode()) return () => undefined;
+  const timer = setInterval(() => {
+    void maybePublishSnapshot({ force: true });
+  }, LIVE_PUBLISH_MS);
+  return () => clearInterval(timer);
+}
+
+async function publishOnce(state: PublisherState, url: string, secret: string): Promise<void> {
   let body: string;
   try {
     body = JSON.stringify(await buildPublicSnapshot());
