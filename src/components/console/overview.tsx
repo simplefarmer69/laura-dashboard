@@ -38,6 +38,12 @@ export function Overview({
   const brief = state.researchBriefs.at(-1) ?? null;
   const pending = state.drafts.filter((d) => d.status === "pending").length;
   const pendingProposals = state.proposals.filter((p) => p.status === "pending").length;
+  const autonomous = state.settings.autoApproveProposals;
+  /* "Now" anchored to the latest run so the render stays pure. */
+  const anchor = state.runs.at(-1)?.startedAt ?? 0;
+  const approvedToday = state.drafts.filter((d) => d.status === "approved" && anchor - d.createdAt < 24 * 3600_000).length;
+  const adoptedToday = state.proposals.filter((p) => p.status === "approved" && anchor - p.createdAt < 24 * 3600_000).length;
+  const queuedLaunches = state.launches.filter((l) => l.status === "approved").length;
   const priceSeries = state.metricsHistory.map((m) => m.priceUsd);
   const gradeSeries = state.grades.map((g) => g.score);
   const feeds = useFeeds();
@@ -221,17 +227,27 @@ export function Overview({
         <Card className="sm:col-span-2">
           <CardContent className="flex flex-wrap items-center gap-3 py-4">
             <ShieldCheck className="size-4 text-[var(--sb-green)]" />
-            <p className="flex-1 text-sm text-muted-foreground">
-              <span className="text-foreground">{pending}</span> drafts and{" "}
-              <span className="text-foreground">{pendingProposals}</span> strategy proposals are waiting
-              for review. Nothing is published or adopted without an operator decision.
-            </p>
+            {autonomous ? (
+              <p className="flex-1 text-sm text-muted-foreground">
+                Full autonomy: <span className="text-foreground">{approvedToday}</span> drafts approved and{" "}
+                <span className="text-foreground">{adoptedToday}</span> strategy revisions adopted in the last 24h by
+                the swarm&apos;s own review, <span className="text-foreground">{queuedLaunches}</span> launch
+                {queuedLaunches === 1 ? "" : "es"} in the deploy queue. No operator step exists; safety lives in
+                code-level caps{pending + pendingProposals > 0 ? ` (${pending + pendingProposals} item${pending + pendingProposals === 1 ? "" : "s"} auto-approve on the next tick)` : ""}.
+              </p>
+            ) : (
+              <p className="flex-1 text-sm text-muted-foreground">
+                <span className="text-foreground">{pending}</span> drafts and{" "}
+                <span className="text-foreground">{pendingProposals}</span> strategy proposals are waiting
+                for review. Nothing is published or adopted without an operator decision.
+              </p>
+            )}
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => onNavigate("queue")}>
-                Review drafts <ArrowRight className="size-3.5" />
+                {autonomous ? "Drafts" : "Review drafts"} <ArrowRight className="size-3.5" />
               </Button>
-              <Button size="sm" variant="outline" onClick={() => onNavigate("evolution")}>
-                Review proposals <ArrowRight className="size-3.5" />
+              <Button size="sm" variant="outline" onClick={() => onNavigate(autonomous ? "launchpad" : "evolution")}>
+                {autonomous ? "Launch queue" : "Review proposals"} <ArrowRight className="size-3.5" />
               </Button>
             </div>
           </CardContent>
