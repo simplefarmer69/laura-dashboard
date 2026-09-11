@@ -27,6 +27,14 @@ export const LAUNCH_CAPS = {
   maxDeploysPerDay: 3,
   /** Launch fee + gas budget per deploy */
   maxSpendEthPerDeploy: 0.02,
+  /**
+   * Spacing between consecutive deploys. Without it the three daily slots
+   * all fire in the hour after the cap window rolls (00:08, 00:09, 01:05 on
+   * 2026-09-11) and the floor sees nothing for the next 23 hours; spaced,
+   * each launch gets its own buffer, its own post window and its own day
+   * part. Tightens the cap, never loosens it.
+   */
+  minDeployGapHours: 4,
 } as const;
 
 export interface WalletStatus {

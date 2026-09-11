@@ -9,6 +9,7 @@ import {
   walletStatus,
 } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
+import { deployCapacity } from "@/lib/launchpad/capacity";
 import { laneClosedReason } from "@/lib/launchpad/lanes";
 import { reservedLaunchNameHit } from "@/lib/launchpad/spec";
 import {
@@ -28,11 +29,6 @@ import {
 
 function log(msg: string): void {
   console.log(`[launch-exec ${new Date().toISOString()}] ${msg}`);
-}
-
-function deploysInLast24h(launches: LaunchProposal[]): number {
-  const dayAgo = Date.now() - 24 * 3600 * 1000;
-  return launches.filter((l) => l.status === "deployed" && (l.deployedAt ?? 0) > dayAgo).length;
 }
 
 export type ExecuteResult =
@@ -62,10 +58,11 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       error: `Swarm wallet ${wallet.address} is not funded yet (balance ${wallet.balanceEth ?? "unknown"} ETH).`,
       httpStatus: 409,
     };
-  if (deploysInLast24h(state.launches) >= LAUNCH_CAPS.maxDeploysPerDay)
+  const capacity = deployCapacity(state.launches);
+  if (!capacity.open)
     return {
       ok: false,
-      error: `Daily cap reached: ${LAUNCH_CAPS.maxDeploysPerDay} deploys per 24h`,
+      error: capacity.reason ?? `Daily cap reached: ${LAUNCH_CAPS.maxDeploysPerDay} deploys per 24h`,
       httpStatus: 429,
     };
 
@@ -193,12 +190,14 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
 /* --------------------- Autonomous queue executor --------------------- */
 
 declare global {
-  var __lauraLaunchExecutor: { running: boolean; nextAttemptAt: Record<string, number> } | undefined;
+  var __lauraLaunchExecutor:
+    | { running: boolean; nextAttemptAt: Record<string, number>; lastWindowNote?: number }
+    | undefined;
 }
 
 function execState() {
   if (!globalThis.__lauraLaunchExecutor) {
-    globalThis.__lauraLaunchExecutor = { running: false, nextAttemptAt: {} };
+    globalThis.__lauraLaunchExecutor = { running: false, nextAttemptAt: {}, lastWindowNote: 0 };
   }
   return globalThis.__lauraLaunchExecutor;
 }
@@ -328,7 +327,15 @@ export async function runLaunchExecutor(): Promise<void> {
     }
 
     if (queue.length === 0) return;
-    if (deploysInLast24h(state.launches) >= LAUNCH_CAPS.maxDeploysPerDay) return;
+    const capacity = deployCapacity(state.launches, now);
+    if (!capacity.open) {
+      /* One line per window change, not per tick: the queue is healthy, it is waiting. */
+      if (es.lastWindowNote !== capacity.nextWindowAt) {
+        es.lastWindowNote = capacity.nextWindowAt;
+        log(`autonomy: ${queue.length} spec(s) queued (${queue[0].symbol} next) — ${capacity.reason}`);
+      }
+      return;
+    }
 
     const next = queue[0];
     log(`autonomy: deploying ${next.name} ($${next.symbol})`);

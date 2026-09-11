@@ -9,6 +9,7 @@ import { loadNotebook } from "@/lib/swarm/notebook";
 import { loadSkills } from "@/lib/swarm/skills";
 import { LAUNCHPAD } from "@/lib/launchpad/contracts";
 import { LAUNCH_CAPS, allPadStates, launcherGrid, walletStatus } from "@/lib/launchpad/service";
+import { launchQueueInfo } from "@/lib/launchpad/capacity";
 import type { Settings, SwarmState } from "@/lib/types";
 
 /**
@@ -116,6 +117,7 @@ export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
       explorer: LAUNCHPAD.explorer,
       factory: LAUNCHPAD.factory,
       autoExecute: state.settings.autoExecuteLaunches,
+      queue: launchQueueInfo(state.launches),
     },
     viewer: { publishedAt: Date.now() },
   };

@@ -229,8 +229,10 @@ is in place.
   and queue in the Launchpad tab.
 - Done: deploy service against the official `StonkSafeLaunchpadV2` ABI
   (`createLaunch`, WETH lane pad `0xFCd6…EC9f`): wallet must be configured and funded,
-  max 3 deploys/24 h, max 0.02 ETH per deploy, simulate-before-send, tx + token
-  address + launch id recorded and linked to Blockscout.
+  max 3 deploys/24 h spaced ≥4 h apart (so the three slots spread over the day
+  instead of firing together when the window rolls), max 0.02 ETH per deploy,
+  simulate-before-send, tx + token address + launch id recorded and linked to
+  Blockscout.
 - Done: **launches as a communication channel.** Every spec carries an `artMotif` +
   `artPalette`; a procedural generator (`art.ts`) renders a 256px terminal-neon WebP
   logo under the launcher's 48KB cap. After deploy the executor uploads it via the

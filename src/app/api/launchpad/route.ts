@@ -4,6 +4,7 @@ import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
 import { LAUNCHPAD } from "@/lib/launchpad/contracts";
 import { LAUNCH_CAPS, allPadStates, launcherGrid, walletStatus } from "@/lib/launchpad/service";
+import { launchQueueInfo } from "@/lib/launchpad/capacity";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ export async function GET() {
     loadState(),
   ]);
   return NextResponse.json({
+    /* Deploy window + per-spec projection so the console can say when each
+       queued token goes live instead of "awaiting action". */
+    queue: launchQueueInfo(state.launches),
     wallet,
     /* `pad` kept as the WETH lane for older published viewer snapshots. */
     pad: pads.find((p) => p.lane === "weth") ?? null,

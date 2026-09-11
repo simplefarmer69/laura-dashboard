@@ -10,6 +10,7 @@ import { worldContext } from "@/lib/swarm/worldfeeds";
 import { forumDigest } from "@/lib/swarm/forum";
 import { collectOnchainDigest } from "@/lib/swarm/onchain";
 import { laneMenuDigest, recentLaunchLanes, resolveLane } from "@/lib/launchpad/lanes";
+import { nextDesignSlotAt } from "@/lib/launchpad/capacity";
 import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
 import { applyProposal } from "@/lib/swarm/strategy";
 import { checkNovelty } from "@/lib/swarm/novelty";
@@ -846,7 +847,10 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
         const spoken = spokenLaunchesDigest(state.launches);
         const capacity = launchCapacityDigest(state);
-        const laneMenu = laneMenuDigest(new Date(), state.runs.length, recentLaunchLanes(state.launches));
+        /* Lanes are judged at the slot this spec would deploy in (after the
+           queue, inside the cap and spacing), not at design time. */
+        const designSlot = new Date(nextDesignSlotAt(state.launches));
+        const laneMenu = laneMenuDigest(designSlot, state.runs.length, recentLaunchLanes(state.launches));
         const queueLimit = mintQueueLimit(state.settings);
         const out = await timed(async () =>
           tally(
@@ -882,9 +886,10 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             id: newId("launch"),
             cycleId: run.id,
             createdAt: Date.now(),
-            /* Weekend-closed stock picks resolve to an open crypto lane here;
-               unknown lanes fall back to the cycle rotation hint. */
-            lane: resolveLane(spec.lane, new Date(), state.runs.length),
+            /* Stock picks whose lane is closed at the projected deploy slot
+               resolve to an open crypto lane here; unknown lanes fall back to
+               the cycle rotation hint. */
+            lane: resolveLane(spec.lane, designSlot, state.runs.length),
             name: spec.name,
             symbol: spec.symbol,
             supplyTokens: spec.supplyTokens,

@@ -6,6 +6,7 @@ import {
   parseEther,
 } from "viem";
 import { LAUNCH_CAPS, getAccount } from "@/lib/launchpad/service";
+import { deployCapacity, deployQueue } from "@/lib/launchpad/capacity";
 import { ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { QUOTE_TOKENS } from "@/lib/launchpad/earnings";
 import { TREASURY_CAPS, buyEligibility } from "@/lib/launchpad/treasury-caps";
@@ -92,8 +93,6 @@ const ERC20_BALANCE_ABI = [
 function log(msg: string): void {
   console.log(`[treasury ${new Date().toISOString()}] ${msg}`);
 }
-
-const DAY_MS = 24 * 3600_000;
 
 /**
  * Charter compliance, enforced in code: the ONLY buyable token is the mission
@@ -294,19 +293,15 @@ export async function runTreasuryTick(state: SwarmState): Promise<void> {
  * skip/propose reasoning is grounded in real capacity instead of guesses.
  */
 export function launchCapacityDigest(state: SwarmState, now = Date.now()): string {
-  const deployed = state.launches
-    .filter((l) => l.status === "deployed" && (l.deployedAt ?? 0) > now - DAY_MS)
-    .map((l) => l.deployedAt ?? 0)
-    .sort((a, b) => a - b);
-  const used = deployed.length;
-  const headroomAt = used >= LAUNCH_CAPS.maxDeploysPerDay ? deployed[0] + DAY_MS : 0;
+  const cap = deployCapacity(state.launches, now);
+  const queued = deployQueue(state.launches, now);
   const gate = mintGate(state);
   const t = state.treasury;
   const buys = state.treasuryBuys ?? [];
   const elig = buyEligibility(state, now);
   const stonkBought = buys.reduce((s, b) => s + b.tokensOut, 0);
   const lines = [
-    `- Deploy cap: ${used}/${LAUNCH_CAPS.maxDeploysPerDay} used in the rolling 24h${headroomAt ? ` — next headroom ~${new Date(headroomAt).toISOString().slice(0, 16)}Z` : " — headroom available now"}`,
+    `- Deploy window: ${cap.used}/${cap.max} used in the rolling 24h, launches spaced ≥${LAUNCH_CAPS.minDeployGapHours}h${cap.open ? " — window open now" : ` — next window ~${new Date(cap.nextWindowAt).toISOString().slice(0, 16)}Z`}${queued.length ? ` · ${queued.length} approved spec(s) already queued (${queued.map((l) => `$${l.symbol}`).join(", ")}) and deploy in that order` : ""}`,
     `- Speech gate: ${gate.blocked ? gate.reason : "clear — a worthy launch can be proposed"}`,
     `- Treasury: ${t ? `${t.ethBalance.toFixed(4)} ETH + ${t.wethBalance.toFixed(5)} WETH fees` : "no snapshot yet"} (floor ${TREASURY_CAPS.treasuryFloorEth} ETH) · ${stonkBought.toFixed(0)} $STONKBROKER accumulated over ${buys.length} treasury buys · next buy ${elig.eligible ? "eligible now" : elig.nextEligibleAt ? `~${new Date(elig.nextEligibleAt).toISOString().slice(0, 16)}Z` : "blocked"}`,
   ];

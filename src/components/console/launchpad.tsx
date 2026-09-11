@@ -41,9 +41,26 @@ interface LaunchpadInfo {
     graduated: boolean;
     createdAt: string;
   }[];
-  caps: { maxDeploysPerDay: number; maxSpendEthPerDeploy: number };
+  caps: { maxDeploysPerDay: number; maxSpendEthPerDeploy: number; minDeployGapHours?: number };
   explorer: string;
   autoExecute: boolean;
+  /** Deploy window and per-spec projection (absent on older published snapshots). */
+  queue?: {
+    used24h: number;
+    max: number;
+    minGapHours: number;
+    open: boolean;
+    nextWindowAt: number;
+    reason: string | null;
+    projected: Record<string, number>;
+  };
+}
+
+function utcClock(at: number): string {
+  const d = new Date(at);
+  const sameDay = d.toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+  const hhmm = d.toISOString().slice(11, 16);
+  return sameDay ? `${hhmm} UTC` : `${d.toISOString().slice(5, 10)} ${hhmm} UTC`;
 }
 
 export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: () => Promise<void> }) {
@@ -188,11 +205,19 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-muted-foreground">
             {info?.autoExecute ? (
-              <p>· Specs auto-approve and deploy the moment the wallet is funded</p>
+              <p>· Specs auto-approve and deploy in queue order; no operator step anywhere in the path</p>
             ) : (
               <p>· Every spec needs operator approval before deploy</p>
             )}
-            <p>· Max {info ? info.caps.maxDeploysPerDay : "—"} deploys per 24h</p>
+            <p>
+              · Max {info ? info.caps.maxDeploysPerDay : "—"} deploys per 24h, spaced ≥{info?.queue?.minGapHours ?? info?.caps.minDeployGapHours ?? "—"}h apart
+              {info?.queue && (
+                <span className="text-foreground">
+                  {" "}
+                  · {info.queue.used24h}/{info.queue.max} used · {info.queue.open ? "window open" : `next window ${utcClock(info.queue.nextWindowAt)}`}
+                </span>
+              )}
+            </p>
             <p>· Max {info ? info.caps.maxSpendEthPerDeploy : "—"} ETH spend per deploy (fee + 2x gas)</p>
             <p>· Specs re-validated against live pad bounds at deploy time</p>
             <p>· Logo + community links attach automatically after each deploy</p>
@@ -202,8 +227,17 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
 
       <EarningsPanel state={state} />
 
-      <div className="flex items-center gap-2">
-        <h2 className="sb-ticker text-xs text-muted-foreground">LAUNCH QUEUE ({pending.length} awaiting action)</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="sb-ticker text-xs text-muted-foreground">
+          LAUNCH QUEUE ({pending.length} {info?.autoExecute ? "queued · autonomous deploy" : "awaiting action"})
+        </h2>
+        {info?.autoExecute && info.queue && pending.length > 0 && (
+          <span className="sb-ticker text-[11px] text-muted-foreground">
+            {info.queue.open
+              ? "· deploy window open, next spec goes out on the next tick"
+              : `· ${info.queue.reason ?? `next window ${utcClock(info.queue.nextWindowAt)}`}`}
+          </span>
+        )}
       </div>
 
       {launches.length === 0 && (
@@ -217,7 +251,15 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {launches.map((l) => (
-          <LaunchCard key={l.id} launch={l} explorer={info?.explorer ?? "https://robinhoodchain.blockscout.com"} walletReady={info?.wallet.funded ?? false} refresh={refresh} />
+          <LaunchCard
+            key={l.id}
+            launch={l}
+            explorer={info?.explorer ?? "https://robinhoodchain.blockscout.com"}
+            walletReady={info?.wallet.funded ?? false}
+            autoExecute={info?.autoExecute ?? false}
+            projectedAt={info?.queue?.projected[l.id] ?? null}
+            refresh={refresh}
+          />
         ))}
       </div>
 
@@ -247,11 +289,17 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
   );
 }
 
-function statusBadge(s: LaunchStatus) {
+function statusBadge(s: LaunchStatus, autoExecute: boolean, projectedAt: number | null) {
   switch (s) {
     case "pending":
-      return <Badge variant="secondary">pending review</Badge>;
+      return <Badge variant="secondary">{autoExecute ? "auto-approving" : "pending review"}</Badge>;
     case "approved":
+      if (autoExecute)
+        return (
+          <Badge className="bg-primary/15 text-primary">
+            queued{projectedAt ? ` · deploys ~${utcClock(projectedAt)}` : " · deploys at next window"}
+          </Badge>
+        );
       return <Badge className="bg-primary/15 text-primary">approved · ready to deploy</Badge>;
     case "deploying":
       return <Badge className="bg-primary/15 text-primary sb-blink">deploying…</Badge>;
@@ -272,11 +320,15 @@ function LaunchCard({
   launch: l,
   explorer,
   walletReady,
+  autoExecute,
+  projectedAt,
   refresh,
 }: {
   launch: LaunchProposal;
   explorer: string;
   walletReady: boolean;
+  autoExecute: boolean;
+  projectedAt: number | null;
   refresh: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -312,7 +364,7 @@ function LaunchCard({
               </CardDescription>
             </div>
           </div>
-          {statusBadge(l.status)}
+          {statusBadge(l.status, autoExecute, projectedAt)}
         </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -353,14 +405,20 @@ function LaunchCard({
             {l.imageHash && <p className="text-muted-foreground">logo live on launcher · {l.imageHash.slice(0, 14)}…</p>}
           </div>
         )}
+        {l.status === "approved" && autoExecute && (
+          <p className="border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-muted-foreground">
+            In the autonomous deploy queue: the executor takes specs in order inside the daily cap and spacing rule
+            {projectedAt ? `; this one is projected for ~${utcClock(projectedAt)}` : ""}. No approval step exists; Reject is the operator veto.
+          </p>
+        )}
         {(l.status === "pending" || l.status === "approved") && (
           <div className="flex flex-wrap gap-2 pt-1">
-            {l.status === "pending" && (
+            {l.status === "pending" && !autoExecute && (
               <Button size="sm" disabled={busy} onClick={() => void act("approve")}>
                 <Check className="size-3.5" /> Approve spec
               </Button>
             )}
-            {l.status === "approved" && (
+            {l.status === "approved" && !autoExecute && (
               <Button size="sm" disabled={busy || !walletReady} onClick={() => void act("deploy")} title={walletReady ? "Deploy on-chain" : "Wallet not funded yet"}>
                 <Rocket className="size-3.5" /> {walletReady ? "Deploy on-chain" : "Deploy (locked: wallet)"}
               </Button>

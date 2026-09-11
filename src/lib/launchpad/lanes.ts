@@ -128,7 +128,7 @@ export function laneMenuDigest(
   const open = stockLanesOpen(at);
   const lines = PAD_LANE_KEYS.map((l) => {
     const info = LANE_INFO[l];
-    const closed = info.kind === "stock" && !open ? " [CLOSED until Monday 00:15 UTC - do not pick]" : "";
+    const closed = info.kind === "stock" && !open ? " [CLOSED at this spec's deploy slot (weekend) - do not pick]" : "";
     return `- ${l}: quoted in ${info.quote} (${info.kind}); ${info.vibe}${closed}`;
   });
   const hint = laneRotationHint(cycleSeq, at);
@@ -137,7 +137,7 @@ export function laneMenuDigest(
     ...lines,
     open
       ? "All lanes are open right now (weekday, equity feeds live). Stock lanes are first-class, verified deployable surfaces (identical pad bounds to weth, createLaunch simulates clean on every stock pad — see the integrations library doc), not exotic options: pairing a launch against a tokenized stock puts LAURA natively inside that stock's story and accrues her fees in it."
-      : "Stock lanes are CLOSED for the weekend (Chainlink equity feeds pause Friday 20:00 UTC to Monday 00:15 UTC). Pick weth, stonk or usdg.",
+      : `Stock lanes are CLOSED at the slot this spec would deploy in (~${at.toISOString().slice(0, 16)}Z, after the queue ahead of it; Chainlink equity feeds pause Friday 20:00 UTC to Monday 00:15 UTC). Pick weth, stonk or usdg, or the spec waits until Monday.`,
     `Rotation hint for this cycle: ${hint}. Recent launch lanes (newest first): ${history}.`,
     "Pick the lane whose quote token genuinely fits the concept - a GME-lore token belongs on the gme lane, an AI token on nvda, a generic meme on weth. Avoid using the same lane three launches in a row unless the concept demands it.",
   ].join("\n");
