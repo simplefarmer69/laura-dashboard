@@ -13,7 +13,17 @@ import { runXPublishTick } from "@/lib/publish/auto";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import { clearFlag, flagPending, RESTART_FLAG } from "@/lib/ops";
+import { beginChainWork, chainWorkInFlight } from "@/lib/chain-work";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
+
+async function withChainWork<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const done = beginChainWork(label);
+  try {
+    return await fn();
+  } finally {
+    done();
+  }
+}
 
 /**
  * LAURA's autopilot. Cascade design: the per-minute tick does only cost-free
@@ -219,7 +229,13 @@ async function tick(): Promise<void> {
      with nothing in flight and let PM2/Railway bring the process back on the
      freshly switched release. The flag is cleared first so a crash loop can
      never be induced by a stale file. */
-  if (process.env.LAURA_DAEMON === "1" && !isCycleRunning() && !isForumRoundRunning() && (await flagPending(RESTART_FLAG))) {
+  if (
+    process.env.LAURA_DAEMON === "1" &&
+    !isCycleRunning() &&
+    !isForumRoundRunning() &&
+    chainWorkInFlight().length === 0 &&
+    (await flagPending(RESTART_FLAG))
+  ) {
     await clearFlag(RESTART_FLAG);
     log("restart requested by operator; quiet tick — exiting for the process manager to restart");
     setTimeout(() => process.exit(0), 500);
@@ -252,25 +268,29 @@ async function tick(): Promise<void> {
     await runLaunchExecutor();
   }
 
+  /* The wallet-touching ticks below run under a chain-work mark so
+     /api/health reports busy and a reload waits until their bookkeeping is
+     written (the $GRADED incident: a release switch 12 s into a deploy). */
+
   /* Earnings watch: cheap on-chain snapshot every ~10 min (interval guard and
      error handling live inside; never throws). Claims send only when
      settings.autoClaimEarnings is true. */
-  await runEarningsMaintenance(state);
+  await withChainWork("earnings", () => runEarningsMaintenance(state));
 
   /* Treasury ops: capped $STONKBROKER accumulation buys (mission-token only).
      All gates live inside (TREASURY_CAPS, floor, executor-busy skip); the
      pure-math eligibility pre-check makes idle ticks free. Never throws. */
-  await runTreasuryTick(state);
+  await withChainWork("treasury", () => runTreasuryTick(state));
 
   /* Smart LP (Stonk Exchange vDEX): pairs accumulated STONK with ETH into one
      full-range position, stakes it for $UP, and refreshes position values.
      Same fail-closed caps/floor/executor-skip discipline. Never throws. */
-  await runSmartLpTick(state);
+  await withChainWork("smart-lp", () => runSmartLpTick(state));
 
   /* Utility builder ops: ships approved dashboard builds every tick; chain
      actions (bag buys, template deploys) additionally require the operator's
      autoExecuteUtility flag and stay inside BUILDER_CAPS. Never throws. */
-  await runBuilderTick(state);
+  await withChainWork("builder", () => runBuilderTick(state));
 
   /* Outbound: fresh approved X drafts post themselves inside the x-guard
      caps (one per tick); silent no-op until the access keys exist. */

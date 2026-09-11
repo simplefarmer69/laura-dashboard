@@ -283,6 +283,55 @@ export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
   return { txHash, launchId, tokenAddress, feePaidEth: Number(formatEther(fee)) };
 }
 
+export interface OrphanDeploy {
+  launchId: string;
+  tokenAddress: string;
+  armed: boolean;
+}
+
+const ERC20_META_ABI = [
+  { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "string" }] },
+  { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "string" }] },
+] as const;
+
+/**
+ * Finds a launch this wallet created on `lane`'s pad whose token the store
+ * does not know yet and whose ERC-20 name and symbol match the spec. Walks
+ * the newest `depth` launch ids on the pad (`launchCount` → `getLaunch`).
+ * Used to reconcile a record left in "deploying" when the process died
+ * between the mined createLaunch tx and the state save (2026-09-11, $GRADED).
+ */
+export async function findOrphanDeploy(
+  lane: PadLane,
+  spec: { name: string; symbol: string },
+  knownTokens: Set<string>,
+  depth = 25,
+): Promise<OrphanDeploy | null> {
+  const account = getAccount();
+  if (!account) return null;
+  const address = LAUNCHPAD.pads[lane] as `0x${string}`;
+  const count = (await publicClient.readContract({ address, abi: PAD_FULL_ABI, functionName: "launchCount" })) as bigint;
+  const known = new Set([...knownTokens].map((t) => t.toLowerCase()));
+  const me = account.address.toLowerCase();
+  for (let id = count; id > 0n && count - id < BigInt(depth); id--) {
+    const launch = (await publicClient.readContract({
+      address,
+      abi: PAD_FULL_ABI,
+      functionName: "getLaunch",
+      args: [id],
+    })) as { token: `0x${string}`; creator: `0x${string}`; armed: boolean };
+    if (launch.creator.toLowerCase() !== me) continue;
+    if (known.has(launch.token.toLowerCase())) continue;
+    const [name, symbol] = await Promise.all([
+      publicClient.readContract({ address: launch.token, abi: ERC20_META_ABI, functionName: "name" }),
+      publicClient.readContract({ address: launch.token, abi: ERC20_META_ABI, functionName: "symbol" }),
+    ]);
+    if (name !== spec.name || symbol !== spec.symbol) continue;
+    return { launchId: String(id), tokenAddress: launch.token, armed: launch.armed };
+  }
+  return null;
+}
+
 /** True when the pad reports the launch's supply loaded and clock started. */
 export async function isLaunchArmed(lane: PadLane, launchId: string): Promise<boolean> {
   const address = LAUNCHPAD.pads[lane] as `0x${string}`;

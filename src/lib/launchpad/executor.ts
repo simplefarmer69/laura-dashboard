@@ -1,9 +1,11 @@
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
-import type { LaunchProposal } from "@/lib/types";
+import type { LaunchProposal, SwarmState } from "@/lib/types";
+import { beginChainWork, chainWorkOpen } from "@/lib/chain-work";
 import {
   LAUNCH_CAPS,
   armLaunch,
   deployLaunch,
+  findOrphanDeploy,
   getAccount,
   verifyLaunchVisible,
   walletStatus,
@@ -78,6 +80,9 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
   launch.status = "deploying";
   await saveState(state);
 
+  /* Open from the moment the tx may be sent until the record is written:
+     /api/health reports busy and the shutdown handler waits on this. */
+  const doneChainWork = beginChainWork(`launch:${launch.id}`);
   try {
     const result = await deployLaunch(launch);
 
@@ -106,23 +111,9 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
     let imageHash: string | null = null;
     let brandingNote = "";
     if (result.tokenAddress) {
-      try {
-        const account = getAccount();
-        if (!account) throw new Error("wallet unavailable for signing");
-        const art = await ensureLaunchArt(launch.id, {
-          name: launch.name,
-          symbol: launch.symbol,
-          motif: launch.artMotif,
-          palette: launch.artPalette,
-        });
-        imageHash = await uploadTokenImage(art);
-        await attachTokenLogo(account, result.tokenAddress, imageHash);
-        const links = profileLinksFromEnv();
-        if (links) await attachTokenProfile(account, result.tokenAddress, links);
-      } catch (err) {
-        brandingNote = ` · logo attach failed: ${String(err)}`;
-        log(`branding failed for ${launch.symbol}: ${String(err)}`);
-      }
+      const branded = await brandLaunch(launch, result.tokenAddress);
+      imageHash = branded.imageHash;
+      brandingNote = branded.note ? ` · ${branded.note}` : "";
     }
 
     /* Verify the USER-VISIBLE end state: the token must render on the surface
@@ -193,6 +184,89 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       });
     });
     return { ok: false, error: String(err), httpStatus: 502 };
+  } finally {
+    doneChainWork();
+  }
+}
+
+/** Procedural logo + community links on the launcher; never throws. */
+async function brandLaunch(
+  launch: LaunchProposal,
+  tokenAddress: string,
+): Promise<{ imageHash: string | null; note: string }> {
+  try {
+    const account = getAccount();
+    if (!account) throw new Error("wallet unavailable for signing");
+    const art = await ensureLaunchArt(launch.id, {
+      name: launch.name,
+      symbol: launch.symbol,
+      motif: launch.artMotif,
+      palette: launch.artPalette,
+    });
+    const imageHash = await uploadTokenImage(art);
+    await attachTokenLogo(account, tokenAddress, imageHash);
+    const links = profileLinksFromEnv();
+    if (links) await attachTokenProfile(account, tokenAddress, links);
+    return { imageHash, note: "" };
+  } catch (err) {
+    log(`branding failed for ${launch.symbol}: ${String(err)}`);
+    return { imageHash: null, note: `logo attach failed: ${String(err)}` };
+  }
+}
+
+/**
+ * A record can only stay in "deploying" across a process death (the deploy
+ * itself is synchronous inside one process and marks its chain work). For
+ * each such orphan: if the pad shows a launch by our wallet with this token's
+ * name and symbol, the tx was mined and only the bookkeeping was lost —
+ * record it as deployed (the arm/brand/verify passes then finish the job);
+ * otherwise the tx never went out and the spec returns to the queue.
+ */
+async function reconcileOrphanDeploys(state: SwarmState): Promise<void> {
+  const orphans = state.launches.filter((l) => l.status === "deploying" && !chainWorkOpen(`launch:${l.id}`));
+  if (orphans.length === 0) return;
+  const known = new Set(state.launches.map((l) => l.tokenAddress).filter((t): t is string => !!t));
+  for (const orphan of orphans) {
+    let found: Awaited<ReturnType<typeof findOrphanDeploy>> = null;
+    try {
+      found = await findOrphanDeploy(orphan.lane, { name: orphan.name, symbol: orphan.symbol }, known);
+    } catch (err) {
+      log(`reconcile: pad lookup for ${orphan.symbol} failed (${String(err)}); will retry next tick`);
+      continue;
+    }
+    if (found) {
+      known.add(found.tokenAddress);
+      const branded = await brandLaunch(orphan, found.tokenAddress);
+      await updateState((s) => {
+        const l = s.launches.find((x) => x.id === orphan.id);
+        if (!l) return;
+        l.status = "deployed";
+        l.tokenAddress = found.tokenAddress;
+        l.launchId = found.launchId;
+        l.deployedAt = l.deployedAt ?? Date.now();
+        l.armedAt = found.armed ? Date.now() : null;
+        l.imageHash = branded.imageHash;
+        l.error = `Recovered: the process was restarted mid-deploy; the on-chain launch (#${found.launchId}) was found on the pad and re-attached. tx hash not recorded.${branded.note ? ` · ${branded.note}` : ""}`;
+        const agent = s.agents.find((a) => a.id === "mint");
+        if (agent) agent.stats.published += 1;
+        pushEvent(s, {
+          kind: "launch.deployed",
+          agentId: "system",
+          title: `Deployed ${l.name} ($${l.symbol}) on Smart Launch V2 (recovered after restart)`,
+          detail: `token ${found.tokenAddress} · launch #${found.launchId} · the deploy tx was mined while the process restarted; record reconciled from the pad${found.armed ? " · armed" : " · ARM PENDING"}${branded.imageHash ? " · logo attached" : ""}`,
+          refId: l.id,
+        });
+      });
+      log(`reconcile: ${orphan.symbol} found on the ${orphan.lane} pad as launch #${found.launchId} (${found.tokenAddress}); recorded as deployed`);
+    } else {
+      await updateState((s) => {
+        const l = s.launches.find((x) => x.id === orphan.id);
+        if (!l) return;
+        l.status = "approved";
+        l.error = "Process restarted mid-deploy before any transaction landed; returned to the queue.";
+      });
+      log(`reconcile: ${orphan.symbol} not on the pad; returned to the queue`);
+    }
   }
 }
 
@@ -218,6 +292,15 @@ const VERIFY_BACKOFF_MS = 5 * 60_000;
 /** Arms one deployed-but-unarmed launch: loads supply, starts the clock, records it. */
 async function repairUnarmedLaunch(launch: LaunchProposal): Promise<void> {
   log(`repair: arming ${launch.name} ($${launch.symbol}) — launch #${launch.launchId}`);
+  const done = beginChainWork(`arm:${launch.id}`);
+  try {
+    await armAndRecord(launch);
+  } finally {
+    done();
+  }
+}
+
+async function armAndRecord(launch: LaunchProposal): Promise<void> {
   const arm = await armLaunch(launch);
   await updateState((s) => {
     const l = s.launches.find((x) => x.id === launch.id);
@@ -274,8 +357,13 @@ export async function runLaunchExecutor(): Promise<void> {
   if (es.running) return;
   es.running = true;
   try {
-    const state = await loadState();
+    let state = await loadState();
     if (!state.settings.autoExecuteLaunches) return;
+
+    if (state.launches.some((l) => l.status === "deploying")) {
+      await reconcileOrphanDeploys(state);
+      state = await loadState();
+    }
 
     const now = Date.now();
     const unarmed = state.launches.filter(

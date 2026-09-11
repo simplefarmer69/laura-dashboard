@@ -45,7 +45,8 @@ pm2() { npx --yes pm2 "$@"; }
 
 health_json() { curl -s -m 8 "$HEALTH" 2>/dev/null || true; }
 health_ok() { [ "$(curl -s -m 8 -o /dev/null -w '%{http_code}' "$HEALTH" 2>/dev/null)" = "200" ]; }
-# `busy` covers cycles and Cafe Bar rounds; older releases only report cycleInFlight.
+# `busy` covers cycles, Cafe Bar rounds and chain work (deploy/arm/buy in
+# flight); older releases only report cycleInFlight.
 cycle_in_flight() { health_json | grep -qE '"(busy|cycleInFlight)":true'; }
 
 # ---------------------------------------------------------------- install
@@ -106,11 +107,23 @@ build_release() {
 }
 
 wait_quiet() {
-  local waited=0
-  while cycle_in_flight; do
-    if [ "$waited" -ge "$QUIET_WAIT_MAX_SEC" ]; then log "quiet wait exceeded ${QUIET_WAIT_MAX_SEC}s; switching anyway (self-heal closes any orphan)"; return 0; fi
-    [ $((waited % 300)) -eq 0 ] && log "cycle in flight; waiting for a quiet moment (${waited}s)"
-    sleep 30; waited=$((waited + 30))
+  local waited=0 confirm
+  while :; do
+    if cycle_in_flight; then
+      if [ "$waited" -ge "$QUIET_WAIT_MAX_SEC" ]; then log "quiet wait exceeded ${QUIET_WAIT_MAX_SEC}s; switching anyway (self-heal closes any orphan)"; return 0; fi
+      [ $((waited % 300)) -eq 0 ] && log "work in flight; waiting for a quiet moment (${waited}s)"
+      sleep 30; waited=$((waited + 30))
+      continue
+    fi
+    # Quiet once is not quiet enough: the executor can start a deploy between
+    # the poll and the switch (that is exactly how $GRADED was orphaned on
+    # 2026-09-11). Re-confirm twice a few seconds apart; any busy reading
+    # restarts the wait.
+    for confirm in 1 2; do
+      sleep 5
+      if cycle_in_flight; then log "work started during the quiet check; waiting again"; continue 2; fi
+    done
+    return 0
   done
 }
 

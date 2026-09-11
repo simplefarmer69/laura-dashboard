@@ -36,7 +36,13 @@ const laura = {
     SWARM_DATA_DIR: dataDir,
     /* Enables /api/ops/restart (graceful exit; PM2 brings the process back). */
     LAURA_DAEMON: "1",
+    /* Next hands SIGTERM/SIGINT to src/instrumentation.ts, which waits for
+       chain work (deploy/arm/buy) to finish its bookkeeping before exiting. */
+    NEXT_MANUAL_SIG_HANDLE: "true",
   },
+  /* Must exceed the instrumentation shutdown wait (120 s) or PM2 SIGKILLs
+     the process mid-bookkeeping and defeats the graceful path. */
+  kill_timeout: 150000,
   autorestart: true,
   restart_delay: 5000,
   max_restarts: 50,
