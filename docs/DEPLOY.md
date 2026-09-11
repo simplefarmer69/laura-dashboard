@@ -71,28 +71,71 @@ Redeploy cadence: every push to `main` redeploys (~3 min). The external agent
 pushes there often; consider deploying Railway from a `deploy` branch that is
 fast-forwarded deliberately between cycles.
 
-## 4. PC daemon runbook (Windows / macOS / Linux)
+## 4. PC daemon runbook (the chosen host)
 
-Prereqs: Node 22 (`node -v`), git, the repo cloned, `.env.local` in the repo root.
+The daemon kit (`scripts/daemon/laura-daemon.sh`) runs LAURA around the clock on
+your PC, **self-updates from GitHub main**, restarts on crash, survives reboots,
+and exposes a narrow co-pilot surface so the Cursor agent can inspect and steer
+it without a shell on your machine. Linux, macOS, or Windows via **WSL2** (the
+kit is bash; native Windows PowerShell is not supported).
+
+### 4.1 Install (once)
 
 ```
-npm ci
-npm run build
-npx pm2 start ecosystem.config.cjs
-npx pm2 save
+curl -fsSL https://raw.githubusercontent.com/simplefarmer69/laura-dashboard/main/scripts/daemon/laura-daemon.sh -o laura-daemon.sh
+bash laura-daemon.sh install        # creates ~/laura/shared/.env.local template, exits
+# fill ~/laura/shared/.env.local (same keys as the VM's .env.local + OPERATOR_TOKEN)
+bash laura-daemon.sh install        # clones, builds release, starts PM2 apps, pm2 save
+npx pm2 startup                     # run the printed command (WSL2: enable systemd first)
 ```
 
-Boot persistence:
-- macOS / Linux: `npx pm2 startup` and run the printed command.
-- Windows: `npm i -g pm2-windows-startup && pm2-startup install`, then `pm2 save`.
+Prereqs: git, Node 22, npm, curl. `OPERATOR_TOKEN` = 32+ random characters
+(`openssl rand -hex 24`), shared only with the Cursor agent, never in git.
 
-Power settings: disable sleep/hibernate on AC power; allow the network adapter to
-stay on. Logs: `data/pm2-out.log`, `data/pm2-err.log`; `npx pm2 logs laura`.
-Updating: `git pull && npm ci && npm run build && npx pm2 restart laura` — do it
-between cycles (`/api/health` → `cycleInFlight: false`).
+What runs under PM2 afterwards:
 
-Health: `curl http://127.0.0.1:4747/api/health`. The dashboard is at
-`http://127.0.0.1:4747`.
+| app | what it does |
+|---|---|
+| `laura` | `next start` from `~/laura/current` (`SWARM_DATA_DIR=~/laura/data`, `LAURA_DAEMON=1`) |
+| `laura-updater` | every 5 min: fetch github/main; on a new commit build a **new release dir**, wait for `cycleInFlight:false`, switch the `current` symlink, reload, verify `/api/health`; **roll back** to the previous release if health fails; keep 3 releases |
+| `laura-watchdog` | probe `/api/health` every 60 s; `pm2 restart laura` after 3 misses |
+
+Layout: `~/laura/{repo,releases/<sha>,current,data,shared/.env.local}`. Data and
+secrets never live inside a release, so a bad build can never touch state.
+
+### 4.2 Co-pilot access for the Cursor agent
+
+The app exposes `/api/ops/*` **only when `OPERATOR_TOKEN` is set** (otherwise 404):
+
+| route | purpose |
+|---|---|
+| `GET /api/ops/status` | release sha, autopilot/cycle/forum state, last runs, agent statuses, recent events, daemon log tail |
+| `GET /api/ops/logs?lines=200[&file=pm2-err.log]` | tails of pm2-out / pm2-err / daemon / watchdog logs |
+| `POST /api/ops/update` | updater fetches + builds + switches at its next pass (≤ 1 min) |
+| `POST /api/ops/restart` | graceful restart at the next quiet tick (PM2 brings it back) |
+
+All responses pass `redactSecrets`. No command execution, no state mutation
+beyond the two request flags. Reach it from outside with a Cloudflare Tunnel
+that publishes **only** those paths (`scripts/daemon/cloudflared.example.yml`
+→ `laura-host.stonkbrokers.io`), or with Tailscale if you prefer a private
+network. The dashboard itself stays on `http://127.0.0.1:4747`.
+
+Co-pilot workflow: the agent pushes a fix to github/main → the updater deploys
+it within ~5 min at a quiet moment (or immediately via `POST /api/ops/update`)
+→ the agent confirms on `/api/ops/status`. Failed builds never replace the live
+release; failed health rolls back automatically and the daemon log says so.
+
+### 4.3 Failsafes
+
+- Code caps (launch/treasury/builder) are compiled into the release — unchanged by hosting.
+- Blue/green releases + health-verified switch + automatic rollback.
+- PM2 autorestart, memory cap 2 GB, watchdog restart on health misses, boot persistence.
+- Scheduler self-heal closes orphaned runs after a crash or sleep; the continuous
+  cadence resumes on its own.
+- Power: disable sleep/hibernate on AC, keep the network adapter awake; on
+  laptops set lid-close to "do nothing".
+
+Manual fallbacks: `bash laura-daemon.sh status | update | watchdog`, `npx pm2 logs laura`.
 
 ## 5. State migration (zero loss)
 

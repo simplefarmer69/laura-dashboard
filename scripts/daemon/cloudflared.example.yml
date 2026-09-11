@@ -1,0 +1,22 @@
+# Cloudflare Tunnel config for the LAURA co-pilot surface.
+# Exposes ONLY /api/ops/* (bearer-token gated) at a hostname on your zone; the
+# dashboard, settings and launch endpoints stay on localhost.
+#
+#   cloudflared tunnel login
+#   cloudflared tunnel create laura-host
+#   cloudflared tunnel route dns laura-host laura-host.stonkbrokers.io
+#   cp scripts/daemon/cloudflared.example.yml ~/.cloudflared/config.yml   # fill in the tunnel id
+#   cloudflared service install        # runs at boot (Linux systemd / macOS launchd / WSL2 systemd)
+#
+# Then give the Cursor agent the hostname + OPERATOR_TOKEN (never in git).
+
+tunnel: <TUNNEL-UUID>
+credentials-file: /home/<you>/.cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  - hostname: laura-host.stonkbrokers.io
+    path: ^/api/ops/.*
+    service: http://127.0.0.1:4747
+  - hostname: laura-host.stonkbrokers.io
+    service: http_status:404
+  - service: http_status:404

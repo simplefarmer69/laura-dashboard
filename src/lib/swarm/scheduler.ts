@@ -11,6 +11,7 @@ import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { runBuilderTick } from "@/lib/builder/executor";
 import { maybePublishSnapshot } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
+import { clearFlag, flagPending, RESTART_FLAG } from "@/lib/ops";
 import type { SwarmEventKind, SwarmState } from "@/lib/types";
 
 /**
@@ -147,6 +148,17 @@ async function tick(): Promise<void> {
       for (const a of st.agents) if (a.status === "running") a.status = "idle";
     });
     log(`self-heal: finalized orphaned run(s) ${staleIds.join(", ")}`);
+  }
+
+  /* Operator-requested graceful restart (daemon hosts only): exit at a tick
+     with nothing in flight and let PM2/Railway bring the process back on the
+     freshly switched release. The flag is cleared first so a crash loop can
+     never be induced by a stale file. */
+  if (process.env.LAURA_DAEMON === "1" && !isCycleRunning() && !isForumRoundRunning() && (await flagPending(RESTART_FLAG))) {
+    await clearFlag(RESTART_FLAG);
+    log("restart requested by operator; quiet tick — exiting for the process manager to restart");
+    setTimeout(() => process.exit(0), 500);
+    return;
   }
 
   const today = utcDate();
