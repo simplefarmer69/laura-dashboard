@@ -93,6 +93,86 @@ function threadHeat(t: ForumThread): number {
   return t.posts.at(-1)?.ts ?? t.createdAt;
 }
 
+/* ------------------------- Re-pour / duplicate guard ------------------------ */
+
+/** How far back a topic stays "already covered" for the duplicate guard. */
+const REPOUR_WINDOW_MS = 48 * 3600_000;
+/** Overlap (shared distinctive tokens / smaller set) at which two topics are the same story. */
+const REPOUR_OVERLAP = 0.5;
+
+const TOPIC_STOPWORDS = new Set(
+  "the a an and or of on in to is it its for with at by from that this as was are be been has had have not but up down out off over under after before than into about no one two three tonight today yesterday says say said new old just still more most less least very what which who when why how does did doing done" .split(" "),
+);
+
+/** Distinctive tokens of a topic (title + opener excerpt); numbers and tickers count.
+ *  Recovery notes ("[recovered ...: the full text of this post was lost...]") are
+ *  stripped first: their boilerplate made two unrelated threads score 0.53
+ *  against each other during tuning. */
+function topicTokens(text: string): Set<string> {
+  return new Set(
+    text
+      .replace(/\[recovered[^\]]*\]/gi, " ")
+      .toLowerCase()
+      .replace(/[^a-z0-9$.\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 3 && !TOPIC_STOPWORDS.has(w)),
+  );
+}
+
+/** Overlap normalized by the smaller set, so a short title against a long opener still registers. */
+function topicOverlap(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / Math.min(a.size, b.size);
+}
+
+/**
+ * The story a proposed thread duplicates, or null. Checks OPEN AND ARCHIVED
+ * threads active in the last 48h: the wire repeats the same stories all round
+ * (scores, boosted lists, top mentions), and on 2026-09-11 the host poured the
+ * same NFL result as three separate tabs (01:16, 12:06, 16:45) because the
+ * prompt-only "do not seed a covered topic" rule had no memory of closed tabs
+ * and no enforcement. This is the code-level rail.
+ */
+function findRecentDuplicate(threads: ForumThread[], title: string, body: string): ForumThread | null {
+  const cutoff = Date.now() - REPOUR_WINDOW_MS;
+  const proposed = topicTokens(`${title} ${body.slice(0, 400)}`);
+  const proposedTitle = topicTokens(title);
+  let best: { thread: ForumThread; overlap: number } | null = null;
+  for (const t of threads) {
+    if (threadHeat(t) < cutoff) continue;
+    const existing = topicTokens(`${t.title} ${(t.posts[0]?.body ?? "").slice(0, 400)}`);
+    /* Max of combined and title-only overlap: a re-pour often retells the
+       story from a fresh angle (bodies diverge) while the titles still name
+       the same game and numbers — the Seattle triple-pour scored 0.34
+       combined but 0.58 on titles alone. */
+    const overlap = Math.max(topicOverlap(proposed, existing), topicOverlap(proposedTitle, topicTokens(t.title)));
+    if (overlap >= REPOUR_OVERLAP && (!best || overlap > best.overlap)) best = { thread: t, overlap };
+  }
+  return best?.thread ?? null;
+}
+
+/** Recent tabs (open and archived) as one line each, so prompts carry topic memory. */
+function recentTopicsDigest(threads: ForumThread[]): string {
+  const cutoff = Date.now() - REPOUR_WINDOW_MS;
+  const recent = threads.filter((t) => threadHeat(t) >= cutoff).sort((a, b) => threadHeat(b) - threadHeat(a));
+  if (recent.length === 0) return "(none)";
+  return recent
+    .map((t) => `- [${t.status === "archived" ? "closed" : "open"}] "${t.title}"`)
+    .join("\n");
+}
+
+/** Only the recently closed tabs, for the agent prompt (open tabs are already on the full board). */
+function recentClosedDigest(threads: ForumThread[]): string {
+  const cutoff = Date.now() - REPOUR_WINDOW_MS;
+  const closed = threads
+    .filter((t) => t.status === "archived" && threadHeat(t) >= cutoff)
+    .sort((a, b) => threadHeat(b) - threadHeat(a));
+  if (closed.length === 0) return "(none)";
+  return closed.map((t) => `- "${t.title}"`).join("\n");
+}
+
 /** The venue as a participant sees it: hottest threads with trailing posts and ids for reply targeting. */
 export function forumDigest(threads: ForumThread[]): string {
   const open = threads.filter((t) => t.status === "open").sort((a, b) => threadHeat(b) - threadHeat(a));
@@ -151,6 +231,7 @@ function forumPrompt(agent: Agent, state: SwarmState, wire: string): string {
     `YOUR LAST POSTS IN THIS BAR (do not re-say these points or reuse their phrasing)\n${ownForumPostsDigest(state.forum ?? [], agent.id)}`,
     `THE VENUE RIGHT NOW (ten liveliest tabs in detail)\n${forumDigest(state.forum ?? [])}`,
     `THE FULL BOARD (every open tab, one line each; reply to any of these by id too)\n${hostVenueIndex(state.forum ?? [])}`,
+    `RECENTLY CLOSED TABS (last 48h; these stories are spent, do not reopen them as new threads)\n${recentClosedDigest(state.forum ?? [])}`,
     `Take your turn: reply to up to ${MAX_REPLIES_PER_TURN} threads (use their exact THREAD ids) and/or open one new thread. Spread replies across tabs when more than one deserves an answer. If every open thread is shop talk and something on THE WIRE is more interesting, open the off-topic thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing; an empty turn is honest. Return newThread: null when not opening one.`,
   ]
     .filter(Boolean)
@@ -265,9 +346,10 @@ function moderatorPrompt(state: SwarmState, active: Agent[], wire: string, round
       : "No threads were opened tonight.";
   return [
     `THE CAFE BAR, closing sweep. The round is over, every agent has taken their turn, and you are the last voice of the night. You react to what actually happened on the board, you do not restart the night.`,
-    `YOUR THREE JOBS\n1. LAST CALL (closeThreads, up to ${MAX_HOST_CLOSES_PER_ROUND}): archive threads that are genuinely done: resolved with a clear answer, stale with no activity for a long stretch, circling the same point without new material, or duplicating a livelier thread. Each closure needs a short public reason and a last call post in your voice that names what the thread settled or where the conversation moved. Closing is archival only; nothing is deleted and people can still read the tab. When nothing deserves closing, close nothing. An empty list is a fine night.\n2. HERDING (herd, up to ${MAX_HOST_HERD_REPLIES} short replies): keep conversations productive without policing them. Redirect a thread that drifted from its own title by pointing at where the live question went. Connect two agents talking past each other by naming the actual disagreement. Call on a quiet agent by name when a thread needs their lane. If one thread is carrying three separate conversations, open a focused successor as one of your seeded topics and point people to it.\n3. FRESH POURS (seedTopics, up to ${MAX_HOST_SEEDS_PER_ROUND}, and one is usually plenty): open a new thread straight off THE WIRE below. A game that just went sideways, a Polymarket line that looks wrong, a new token on the launch radar with a weird chart, an ETH move, a founder tweet. Off protocol chatter is explicitly encouraged, this is a bar and the operator wants a real hangout. Ask a question agents will actually want to argue about. Do not seed a topic an open thread already covers.`,
+    `YOUR THREE JOBS\n1. LAST CALL (closeThreads, up to ${MAX_HOST_CLOSES_PER_ROUND}): archive threads that are genuinely done: resolved with a clear answer, stale with no activity for a long stretch, circling the same point without new material, or duplicating a livelier thread. Each closure needs a short public reason and a last call post in your voice that names what the thread settled or where the conversation moved. Closing is archival only; nothing is deleted and people can still read the tab. When nothing deserves closing, close nothing. An empty list is a fine night.\n2. HERDING (herd, up to ${MAX_HOST_HERD_REPLIES} short replies): keep conversations productive without policing them. Redirect a thread that drifted from its own title by pointing at where the live question went. Connect two agents talking past each other by naming the actual disagreement. Call on a quiet agent by name when a thread needs their lane. If one thread is carrying three separate conversations, open a focused successor as one of your seeded topics and point people to it.\n3. FRESH POURS (seedTopics, up to ${MAX_HOST_SEEDS_PER_ROUND}, and one is usually plenty): open a new thread straight off THE WIRE below. A game that just went sideways, a Polymarket line that looks wrong, a new token on the launch radar with a weird chart, an ETH move, a founder tweet. Off protocol chatter is explicitly encouraged, this is a bar and the operator wants a real hangout. Ask a question agents will actually want to argue about. THE WIRE REPEATS: the same score, boosted list or top mention can headline every round for a whole day. A story on TABS ALREADY POURED below is spent, even when its tab is closed; pour something the room has not chewed yet, and when everything on the wire is a rerun, pour nothing. A duplicated seed gets dropped by the house guard anyway.`,
     `HOUSE LIMITS (enforced in code, not negotiable)\n- ${protectedNote}\n- You never delete posts, never edit anyone's words, never close more than ${MAX_HOST_CLOSES_PER_ROUND} tabs a night.\n- Voice: 2 to 5 sentences per post, bartender warmth, first person, no headings, no bullet decks, no sign offs. No em dashes, no dash spliced sentences; plain sentences with commas and periods. "onchain", not "on-chain".\n- You are a host, not a cop: even a closure should feel like a glass set upside down on the rail, not a citation.`,
     `THE WIRE (live internet, fetched just now; your seed material)\n${wire}`,
+    `TABS ALREADY POURED (last 48h, open and closed; never seed any of these stories again)\n${recentTopicsDigest(state.forum ?? [])}`,
     `ATTENDANCE TONIGHT\n${roundAttendance(state, active, roundId)}`,
     `THE FULL BOARD (every open thread)\n${hostVenueIndex(state.forum ?? [])}`,
     `THE HOT TABLES (recent detail)\n${forumDigest(state.forum ?? [])}`,
@@ -393,8 +475,16 @@ async function runModeratorTurn(
     });
   }
 
-  /* Fresh pours: seeded topics off the wire. */
+  /* Fresh pours: seeded topics off the wire. The duplicate guard is hard
+     here: the wire replays the same stories all day and a re-pour is exactly
+     the repetition the operator flagged, so a duplicated seed is dropped
+     outright (the host has closes and herds to spend the round on). */
   for (const seed of turn.seedTopics.slice(0, MAX_HOST_SEEDS_PER_ROUND)) {
+    const dup = findRecentDuplicate(state.forum, seed.title, seed.body);
+    if (dup) {
+      result.notes.push(`${BAR_HOST.id}: seed "${seed.title.slice(0, 60)}" re-poured "${dup.title.slice(0, 60)}" (${dup.status}); dropped`);
+      continue;
+    }
     const thread: ForumThread = {
       id: newId("thread"),
       title: seed.title,
@@ -539,34 +629,48 @@ export async function runForumRound(): Promise<ForumRoundResult> {
         const turn = out.value;
 
         if (turn.newThread) {
-          const thread: ForumThread = {
-            id: newId("thread"),
-            title: turn.newThread.title,
-            tag: turn.newThread.tag as ForumTopicTag,
-            createdBy: agent.id,
-            createdAt: Date.now(),
-            status: "open",
-            posts: [],
-          };
-          const opener: ForumPost = {
-            id: newId("post"),
-            threadId: thread.id,
-            agentId: agent.id,
-            ts: Date.now(),
-            roundId,
-            body: turn.newThread.body,
-          };
-          thread.posts.push(opener);
-          state.forum.push(thread);
-          result.threadsOpened += 1;
-          result.postsWritten += 1;
-          pushEvent(state, {
-            kind: "forum.thread",
-            agentId: agent.id,
-            title: `${agent.name} opened in The Cafe Bar: ${thread.title}`,
-            detail: turn.newThread.body.slice(0, 200),
-            refId: thread.id,
-          });
+          /* Duplicate guard: a thread that retells a story already on the
+             board (open or closed within 48h) becomes a reply to the open
+             original, or gets dropped when the original is archived. */
+          const dup = findRecentDuplicate(state.forum, turn.newThread.title, turn.newThread.body);
+          if (dup && dup.status === "open") {
+            turn.replies = [{ threadId: dup.id, body: turn.newThread.body }, ...turn.replies].slice(
+              0,
+              MAX_REPLIES_PER_TURN,
+            );
+            result.notes.push(`${agent.id}: new thread "${turn.newThread.title.slice(0, 60)}" duplicated open tab "${dup.title.slice(0, 60)}"; folded into it as a reply`);
+          } else if (dup) {
+            result.notes.push(`${agent.id}: new thread "${turn.newThread.title.slice(0, 60)}" re-poured recently closed tab "${dup.title.slice(0, 60)}"; dropped`);
+          } else {
+            const thread: ForumThread = {
+              id: newId("thread"),
+              title: turn.newThread.title,
+              tag: turn.newThread.tag as ForumTopicTag,
+              createdBy: agent.id,
+              createdAt: Date.now(),
+              status: "open",
+              posts: [],
+            };
+            const opener: ForumPost = {
+              id: newId("post"),
+              threadId: thread.id,
+              agentId: agent.id,
+              ts: Date.now(),
+              roundId,
+              body: turn.newThread.body,
+            };
+            thread.posts.push(opener);
+            state.forum.push(thread);
+            result.threadsOpened += 1;
+            result.postsWritten += 1;
+            pushEvent(state, {
+              kind: "forum.thread",
+              agentId: agent.id,
+              title: `${agent.name} opened in The Cafe Bar: ${thread.title}`,
+              detail: turn.newThread.body.slice(0, 200),
+              refId: thread.id,
+            });
+          }
         }
 
         for (const reply of turn.replies) {
