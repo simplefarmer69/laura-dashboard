@@ -9,9 +9,9 @@ import path from "node:path";
  * acquisition is an atomic O_EXCL create, so exactly one process wins.
  *
  * Failure posture, in order of importance:
- * - Never deadlock: a lock older than CYCLE_LOCK_STALE_MS is treated as
- *   orphaned (crashed process) and taken over; a corrupt/unreadable lock file
- *   counts as stale. Real cycles finish in well under 15 minutes.
+ * - Never deadlock: a lock older than CYCLE_LOCK_STALE_MS, or whose holder pid
+ *   is no longer running, is treated as orphaned (crashed process) and taken
+ *   over; a corrupt/unreadable lock file counts as stale.
  * - Never stop the swarm: unexpected filesystem errors fail OPEN ("unlocked")
  *   — the caller proceeds without the lock rather than stalling forever.
  * - Never release someone else's lock: release only unlinks when the recorded
@@ -30,6 +30,22 @@ export type CycleLockResult = "acquired" | "held" | "unlocked";
 interface LockPayload {
   pid: number;
   startedAt: number;
+}
+
+/**
+ * A holder that no longer exists cannot finish its cycle. Every runtime that
+ * shares this data dir runs on the same machine, so `kill -0` is authoritative;
+ * EPERM (alive but not ours) counts as alive. Lets a PM2/daemon restart
+ * mid-cycle resume within a minute instead of idling out the stale window.
+ */
+function holderAlive(pid: unknown): boolean {
+  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 /** Atomic create; false when the file already exists. */
@@ -52,7 +68,8 @@ export async function acquireCycleLock(now = Date.now()): Promise<CycleLockResul
     let stale = true;
     try {
       const held = JSON.parse(await fs.readFile(LOCK_FILE, "utf8")) as Partial<LockPayload>;
-      stale = !(typeof held.startedAt === "number" && now - held.startedAt < CYCLE_LOCK_STALE_MS);
+      const fresh = typeof held.startedAt === "number" && now - held.startedAt < CYCLE_LOCK_STALE_MS;
+      stale = !fresh || !holderAlive(held.pid);
     } catch {
       /* unreadable or corrupt lock: treat as stale */
     }
