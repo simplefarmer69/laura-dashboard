@@ -1,8 +1,8 @@
 import os from "node:os";
-import { loadState } from "@/lib/store";
+import { loadState, pushEvent, updateState } from "@/lib/store";
 import { acquireCycleLock, releaseCycleLock } from "@/lib/swarm/cycle-lock";
 import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy";
-import { runCycle, runGrader } from "@/lib/swarm/orchestrator";
+import { isCycleRunning, runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
@@ -97,6 +97,36 @@ async function tick(): Promise<void> {
      ancient events as fresh triggers). */
   const latestRun = state.runs.at(-1);
   if (latestRun) s.lastCycleAt = Math.max(s.lastCycleAt, latestRun.finishedAt ?? latestRun.startedAt);
+
+  /* Self-heal: a process death mid-cycle leaves the newest run permanently
+     unfinished and its agents shown as "running" forever (this is what made
+     the swarm look stalled on 2026-09-10 and needed a manual finalize).
+     Cadence already tolerates the orphan; this closes the record honestly.
+     45 min is double the longest observed cycle, and isCycleRunning() covers
+     every in-process cycle whatever its trigger, so a live cycle is never
+     clipped. */
+  if (
+    latestRun &&
+    !latestRun.finishedAt &&
+    Date.now() - latestRun.startedAt > 45 * 60_000 &&
+    !isCycleRunning()
+  ) {
+    await updateState((st) => {
+      const orphan = st.runs.find((r) => r.id === latestRun.id);
+      if (!orphan || orphan.finishedAt) return;
+      orphan.finishedAt = Date.now();
+      orphan.error = orphan.error ?? "orphaned: process died mid-cycle; finalized by scheduler self-heal";
+      for (const a of st.agents) if (a.status === "running") a.status = "idle";
+      pushEvent(st, {
+        kind: "cycle.finished",
+        agentId: "system",
+        title: `Cycle ${orphan.id} finalized by self-heal (orphaned mid-cycle)`,
+        detail: "The process running this cycle died before it finished; the record is closed so nothing waits on it.",
+        refId: orphan.id,
+      });
+    });
+    log(`self-heal: finalized orphaned run ${latestRun.id}`);
+  }
 
   const today = utcDate();
   const hasGradeToday = state.grades.some((g) => g.date === today);
