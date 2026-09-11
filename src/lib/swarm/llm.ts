@@ -51,6 +51,27 @@ export interface StructuredCall<T> {
   mock: () => T;
 }
 
+/**
+ * Compact "path: code (limit)" list pulled from a zod error message, so the
+ * one-line failure log names the field that broke instead of only the first
+ * 300 chars of the model's output (which never reach the failing field).
+ */
+function schemaIssues(cause: string): string {
+  const start = cause.indexOf("Error message: ");
+  const jsonText = start >= 0 ? cause.slice(start + "Error message: ".length) : cause;
+  try {
+    const parsed = JSON.parse(jsonText) as Array<{ code?: string; path?: Array<string | number>; maximum?: number; minimum?: number }>;
+    if (!Array.isArray(parsed)) return "unparsed";
+    return parsed
+      .slice(0, 4)
+      .map((i) => `${(i.path ?? []).join(".") || "$"}: ${i.code ?? "?"}${i.maximum !== undefined ? ` >${i.maximum}` : ""}${i.minimum !== undefined ? ` <${i.minimum}` : ""}`)
+      .join("; ");
+  } catch {
+    const m = /"path":\s*\[([^\]]*)\]/.exec(cause);
+    return m ? m[1].replace(/["\s]/g, "") : "unparsed";
+  }
+}
+
 export async function generateStructured<T>(
   resolved: ResolvedModel,
   call: StructuredCall<T>,
@@ -71,7 +92,7 @@ export async function generateStructured<T>(
     const e = err as { text?: string; cause?: { message?: string } };
     const cause = e.cause?.message ?? String(err);
     console.error(
-      `[llm] ${resolved.provider}/${resolved.modelId} schema failure (${cause.slice(0, 300)}), attempting repair`,
+      `[llm] ${resolved.provider}/${resolved.modelId} schema failure [${schemaIssues(cause)}] (${cause.slice(0, 200)}), attempting repair`,
     );
     try {
       const { object } = await generateObject({

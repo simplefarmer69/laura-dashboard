@@ -30,9 +30,12 @@ import {
 
 /* Generous caps: providers write long; hard failures cost a whole agent turn.
    Anything display-constrained is truncated at the point of use instead. */
+/* Generous caps: the scout and watcher write dense, numeric lines, and every
+   overflow costs a repair round-trip (alerts[4] > 700 was failing most
+   cycles on 2026-09-11). Length discipline lives in the prompts. */
 export const briefSchema = z.object({
-  headline: z.string().max(400),
-  bullets: z.array(z.string().max(700)).min(2).max(8),
+  headline: z.string().max(600),
+  bullets: z.array(z.string().max(1500)).min(2).max(8),
 });
 
 export const draftSchema = z.object({
@@ -184,9 +187,9 @@ export function agentSystem(agent: Agent): string {
 /* Generous caps (library learnings: tight caps cause NoObjectGenerated failures). */
 export const chainReadSchema = z.object({
   /** The single most decision-relevant on-chain fact right now. */
-  headline: z.string().min(10).max(400),
+  headline: z.string().min(10).max(600),
   /** Numeric, actionable alerts for the rest of the swarm. */
-  alerts: z.array(z.string().max(700)).min(1).max(6),
+  alerts: z.array(z.string().max(1500)).min(1).max(6),
   /** Durable structural observation only; null for routine fluctuations. */
   notebook: z
     .object({
