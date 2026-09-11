@@ -168,3 +168,4 @@ tokens that speak AS LAURA herself should echo it (sentinel motif, cyan or auror
 - Name/symbol resembles another project, person, or security
 - Concept only works if price goes up
 - You can't explain the token in one sentence
+- Name or symbol folds to a reserved launcher needle (clockin, admir, zlatic in any spelling or leet form). The floor and the Telegram announcer hide such launches completely even though they deploy and trade. CLKIN #281 burned a deploy slot this way on 2026-09-10: live on chain, invisible everywhere, unfixable without a rename. Spec validation refuses these names now, but do not spend concept work on them in the first place.

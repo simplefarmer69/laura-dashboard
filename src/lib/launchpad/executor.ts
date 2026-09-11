@@ -10,6 +10,7 @@ import {
 } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { laneClosedReason } from "@/lib/launchpad/lanes";
+import { reservedLaunchNameHit } from "@/lib/launchpad/spec";
 import {
   attachTokenLogo,
   attachTokenProfile,
@@ -277,12 +278,16 @@ export async function runLaunchExecutor(): Promise<void> {
         !l.armedAt &&
         (es.nextAttemptAt[`arm:${l.id}`] ?? 0) <= now,
     );
+    /* Launches whose name trips the floor's reserved brand filter deploy and
+       trade fine but can never index (learned with CLKIN #281), so retrying
+       their visibility check forever is pure waste: skip them. */
     const unverified = state.launches.filter(
       (l) =>
         l.status === "deployed" &&
         l.tokenAddress &&
         l.armedAt &&
         !l.verifiedAt &&
+        !reservedLaunchNameHit(l.name, l.symbol) &&
         (es.nextAttemptAt[`verify:${l.id}`] ?? 0) <= now,
     );
     /* Weekend-closed stock lanes stay queued (not failed) and deploy on the
