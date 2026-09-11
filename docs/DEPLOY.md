@@ -135,7 +135,7 @@ release; failed health rolls back automatically and the daemon log says so.
 - Power: disable sleep/hibernate on AC, keep the network adapter awake; on
   laptops set lid-close to "do nothing".
 
-Manual fallbacks: `bash laura-daemon.sh status | update | watchdog`, `npx pm2 logs laura`.
+Manual fallbacks: `bash laura-daemon.sh status | build | update | watchdog`, `npx pm2 logs laura`. `build` pre-warms the newest release without switching, so the later `update` takes seconds.
 
 ## 5. State migration (zero loss)
 

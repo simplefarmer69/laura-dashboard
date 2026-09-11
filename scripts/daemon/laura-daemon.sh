@@ -3,6 +3,7 @@
 # self-updates from GitHub main, and gives the Cursor agent a co-pilot surface.
 #
 #   laura-daemon.sh install    one-time setup (clone, build, PM2 apps, boot persistence hint)
+#   laura-daemon.sh build      build the newest github main release without switching to it
 #   laura-daemon.sh update     fetch github main; if new: build a fresh release, switch at a
 #                              quiet moment, verify health, roll back on failure
 #   laura-daemon.sh updater    loop: `update` every UPDATE_EVERY_SEC (default 300) or as soon
@@ -139,18 +140,38 @@ prune_releases() {
   done
 }
 
-cmd_update() {
-  local force="${1:-}"
-  need git; need npm; need curl
+head_sha() {
   git -C "$REPO" fetch --quiet origin "$BRANCH"
-  local sha; sha="$(git -C "$REPO" rev-parse "origin/$BRANCH")"
-  if [ "$sha" = "$(current_sha)" ] && [ "$force" != "--force" ]; then return 0; fi
-  log "update: $(current_sha) -> $sha"
+  git -C "$REPO" rev-parse "origin/$BRANCH"
+}
+
+release_built() { [ -f "$RELEASES/$1/.release" ]; }
+
+# Build (or reuse) the release for a sha without touching the live one.
+ensure_release() {
+  local sha="$1"
+  if release_built "$sha"; then log "release $sha already built"; return 0; fi
   if ! build_release "$sha"; then
     log "BUILD FAILED for $sha; keeping $(current_sha) live"
     rm -rf "$RELEASES/$sha"
     return 1
   fi
+}
+
+# Pre-warm: build the newest release now so the later switch takes seconds.
+cmd_build() {
+  need git; need npm; need curl
+  local sha; sha="$(head_sha)"
+  ensure_release "$sha" && echo "$sha"
+}
+
+cmd_update() {
+  local force="${1:-}"
+  need git; need npm; need curl
+  local sha; sha="$(head_sha)"
+  if [ "$sha" = "$(current_sha)" ] && [ "$force" != "--force" ]; then return 0; fi
+  log "update: $(current_sha) -> $sha"
+  ensure_release "$sha" || return 1
   switch_to "$sha" && prune_releases
 }
 
@@ -195,6 +216,7 @@ cmd_status() {
 
 case "${1:-}" in
   install)  cmd_install ;;
+  build)    cmd_build ;;
   update)   shift; cmd_update "$@" ;;
   updater)  cmd_updater ;;
   watchdog) cmd_watchdog ;;
