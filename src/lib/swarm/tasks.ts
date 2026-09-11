@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { allowedHostsForPrompt } from "@/lib/swarm/browser";
 import type {
   Agent,
   DailyGrade,
@@ -389,6 +390,8 @@ export const researchSchema = z.object({
       }),
     )
     .max(2),
+  /** Up to 3 allowlisted URLs the browser worker should read for you next cycle. */
+  readNext: z.array(z.string().max(400)).max(3).optional(),
 });
 
 export type ResearchOut = z.infer<typeof researchSchema>;
@@ -406,6 +409,7 @@ export function researcherPrompt(ctx: CycleContext): string {
     `LIBRARY (durable build knowledge; the notebook topics listed here are already covered)\n${ctx.library}`,
     `DOCS EXCERPT\n${ctx.docs.slice(0, 3500)}`,
     `Deep-dive ONE topic the swarm has not covered recently. The topic field is the plain subject itself — no "Deep-dive:" prefix, no date, no template label (labels are added downstream). In whyNow, name the last topics you covered and how this one differs. The memo must ground every claim in the data you were given. Record 1-2 notebook entries of durable fact the library is missing, and give each producer one concrete novel angle in anglesForSwarm.`,
+    `READ NEXT (your browser worker): you may list up to 3 full URLs in readNext that the read-only browser should open for you before the next cycle — the page text arrives under BROWSED PAGES in the world feeds. Use it to verify a claim, read a docs page, a competitor's mechanics, a newsroom post, or a quote page. Allowed hosts only: ${allowedHostsForPrompt()}. Never x.com/twitter.com pages. Skip the field if this cycle's inputs already answer your questions.`,
   ].join("\n\n");
 }
 

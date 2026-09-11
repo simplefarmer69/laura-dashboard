@@ -61,7 +61,8 @@ import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
-import { browseCandidates, browseDigest, browsePages } from "@/lib/swarm/browser";
+import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
+import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
 import { coachProposalBudget, mintGate, mintQueueLimit, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { builderGate } from "@/lib/builder/caps";
 import {
@@ -304,20 +305,41 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       step({ agentId: "system", label: "World feeds", status: "error", summary: String(err), durationMs: 0 });
     }
 
-    /* 1c2b. Browser worker: read-only page reads (operator watchlist + links
-       the live X reads carried), allowlisted and wrapped as untrusted. Uses
-       Chromium where the host installed Playwright, plain fetch elsewhere. */
+    /* 1c2a. Official site surface: the website's own llms-full.txt, ecosystem
+       map and sitemaps, so product names, statuses and wording rules track
+       what the team actually ships. Cached 6 h; fail-soft. */
     try {
-      const candidates = await browseCandidates(intelSnap);
-      if (candidates.length > 0) {
-        const browsed = await timed(() => browsePages(candidates));
-        const digest = browseDigest(browsed.value.results);
+      const site = await timed(() => fetchSiteContext());
+      const digest = siteDigest(site.value);
+      if (digest) worldText = `${worldText}\n\n${digest}`;
+      step({
+        agentId: "system",
+        label: "Site surface",
+        status: site.value ? "ok" : "skipped",
+        summary: site.value
+          ? `${site.value.surfaces.length} surfaces · ${site.value.pages.length} pages · ${site.value.launchPages} live launches (${site.value.canonicalUrl})`
+          : "site files unreachable this cycle",
+        durationMs: site.ms,
+      });
+    } catch (err) {
+      step({ agentId: "system", label: "Site surface", status: "error", summary: String(err), durationMs: 0 });
+    }
+
+    /* 1c2b. Browser worker: read-only page reads — agent requests from last
+       cycle, a rotating slice of the site's pages, the operator watchlist and
+       links the live X reads carried — allowlisted and wrapped as untrusted.
+       Chromium where the host has it, plain fetch elsewhere. */
+    try {
+      const plan = await browseCandidates(intelSnap, state.runs.length);
+      if (plan.urls.length > 0) {
+        const browsed = await timed(() => browsePages(plan.urls));
+        const digest = browseDigest(browsed.value.results, plan.requestedBy);
         if (digest) worldText = `${worldText}\n\n${digest}`;
         step({
           agentId: "system",
           label: "Browser worker",
           status: browsed.value.results.length > 0 ? "ok" : "skipped",
-          summary: `${browsed.value.results.length}/${candidates.length} page(s) read via ${browsed.value.engine}: ${browsed.value.results.map((r) => new URL(r.finalUrl).hostname).join(", ") || "none"}${browsed.value.errors.length ? ` · ${browsed.value.errors.length} failed` : ""}`,
+          summary: `${browsed.value.results.length}/${plan.urls.length} page(s) read via ${browsed.value.engine}${plan.requestedBy.size ? ` (${plan.requestedBy.size} agent-requested)` : ""}: ${browsed.value.results.map((r) => new URL(r.finalUrl).hostname).join(", ") || "none"}${browsed.value.errors.length ? ` · ${browsed.value.errors.length} failed` : ""}`,
           durationMs: browsed.ms,
         });
       } else {
@@ -513,12 +535,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             refId: rec.entry.id,
           });
         }
+        const queued = r.readNext?.length ? await requestBrowse(r.readNext, "researcher", r.topic) : [];
         markRan(researcher);
         step({
           agentId: "researcher",
           label: "Deep research",
           status: "ok",
-          summary: `${r.topic} · ${r.notebook.length} notebook entr${r.notebook.length === 1 ? "y" : "ies"}${out.value.usedMock ? " (fallback)" : ""}`,
+          summary: `${r.topic} · ${r.notebook.length} notebook entr${r.notebook.length === 1 ? "y" : "ies"}${queued.length ? ` · ${queued.length} page read(s) queued for next cycle` : ""}${out.value.usedMock ? " (fallback)" : ""}`,
           durationMs: out.ms,
         });
       } catch (err) {

@@ -113,9 +113,13 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.
 - **Browser worker** (`src/lib/swarm/browser.ts`) - reads allowlisted web
-  pages each cycle (Robinhood newsroom, meme-stock quote pages,
-  links from the X pulse) with plain fetch or Chromium via Playwright; read-only,
-  no cookies or logins, and page text is wrapped as untrusted content.
+  pages each cycle (pages agents asked for, the official site's pages on
+  rotation, Robinhood newsroom, meme-stock quote pages, links from the X pulse)
+  with plain fetch or Chromium via Playwright; read-only, no cookies or logins,
+  and page text is wrapped as untrusted content.
+- **Site surface** (`src/lib/swarm/site.ts`) - the website's own `llms-full.txt`,
+  `ecosystem.json` and sitemaps feed every cycle, so LAURA speaks about the
+  products the way the site does today.
 - **Feeds** (`src/app/api/feeds/`) - public JSON feeds the swarm and anyone
   else can consume: launchpad tape, NFT buys, token pairs, holders, Smart LP,
   Polymarket, ESPN, DefiLlama. Documented in [`FEEDS.md`](./FEEDS.md).

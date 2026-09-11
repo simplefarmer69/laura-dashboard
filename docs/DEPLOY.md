@@ -178,11 +178,19 @@ worker"), and the digest is appended to the world feed the agents reason over.
   stays optional. The active engine is reported
   as `runtime.host.browser` on `/api/state`, `/api/health`-adjacent ops routes and
   the public viewer banner.
-- **What she reads.** A default watchlist (Robinhood newsroom, GME/AMC/HOOD quote
+- **What she reads**, in priority order: pages agents asked for (Scholar's
+  `readNext`, queued in `data/browse-requests.json`, max 6, 24 h TTL), two pages
+  per cycle from the official site's sitemap on rotation (so every public page is
+  re-read about daily), a default watchlist (Robinhood newsroom, GME/AMC/HOOD quote
   pages) or `SWARM_BROWSE_URLS` (comma-separated),
   plus links surfaced by the X pulse and top mentions (t.co links are expanded
-  first). At most 6 pages per cycle, 1 800 chars per page, 15 s per page, 30 min
+  first). At most 8 pages per cycle, 1 800 chars per page, 15 s per page, 30 min
   cache.
+- **Site surface** (`src/lib/swarm/site.ts`). Every cycle the swarm also receives
+  the website's own machine-readable files — `llms-full.txt`, `ecosystem.json`
+  (surfaces with status, e.g. Leverage Machine `september_2026`), `sitemap.xml`
+  and `launches/sitemap.xml` — cached 6 h, so product names, statuses and wording
+  rules track what the team ships. `STONKBROKERS_SITE` overrides the origin.
 - **Read-only, by construction.** Allowlisted hosts only (`DEFAULT_ALLOW` +
   `SWARM_BROWSE_ALLOW`), redirects re-checked against the allowlist, no cookies,
   logins, forms, wallets or posting. Page text is wrapped with the same
