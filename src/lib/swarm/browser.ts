@@ -78,6 +78,19 @@ const DEFAULT_ALLOW = [
   "old.reddit.com",
   "reddit.com",
   "wikipedia.org",
+  /* Ethereum knowledge rail (library/90-ethskills.md) */
+  "ethskills.com",
+  "raw.githubusercontent.com",
+  "speedrunethereum.com",
+  "ethereum.org",
+  "eips.ethereum.org",
+  "8004.org",
+  "x402.org",
+  "docs.safe.global",
+  "forkcast.org",
+  "dune.com",
+  "docs.uniswap.org",
+  "docs.arbitrum.io",
 ];
 
 declare global {
