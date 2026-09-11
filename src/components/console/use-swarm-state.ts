@@ -5,6 +5,7 @@ import type { LlmProvider, SwarmState } from "@/lib/types";
 import type { MissionStatus } from "@/lib/mission-status";
 import type { NotebookEntry } from "@/lib/swarm/notebook";
 import type { HostInfo } from "@/components/console/viewer";
+import type { RuntimeActivity } from "@/lib/swarm/scheduler";
 
 export interface ConsoleState extends SwarmState {
   mission: MissionStatus;
@@ -17,6 +18,8 @@ export interface ConsoleState extends SwarmState {
   runtime: {
     cycleRunning: boolean;
     autopilot: boolean;
+    /** Current phase (cycle / Cafe Bar round / rest gap / paused); absent on older snapshots. */
+    activity?: RuntimeActivity | null;
     llmProvider: LlmProvider;
     llmModel: string;
     x: { appKeys: boolean; accessKeys: boolean; ready: boolean; missing: string[] };

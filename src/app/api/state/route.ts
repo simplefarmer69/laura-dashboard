@@ -4,7 +4,7 @@ import { isViewerMode } from "@/lib/viewer/mode";
 import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
-import { schedulerRunning, startScheduler } from "@/lib/swarm/scheduler";
+import { runtimeActivity, schedulerRunning, startScheduler } from "@/lib/swarm/scheduler";
 import { resolveModel } from "@/lib/swarm/llm";
 import { missionStatus } from "@/lib/mission-status";
 import { xStatus } from "@/lib/publish/x";
@@ -48,6 +48,7 @@ export async function GET() {
     runtime: {
       cycleRunning: isCycleRunning(),
       autopilot: schedulerRunning(),
+      activity: runtimeActivity(state),
       llmProvider: model.provider,
       llmModel: model.modelId,
       x: xStatus(),

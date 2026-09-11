@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Eye } from "lucide-react";
+import type { RuntimeActivity } from "@/lib/swarm/scheduler";
 
 /**
  * Client-side face of the public viewer (laura.stonkbrokers.io). Inlined at
@@ -72,14 +73,80 @@ export function describeHost(host: HostInfo): string {
   return parts.join(" · ");
 }
 
+function clockUtc(ts: number): string {
+  return `${new Date(ts).toUTCString().slice(17, 22)} UTC`;
+}
+
+function minutesUntil(ts: number, now: number): string {
+  const m = Math.ceil((ts - now) / 60_000);
+  if (m <= 0) return "now";
+  if (m < 60) return `~${m}m`;
+  return `~${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/**
+ * Plain statement of what LAURA is doing, from the runtime's own signal.
+ * `asOf` is when that signal was captured (the snapshot's publish time on
+ * the public site; the poll time on the local console), so countdowns are
+ * computed against real wall-clock and never claim a cycle "in progress"
+ * from a snapshot that is itself out of date.
+ */
+export function describeActivity(activity: RuntimeActivity, now: number): { text: string; tone: "live" | "quiet" | "warn" } {
+  switch (activity.phase) {
+    case "cycle":
+      return {
+        text: `cycle in progress${activity.since ? ` since ${clockUtc(activity.since)}` : ""}`,
+        tone: "live",
+      };
+    case "forum":
+      return {
+        text: `Cafe Bar round in progress${activity.since ? ` since ${clockUtc(activity.since)}` : ""}`,
+        tone: "live",
+      };
+    case "between":
+      return {
+        text: activity.nextCycleAt ? `between cycles · next starts ${minutesUntil(activity.nextCycleAt, now)}` : "between cycles",
+        tone: "quiet",
+      };
+    case "paused":
+      return {
+        text: `cycles paused: ${activity.note ?? "budget"}${activity.nextCycleAt ? ` · resumes ${minutesUntil(activity.nextCycleAt, now)}` : ""}`,
+        tone: "warn",
+      };
+    case "off":
+      return { text: "autopilot off on the host", tone: "warn" };
+    default: {
+      const exhaustive: never = activity.phase;
+      return exhaustive;
+    }
+  }
+}
+
+const ACTIVITY_TONE: Record<"live" | "quiet" | "warn", string> = {
+  live: "text-[var(--sb-green)]",
+  quiet: "text-muted-foreground",
+  warn: "text-[var(--sb-gold)]/90",
+};
+
 /** The public header strip: what this is, where it runs, and how fresh the data is. */
-export function ViewerBanner({ publishedAt, host }: { publishedAt: number | null; host?: HostInfo | null }) {
+export function ViewerBanner({
+  publishedAt,
+  host,
+  activity,
+}: {
+  publishedAt: number | null;
+  host?: HostInfo | null;
+  activity?: RuntimeActivity | null;
+}) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(id);
   }, []);
   const stale = publishedAt !== null && now - publishedAt > STALE_AFTER_MS;
+  /* The phase is only trustworthy while the snapshot is fresh; a stale one
+     says how old it is and nothing about what LAURA is doing right now. */
+  const phase = activity && !stale ? describeActivity(activity, now) : null;
   return (
     <div className="border-b border-primary/25 bg-primary/10">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 sb-ticker text-[11px] sm:px-6">
@@ -91,9 +158,10 @@ export function ViewerBanner({ publishedAt, host }: { publishedAt: number | null
         </span>
         {host && (
           <span className="hidden font-mono text-muted-foreground/90 sm:inline" title={host.builtAt ? `built ${host.builtAt}` : undefined}>
-            host: {describeHost(host)} · continuous cycles
+            host: {describeHost(host)}
           </span>
         )}
+        {phase && <span className={`font-mono ${ACTIVITY_TONE[phase.tone]}`}>{phase.text}</span>}
         <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
           {publishedAt === null ? (
             "waiting for the first snapshot…"
@@ -101,7 +169,9 @@ export function ViewerBanner({ publishedAt, host }: { publishedAt: number | null
             <>
               <span className={`size-1.5 rounded-full ${stale ? "bg-[var(--sb-gold)]" : "bg-[var(--sb-green)] sb-pulse"}`} />
               updated {ago(publishedAt, now)}
-              {stale && <span className="text-[var(--sb-gold)]/90"> · LAURA&apos;s host may be resting</span>}
+              {stale && (
+                <span className="text-[var(--sb-gold)]/90"> · no fresh snapshot for {ago(publishedAt, now).replace(" ago", "")}; showing the last one</span>
+              )}
             </>
           )}
         </span>

@@ -3,7 +3,7 @@ import { loadState, pushEvent, updateState } from "@/lib/store";
 import { acquireCycleLock, releaseCycleLock } from "@/lib/swarm/cycle-lock";
 import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy";
 import { isCycleRunning, runCycle, runGrader } from "@/lib/swarm/orchestrator";
-import { isForumRoundRunning, lastForumPostAt, runForumRound } from "@/lib/swarm/forum";
+import { forumRoundStartedAt, isForumRoundRunning, lastForumPostAt, runForumRound } from "@/lib/swarm/forum";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
@@ -73,6 +73,70 @@ function log(msg: string): void {
 
 export function schedulerRunning(): boolean {
   return globalThis.__lauraSchedulerV2?.started ?? false;
+}
+
+/**
+ * What LAURA is doing right now, for the console header and the public
+ * banner. The viewer used to infer "resting" from snapshot age alone, which
+ * read as "LAURA is asleep" during a 20-minute cycle (operator report
+ * 2026-09-11: "confusing people"). This is the truthful signal instead:
+ * cycle or Cafe Bar round in flight, the countdown to the next cycle in the
+ * rest gap, or the one reason the loop is paused (budget spent / autopilot
+ * off). Maintenance ticks (launch queue, treasury, X rail) keep running in
+ * every phase but "off".
+ */
+export interface RuntimeActivity {
+  phase: "cycle" | "forum" | "between" | "paused" | "off";
+  /** When the current phase began (cycle/round start, or the last cycle's end). */
+  since: number | null;
+  /** Expected start of the next cycle; only in "between" and "paused". */
+  nextCycleAt: number | null;
+  /** Id of the run in flight (phase "cycle"). */
+  runId: string | null;
+  /** Rolling-24h LLM cycle budget. */
+  budgetUsed: number;
+  budgetMax: number;
+  /** One-line reason for "paused"/"off"; null otherwise. */
+  note: string | null;
+}
+
+export function runtimeActivity(state: SwarmState, now = Date.now()): RuntimeActivity {
+  const budgetUsed = cyclesInLast24h(state, now);
+  const budgetMax = state.settings.maxLlmCyclesPerDay;
+  const base = { budgetUsed, budgetMax, runId: null, nextCycleAt: null, note: null };
+  const latestRun = state.runs.at(-1);
+  if (isCycleRunning()) {
+    const open = latestRun && !latestRun.finishedAt ? latestRun : null;
+    return { ...base, phase: "cycle", since: open?.startedAt ?? now, runId: open?.id ?? null };
+  }
+  if (isForumRoundRunning()) {
+    return { ...base, phase: "forum", since: forumRoundStartedAt() ?? now };
+  }
+  const s = globalThis.__lauraSchedulerV2;
+  if (!s?.started) {
+    return { ...base, phase: "off", since: null, note: "autopilot is not running in this process" };
+  }
+  const lastCycleAt = Math.max(s.lastCycleAt, latestRun?.finishedAt ?? latestRun?.startedAt ?? 0);
+  const intervalMs = Math.max(1, state.settings.cycleIntervalMinutes) * 60_000;
+  if (budgetUsed >= budgetMax) {
+    /* Window rolls when the oldest counted run leaves the 24h span. */
+    const oldest = state.runs
+      .filter((r) => r.startedAt > now - DAY_MS)
+      .reduce((min, r) => Math.min(min, r.startedAt), now);
+    return {
+      ...base,
+      phase: "paused",
+      since: lastCycleAt || null,
+      nextCycleAt: oldest + DAY_MS,
+      note: `daily LLM budget spent (${budgetUsed}/${budgetMax}); maintenance ticks continue`,
+    };
+  }
+  return {
+    ...base,
+    phase: "between",
+    since: lastCycleAt || null,
+    nextCycleAt: Math.max(now, lastCycleAt + intervalMs),
+  };
 }
 
 /**

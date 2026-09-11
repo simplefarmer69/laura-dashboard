@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { postJson, useSwarmState, type LinkStatus } from "@/components/console/use-swarm-state";
-import { VIEWER_MODE, ViewerBanner, ViewerShield, describeHost } from "@/components/console/viewer";
+import { VIEWER_MODE, ViewerBanner, ViewerShield, describeActivity, describeHost } from "@/components/console/viewer";
 import { Overview } from "@/components/console/overview";
 import { ReviewQueue } from "@/components/console/queue";
 import { Evolution } from "@/components/console/evolution";
@@ -108,16 +108,22 @@ export function Console() {
                 LLM {state.runtime.llmProvider === "mock" ? "fallback (no key)" : state.runtime.llmModel}
               </Badge>
             )}
-            {state?.runtime.autopilot && !cycleRunning && (
-              <Badge variant="outline" className="hidden text-[10px] text-[var(--sb-green)] sm:inline-flex">
-                <Radio className="size-3" /> autopilot
-              </Badge>
-            )}
-            {cycleRunning && (
+            {cycleRunning ? (
               <Badge className="bg-primary/15 text-primary">
                 <Radio className="size-3 sb-blink" /> cycle running
               </Badge>
-            )}
+            ) : state?.runtime.activity?.phase === "forum" ? (
+              <Badge className="bg-primary/15 text-primary">
+                <Radio className="size-3 sb-blink" /> Cafe Bar round running
+              </Badge>
+            ) : state?.runtime.autopilot ? (
+              <Badge variant="outline" className="hidden text-[10px] text-[var(--sb-green)] sm:inline-flex">
+                <Radio className="size-3" /> autopilot
+                {state.runtime.activity && !VIEWER_MODE && link.lastGoodAt && (
+                  <span className="text-muted-foreground">· {describeActivity(state.runtime.activity, link.lastGoodAt).text}</span>
+                )}
+              </Badge>
+            ) : null}
             <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
               <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>
@@ -180,7 +186,11 @@ export function Console() {
           </div>
         </div>
         {VIEWER_MODE && (
-          <ViewerBanner publishedAt={state?.viewer?.publishedAt ?? null} host={state?.runtime.host ?? null} />
+          <ViewerBanner
+            publishedAt={state?.viewer?.publishedAt ?? null}
+            host={state?.runtime.host ?? null}
+            activity={state?.runtime.activity ?? null}
+          />
         )}
       </header>
 

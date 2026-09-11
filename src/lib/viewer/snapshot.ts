@@ -1,7 +1,7 @@
 import { loadState } from "@/lib/store";
 import { hostInfo } from "@/lib/ops";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
-import { schedulerRunning } from "@/lib/swarm/scheduler";
+import { runtimeActivity, schedulerRunning } from "@/lib/swarm/scheduler";
 import { resolveModel } from "@/lib/swarm/llm";
 import { missionStatus } from "@/lib/mission-status";
 import { xStatus } from "@/lib/publish/x";
@@ -97,6 +97,9 @@ export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
     runtime: {
       cycleRunning: isCycleRunning(),
       autopilot: schedulerRunning(),
+      /* What LAURA is doing at publish time, so the public banner states the
+         phase instead of guessing "resting" from snapshot age. */
+      activity: runtimeActivity(state),
       llmProvider: model.provider,
       llmModel: model.modelId,
       /* booleans only; the local console's "missing credentials" hints stay local */

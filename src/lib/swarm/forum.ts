@@ -473,10 +473,16 @@ function barIntel(intel: string): string {
    console button started (and vice versa). */
 declare global {
   var __lauraForumRoundRunning: boolean | undefined;
+  var __lauraForumRoundStartedAt: number | undefined;
 }
 
 export function isForumRoundRunning(): boolean {
   return globalThis.__lauraForumRoundRunning === true;
+}
+
+/** When the in-flight round opened; null when no round is running. */
+export function forumRoundStartedAt(): number | null {
+  return isForumRoundRunning() ? (globalThis.__lauraForumRoundStartedAt ?? null) : null;
 }
 
 /** Timestamp of the newest post in the venue; 0 when the bar has never opened. */
@@ -491,6 +497,7 @@ export async function runForumRound(): Promise<ForumRoundResult> {
   if (isForumRoundRunning()) throw new Error("A forum round is already running");
   globalThis.__lauraForumRoundRunning = true;
   const startedAt = Date.now();
+  globalThis.__lauraForumRoundStartedAt = startedAt;
   const roundId = newId("fround");
   try {
     const state = await loadState();
