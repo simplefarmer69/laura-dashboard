@@ -4,7 +4,7 @@ import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { newId, pushEvent, updateState } from "@/lib/store";
 import type { LaunchProposal } from "@/lib/types";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
-import { ART_PALETTES, isDuplicateLaunch, launchSpecShape } from "@/lib/launchpad/spec";
+import { ART_PALETTES, isDuplicateLaunch, launchSpecShape, reservedLaunchNameHit } from "@/lib/launchpad/spec";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,12 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   const p = parsed.data;
+  const reservedHit = reservedLaunchNameHit(p.name, p.symbol);
+  if (reservedHit)
+    return NextResponse.json(
+      { error: `"${p.name}" ($${p.symbol}) contains "${reservedHit}", which the Stonklauncher floor hides. Pick another name.` },
+      { status: 400 },
+    );
 
   const result = await updateState<{ ok: true; launch: LaunchProposal } | { ok: false; error: string }>((state) => {
     if (isDuplicateLaunch(state.launches, p.name, p.symbol))

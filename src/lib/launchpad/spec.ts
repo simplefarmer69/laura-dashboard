@@ -40,6 +40,49 @@ export const launchSpecShape = {
    palette on either side without the other is a compile error (no drift). */
 export const ART_PALETTES = ["emerald", "amber", "crimson", "violet", "cyan", "gold", "ion", "aurora"] as const;
 
+/**
+ * Names the Stonklauncher floor HIDES. The site (and the Telegram deploy
+ * bot) fold every launch name+symbol and drop rows containing these needles
+ * (house brand + operator names), so a launch carrying one deploys fine but
+ * is invisible everywhere: no card, no token page, no announcement. Launch
+ * 281 "Apes Clock In" (CLKIN, 2026-09-10) burned a deploy exactly this way.
+ * Mirror of RESERVED_LAUNCH_NAMES in the stonkbrokers floor code.
+ */
+export const RESERVED_LAUNCH_NEEDLES = ["clockin", "admir", "zlatic"] as const;
+
+/**
+ * Compact version of the floor's homoglyph fold. LAURA's specs are ASCII
+ * (the symbol regex enforces it), so lowercasing, leet digits and the l->i
+ * fold cover everything she can emit; the floor's Unicode confusables map is
+ * unreachable from here. Needles run through the same fold so l->i stays
+ * symmetric ("clockin" -> "ciockin" on both sides).
+ */
+function foldLaunchName(s: string): string {
+  const leet: Record<string, string> = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "8": "b", l: "i", "|": "i", "!": "i" };
+  return s
+    .normalize("NFKD")
+    .toLowerCase()
+    .split("")
+    .map((ch) => leet[ch] ?? ch)
+    .join("")
+    .replace(/[^a-z]/g, "");
+}
+
+/**
+ * Returns the reserved needle a name/symbol pair would trip on the floor,
+ * or null when the pair is clean. Checks both concatenation orders because
+ * the floor does (a needle split across name and symbol still hides the row).
+ */
+export function reservedLaunchNameHit(name: string, symbol: string): string | null {
+  const n = foldLaunchName(name);
+  const s = foldLaunchName(symbol);
+  for (const needle of RESERVED_LAUNCH_NEEDLES) {
+    const f = foldLaunchName(needle);
+    if ((n + s).includes(f) || (s + n).includes(f)) return needle;
+  }
+  return null;
+}
+
 /** True when a non-rejected, non-failed launch already uses this name or symbol. */
 export function isDuplicateLaunch(
   launches: LaunchProposal[],

@@ -54,7 +54,7 @@ import {
 } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
 import { launchCapacityDigest } from "@/lib/launchpad/treasury";
-import { isDuplicateLaunch } from "@/lib/launchpad/spec";
+import { isDuplicateLaunch, reservedLaunchNameHit } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from "@/lib/swarm/library";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
@@ -769,6 +769,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         if (spec) {
           if (isDuplicateLaunch(state.launches, spec.name, spec.symbol)) {
             skipReason = `Dropped duplicate concept: ${spec.name} ($${spec.symbol}) already exists in the queue or on-chain`;
+            spec = null;
+          }
+        }
+        /* Never queue a name the Stonklauncher floor hides: it would deploy,
+           cost the fee, and then be invisible on the site and in Telegram. */
+        if (spec) {
+          const hit = reservedLaunchNameHit(spec.name, spec.symbol);
+          if (hit) {
+            skipReason = `Dropped reserved name: ${spec.name} ($${spec.symbol}) contains "${hit}", which the launcher floor hides`;
             spec = null;
           }
         }
