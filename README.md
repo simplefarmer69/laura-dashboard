@@ -108,9 +108,9 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   herds topics) before producing; output budgets keep rounds cheap.
 - **Launchpad rail** (`src/lib/launchpad/`) - Smart Launch V2 ABI, pad reads,
   spec design, procedural launch art, and a gated deploy executor with hard
-  caps: max 3 deploys per 24h spaced at least 4h apart, max 0.02 ETH per deploy,
-  one deploy per tick, 15 minute backoff after failure, live re-validation at
-  deploy time. Approved specs sit in an autonomous queue; the console shows each
+  rails: no daily count cap, deploys paced at least 20 min apart, max 0.02 ETH
+  per deploy, the wallet never deploys below a 0.05 ETH floor, one deploy per
+  tick, 15 minute backoff after failure, live re-validation at deploy time. Approved specs sit in an autonomous queue; the console shows each
   one's projected deploy time instead of an approval prompt.
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.

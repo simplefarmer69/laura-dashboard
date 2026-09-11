@@ -75,7 +75,7 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
             )}
             <p className="text-[11px] text-muted-foreground">
               Earnings compound the treasury: creator fees fund future launches inside the inviolable caps
-              (deploys per day and spend per deploy; the Launchpad tab shows the live numbers). Claimable is the flushCreatorQuote fallback,
+              (spend per deploy, pacing between deploys and the wallet floor; the Launchpad tab shows the live numbers). Claimable is the flushCreatorQuote fallback,
               normally zero because fees are pushed per trade.
             </p>
             <TreasuryOps state={state} />

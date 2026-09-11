@@ -229,8 +229,8 @@ is in place.
   and queue in the Launchpad tab.
 - Done: deploy service against the official `StonkSafeLaunchpadV2` ABI
   (`createLaunch`, WETH lane pad `0xFCd6…EC9f`): wallet must be configured and funded,
-  max 3 deploys/24 h spaced ≥4 h apart (so the three slots spread over the day
-  instead of firing together when the window rolls), max 0.02 ETH per deploy,
+  no daily count cap (operator directive 2026-09-11), deploys paced ≥20 min apart
+  so each gets its own arrival, wallet floor 0.05 ETH, max 0.02 ETH per deploy,
   simulate-before-send, tx + token address + launch id recorded and linked to
   Blockscout.
 - Done: **launches as a communication channel.** Every spec carries an `artMotif` +

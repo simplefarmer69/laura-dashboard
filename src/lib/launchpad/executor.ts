@@ -23,8 +23,9 @@ import {
  * Launch execution: deploy + brand a spec in one motion.
  * Used by the operator's Deploy button and by the autonomous executor
  * the scheduler runs each tick. Every path fails closed on the same
- * hard caps: funded designated wallet, deploys/day, spend/deploy,
- * live pad bounds (re-validated inside deployLaunch).
+ * hard rails: funded designated wallet above the wallet floor, spend/deploy,
+ * pacing between deploys (no daily count cap), live pad bounds (re-validated
+ * inside deployLaunch).
  */
 
 function log(msg: string): void {
@@ -58,11 +59,19 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       error: `Swarm wallet ${wallet.address} is not funded yet (balance ${wallet.balanceEth ?? "unknown"} ETH).`,
       httpStatus: 409,
     };
+  /* Wallet floor: a deploy may never take the balance under the floor that
+     keeps gas for treasury ops and fee claims. Count is unlimited; ETH is not. */
+  if ((wallet.balanceEth ?? 0) - LAUNCH_CAPS.maxSpendEthPerDeploy < LAUNCH_CAPS.walletFloorEth)
+    return {
+      ok: false,
+      error: `Wallet floor: ${(wallet.balanceEth ?? 0).toFixed(4)} ETH minus the ${LAUNCH_CAPS.maxSpendEthPerDeploy} ETH deploy budget would breach the ${LAUNCH_CAPS.walletFloorEth} ETH floor`,
+      httpStatus: 409,
+    };
   const capacity = deployCapacity(state.launches);
   if (!capacity.open)
     return {
       ok: false,
-      error: capacity.reason ?? `Daily cap reached: ${LAUNCH_CAPS.maxDeploysPerDay} deploys per 24h`,
+      error: capacity.reason ?? `Pacing: launches go out at least ${LAUNCH_CAPS.minDeployGapMinutes} min apart`,
       httpStatus: 429,
     };
 

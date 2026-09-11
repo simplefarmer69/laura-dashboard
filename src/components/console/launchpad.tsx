@@ -41,14 +41,20 @@ interface LaunchpadInfo {
     graduated: boolean;
     createdAt: string;
   }[];
-  caps: { maxDeploysPerDay: number; maxSpendEthPerDeploy: number; minDeployGapHours?: number };
+  caps: {
+    /** null since 2026-09-11: no daily count cap */
+    maxDeploysPerDay: number | null;
+    maxSpendEthPerDeploy: number;
+    minDeployGapMinutes?: number;
+    walletFloorEth?: number;
+  };
   explorer: string;
   autoExecute: boolean;
   /** Deploy window and per-spec projection (absent on older published snapshots). */
   queue?: {
     used24h: number;
-    max: number;
-    minGapHours: number;
+    max: number | null;
+    minGapMinutes?: number;
     open: boolean;
     nextWindowAt: number;
     reason: string | null;
@@ -210,15 +216,18 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
               <p>· Every spec needs operator approval before deploy</p>
             )}
             <p>
-              · Max {info ? info.caps.maxDeploysPerDay : "—"} deploys per 24h, spaced ≥{info?.queue?.minGapHours ?? info?.caps.minDeployGapHours ?? "—"}h apart
+              · No daily launch limit; deploys pace ≥{info?.queue?.minGapMinutes ?? info?.caps.minDeployGapMinutes ?? "—"} min apart so each gets its own arrival
               {info?.queue && (
                 <span className="text-foreground">
                   {" "}
-                  · {info.queue.used24h}/{info.queue.max} used · {info.queue.open ? "window open" : `next window ${utcClock(info.queue.nextWindowAt)}`}
+                  · {info.queue.used24h} deployed in the last 24h · {info.queue.open ? "window open" : `next window ${utcClock(info.queue.nextWindowAt)}`}
                 </span>
               )}
             </p>
-            <p>· Max {info ? info.caps.maxSpendEthPerDeploy : "—"} ETH spend per deploy (fee + 2x gas)</p>
+            <p>
+              · Max {info ? info.caps.maxSpendEthPerDeploy : "—"} ETH spend per deploy (fee + 2x gas)
+              {info?.caps.walletFloorEth !== undefined && ` · wallet never deploys below ${info.caps.walletFloorEth} ETH`}
+            </p>
             <p>· Specs re-validated against live pad bounds at deploy time</p>
             <p>· Logo + community links attach automatically after each deploy</p>
           </CardContent>
@@ -407,7 +416,7 @@ function LaunchCard({
         )}
         {l.status === "approved" && autoExecute && (
           <p className="border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-muted-foreground">
-            In the autonomous deploy queue: the executor takes specs in order inside the daily cap and spacing rule
+            In the autonomous deploy queue: the executor takes specs in order at the pacing gap (no daily count cap)
             {projectedAt ? `; this one is projected for ~${utcClock(projectedAt)}` : ""}. No approval step exists; Reject is the operator veto.
           </p>
         )}

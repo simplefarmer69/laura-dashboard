@@ -301,7 +301,7 @@ export function launchCapacityDigest(state: SwarmState, now = Date.now()): strin
   const elig = buyEligibility(state, now);
   const stonkBought = buys.reduce((s, b) => s + b.tokensOut, 0);
   const lines = [
-    `- Deploy window: ${cap.used}/${cap.max} used in the rolling 24h, launches spaced ≥${LAUNCH_CAPS.minDeployGapHours}h${cap.open ? " — window open now" : ` — next window ~${new Date(cap.nextWindowAt).toISOString().slice(0, 16)}Z`}${queued.length ? ` · ${queued.length} approved spec(s) already queued (${queued.map((l) => `$${l.symbol}`).join(", ")}) and deploy in that order` : ""}`,
+    `- Deploy window: NO daily count cap — ${cap.used} launch(es) deployed in the rolling 24h, launches paced ≥${LAUNCH_CAPS.minDeployGapMinutes} min apart${cap.open ? " — window open now" : ` — next window ~${new Date(cap.nextWindowAt).toISOString().slice(0, 16)}Z`}${queued.length ? ` · ${queued.length} approved spec(s) already queued (${queued.map((l) => `$${l.symbol}`).join(", ")}) and deploy in that order, one every ${LAUNCH_CAPS.minDeployGapMinutes} min` : ""}`,
     `- Speech gate: ${gate.blocked ? gate.reason : "clear — a worthy launch can be proposed"}`,
     `- Treasury: ${t ? `${t.ethBalance.toFixed(4)} ETH + ${t.wethBalance.toFixed(5)} WETH fees` : "no snapshot yet"} (floor ${TREASURY_CAPS.treasuryFloorEth} ETH) · ${stonkBought.toFixed(0)} $STONKBROKER accumulated over ${buys.length} treasury buys · next buy ${elig.eligible ? "eligible now" : elig.nextEligibleAt ? `~${new Date(elig.nextEligibleAt).toISOString().slice(0, 16)}Z` : "blocked"}`,
   ];

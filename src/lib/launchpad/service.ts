@@ -24,17 +24,31 @@ const publicClient = createPublicClient({ chain: ROBINHOOD_CHAIN, transport: htt
  * change to this file, not a runtime knob.
  */
 export const LAUNCH_CAPS = {
-  maxDeploysPerDay: 3,
+  /**
+   * No daily count cap. Operator directive 2026-09-11: "LAURA should have no
+   * limit of number of tokens she can launch per day". The pad's launch fee
+   * is 0 wei and a deploy costs gas only, so the count never was the money
+   * risk; the per-deploy spend cap and the wallet floor below are. What
+   * bounds the count is Mint's own judgment (skip when there is nothing new
+   * to say) and the pacing gap.
+   */
+  maxDeploysPerDay: null,
   /** Launch fee + gas budget per deploy */
   maxSpendEthPerDeploy: 0.02,
   /**
-   * Spacing between consecutive deploys. Without it the three daily slots
-   * all fire in the hour after the cap window rolls (00:08, 00:09, 01:05 on
-   * 2026-09-11) and the floor sees nothing for the next 23 hours; spaced,
-   * each launch gets its own buffer, its own post window and its own day
-   * part. Tightens the cap, never loosens it.
+   * Pacing between consecutive deploys, not a cap: with a loaded queue and no
+   * count limit the executor would otherwise fire one deploy per tick and
+   * drop four tokens on the floor inside four minutes (Telegram shows each
+   * as one line, the community reads it as spam). Twenty minutes gives every
+   * launch its own arrival, buffer window and post, and still allows more
+   * deploys a day than Mint could ever design (one spec per ~22-min cycle).
    */
-  minDeployGapHours: 4,
+  minDeployGapMinutes: 20,
+  /**
+   * The swarm wallet never deploys below this balance, so treasury ops and
+   * fee claims always keep gas. Unrelated to the count; it is a floor.
+   */
+  walletFloorEth: 0.05,
 } as const;
 
 export interface WalletStatus {
@@ -195,7 +209,7 @@ export interface DeployResult {
 /**
  * Deploys an operator-approved launch on the Smart Launch V2 pad.
  * Fails closed: requires a configured funded wallet, live-bounds validation,
- * and the fee+gas estimate under the per-deploy cap. Caller enforces the daily cap.
+ * and the fee+gas estimate under the per-deploy cap. Caller enforces pacing and the wallet floor.
  */
 export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
   const account = getAccount();
