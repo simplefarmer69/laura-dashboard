@@ -200,7 +200,9 @@ type NftFeed = {
  */
 async function nftFeed(): Promise<NftFeed> {
   try {
-    const local = await getJson<NftFeed>("http://127.0.0.1:4747/api/feeds/nft-buys", 25_000);
+    /* PORT is what `next start` binds on hosts (Railway injects it); 4747 is
+       the pinned dev/PM2 port. */
+    const local = await getJson<NftFeed>(`http://127.0.0.1:${process.env.PORT ?? 4747}/api/feeds/nft-buys`, 25_000);
     if ((local.sales ?? []).length > 0) return local;
   } catch {
     /* local server unavailable: fall through to the configured base */

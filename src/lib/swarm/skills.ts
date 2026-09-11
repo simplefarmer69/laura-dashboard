@@ -21,9 +21,33 @@ export interface Skill {
 const SKILLS_DIR = process.env.SWARM_LIBRARY_DIR
   ? path.join(process.env.SWARM_LIBRARY_DIR, "skills")
   : path.join(process.cwd(), "library", "skills");
+/* Coach-written skills land in the data-dir overlay (same reasoning as the
+   library docs overlay: the repo checkout is rebuilt per deploy on Railway/
+   Docker, the data dir is the persistent volume). Reads merge repo + overlay
+   by filename, overlay winning. */
+const OVERLAY_SKILLS_DIR =
+  process.env.SWARM_LIBRARY_OVERLAY_DIR
+    ? path.join(process.env.SWARM_LIBRARY_OVERLAY_DIR, "skills")
+    : path.join(process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data"), "library", "skills");
 const CACHE_TTL_MS = 60_000;
 
 let cache: { at: number; skills: Skill[] } | null = null;
+
+async function listSkillFiles(dir: string): Promise<string[]> {
+  try {
+    return (await fs.readdir(dir)).filter((f) => f.endsWith(".md"));
+  } catch {
+    return [];
+  }
+}
+
+/** Merged skill files: repo seed plus overlay, overlay path winning per filename. */
+async function skillFilePaths(): Promise<Map<string, string>> {
+  const [repo, overlay] = await Promise.all([listSkillFiles(SKILLS_DIR), listSkillFiles(OVERLAY_SKILLS_DIR)]);
+  const byFile = new Map(repo.map((f) => [f, path.join(SKILLS_DIR, f)]));
+  for (const f of overlay) byFile.set(f, path.join(OVERLAY_SKILLS_DIR, f));
+  return new Map([...byFile.entries()].sort(([a], [b]) => a.localeCompare(b)));
+}
 
 function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
   const match = raw.match(/^---\n([\s\S]*?)\n---\n?/);
@@ -40,10 +64,10 @@ export async function loadSkills(): Promise<Skill[]> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.skills;
   let skills: Skill[] = [];
   try {
-    const files = (await fs.readdir(SKILLS_DIR)).filter((f) => f.endsWith(".md")).sort();
+    const files = await skillFilePaths();
     skills = await Promise.all(
-      files.map(async (f) => {
-        const raw = await fs.readFile(path.join(SKILLS_DIR, f), "utf8");
+      [...files.entries()].map(async ([f, fullPath]) => {
+        const raw = await fs.readFile(fullPath, "utf8");
         const { meta, body } = parseFrontmatter(raw);
         return {
           name: meta.name ?? f.replace(/\.md$/, ""),
@@ -109,11 +133,11 @@ export async function writeSkill(edit: SkillEdit): Promise<{ file: string; creat
   const slug = slugify(edit.name);
   if (!slug) throw new Error(`skill name "${edit.name}" produced an empty filename slug`);
   const file = `${slug}.md`;
-  const target = path.resolve(SKILLS_DIR, file);
-  if (path.dirname(target) !== path.resolve(SKILLS_DIR)) throw new Error("skill path escaped the skills dir");
+  const target = path.resolve(OVERLAY_SKILLS_DIR, file);
+  if (path.dirname(target) !== path.resolve(OVERLAY_SKILLS_DIR)) throw new Error("skill path escaped the skills dir");
 
-  await fs.mkdir(SKILLS_DIR, { recursive: true });
-  const existing = (await fs.readdir(SKILLS_DIR)).filter((f) => f.endsWith(".md"));
+  await fs.mkdir(OVERLAY_SKILLS_DIR, { recursive: true });
+  const existing = [...(await skillFilePaths()).keys()];
   const created = !existing.includes(file);
   if (created && existing.length >= MAX_SKILL_FILES) {
     throw new Error(

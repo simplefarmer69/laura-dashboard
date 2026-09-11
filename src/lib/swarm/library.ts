@@ -12,6 +12,15 @@ import { skillsIndex } from "@/lib/swarm/skills";
  */
 
 const LIBRARY_DIR = process.env.SWARM_LIBRARY_DIR ?? path.join(process.cwd(), "library");
+const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
+/**
+ * Agent-authored docs (Sage) land in an overlay under the data dir, not in the
+ * repo checkout: on hosts that rebuild the checkout per deploy (Railway,
+ * Docker) anything written into /library vanishes at the next deploy, while
+ * the data dir is the persistent volume. Reads merge both — repo docs are the
+ * operator-maintained seed, an overlay doc with the same filename wins.
+ */
+const OVERLAY_DIR = process.env.SWARM_LIBRARY_OVERLAY_DIR ?? path.join(DATA_DIR, "library");
 const CACHE_TTL_MS = 60_000;
 const SEP = "\n\n---\n\n";
 
@@ -22,20 +31,23 @@ interface LibraryDoc {
 
 let cache: { at: number; docs: LibraryDoc[] } | null = null;
 
-async function libraryDocs(): Promise<LibraryDoc[]> {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.docs;
-  let docs: LibraryDoc[] = [];
+async function readDocsDir(dir: string): Promise<LibraryDoc[]> {
   try {
-    const files = (await fs.readdir(LIBRARY_DIR)).filter((f) => f.endsWith(".md")).sort();
-    docs = await Promise.all(
-      files.map(async (f) => ({
-        file: f,
-        text: (await fs.readFile(path.join(LIBRARY_DIR, f), "utf8")).trim(),
-      })),
+    const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".md"));
+    return await Promise.all(
+      files.map(async (f) => ({ file: f, text: (await fs.readFile(path.join(dir, f), "utf8")).trim() })),
     );
   } catch {
-    docs = [];
+    return [];
   }
+}
+
+async function libraryDocs(): Promise<LibraryDoc[]> {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.docs;
+  const [repo, overlay] = await Promise.all([readDocsDir(LIBRARY_DIR), readDocsDir(OVERLAY_DIR)]);
+  const byFile = new Map(repo.map((d) => [d.file, d]));
+  for (const d of overlay) byFile.set(d.file, d);
+  const docs = [...byFile.values()].sort((a, b) => a.file.localeCompare(b.file));
   cache = { at: Date.now(), docs };
   return docs;
 }
@@ -162,11 +174,13 @@ export async function writeLibraryDoc(edit: LibraryDocEdit): Promise<{ file: str
   if (PROTECTED_DOCS.has(file)) {
     throw new Error(`"${file}" carries operator directives and is protected from agent edits`);
   }
-  const target = path.resolve(LIBRARY_DIR, file);
-  if (path.dirname(target) !== path.resolve(LIBRARY_DIR)) throw new Error("library doc path escaped the library dir");
+  const target = path.resolve(OVERLAY_DIR, file);
+  if (path.dirname(target) !== path.resolve(OVERLAY_DIR)) throw new Error("library doc path escaped the library dir");
 
-  await fs.mkdir(LIBRARY_DIR, { recursive: true });
-  const existing = (await fs.readdir(LIBRARY_DIR)).filter((f) => f.endsWith(".md"));
+  await fs.mkdir(OVERLAY_DIR, { recursive: true });
+  /* The cap counts the merged shelf (repo seed + overlay), so a doc that
+     exists in the repo is an update even when the overlay has no copy yet. */
+  const existing = (await libraryDocs()).map((d) => d.file);
   const created = !existing.includes(file);
   if (created && existing.length >= MAX_LIBRARY_FILES) {
     throw new Error(

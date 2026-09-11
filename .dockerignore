@@ -1,0 +1,7 @@
+node_modules
+.next
+data
+.git
+.env*
+*.tmp.*
+scripts/*.tmp.sh

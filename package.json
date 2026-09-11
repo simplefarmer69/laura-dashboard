@@ -7,6 +7,7 @@
     "dev": "next dev -p 4747",
     "build": "next build",
     "start": "next start -p 4747",
+    "start:host": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "worker": "tsx --tsconfig tsconfig.json scripts/worker.ts",
