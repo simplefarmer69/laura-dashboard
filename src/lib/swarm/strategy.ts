@@ -14,7 +14,7 @@ export function adoptStrategy(
   agent: Agent,
   newStrategy: string,
   reason: string,
-  actor: "operator" | "coach",
+  actor: "operator" | "coach" | "trainer",
 ): void {
   const grade = latestGradeScore(state);
   agent.history.push({
@@ -31,7 +31,7 @@ export function adoptStrategy(
   agent.gradeAtVersionAdoption = grade;
   pushEvent(state, {
     kind: actor === "operator" && !reason.startsWith("Approved") ? "strategy.edited" : "proposal.adopted",
-    agentId: actor === "operator" ? "operator" : "coach",
+    agentId: actor === "operator" ? "operator" : actor,
     title: `${agent.name} moved to strategy v${agent.strategyVersion}`,
     detail: reason,
     refId: agent.id,
@@ -78,7 +78,7 @@ export function applyProposal(
   state: SwarmState,
   proposal: StrategyProposal,
   reason: string,
-  actor: "operator" | "coach",
+  actor: "operator" | "coach" | "trainer",
 ): void {
   const agent = state.agents.find((a) => a.id === proposal.agentId);
   if (!agent) throw new Error(`agent ${proposal.agentId} missing`);

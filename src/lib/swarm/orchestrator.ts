@@ -46,6 +46,10 @@ import {
   scoutMock,
   scoutPrompt,
   spokenLaunchesDigest,
+  trainerMock,
+  trainerPrompt,
+  trainerSchema,
+  trainerTargets,
   vaultMock,
   vaultPrompt,
   vaultSchema,
@@ -100,6 +104,9 @@ const FORUM_ONLY_AGENTS: AgentId[] = ["smartlp", "nftintel", "tokenintel"];
 const VAULT_STRIDE_MS = 2 * 60 * 60_000;
 const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
 const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
+/** Forge works the upgrade queue about every 90 minutes: two targets per run
+ *  covers the full 17-seat roster roughly daily. */
+const TRAINER_STRIDE_MS = 1.5 * 60 * 60_000;
 
 /* On globalThis, not module scope: under dev HMR every compile gets its own
    module copy, and two copies (e.g. the scheduler loop and a manual /api/cycle
@@ -1216,6 +1223,97 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}${overBudgetDropped.length ? ` · dropped over-budget revision for ${overBudgetDropped.join(", ")}` : ""}`,
         durationMs: out.ms,
       });
+    }
+
+    /* 5b. Forge: coverage-first agent upgrades. The coach chases this cycle's
+       weakest output; Forge guarantees the whole roster keeps evolving by
+       working a deterministic queue of the least-upgraded agents (operator
+       directive 2026-09-11: upgrades had concentrated on a few draft agents
+       while half the roster sat on v1). Same proposal machinery and rails as
+       the coach: pending-dedupe, the over-budget ratchet, auto-apply per
+       settings. */
+    const trainer = agentById(state, "trainer");
+    if (trainer.status === "paused") {
+      step({ agentId: "trainer", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (trainer.lastRunAt !== null && Date.now() - trainer.lastRunAt < TRAINER_STRIDE_MS) {
+      step({
+        agentId: "trainer",
+        label: "Agent upgrades",
+        status: "skipped",
+        summary: `Strided: next upgrade pass in ~${Math.ceil((TRAINER_STRIDE_MS - (Date.now() - trainer.lastRunAt)) / 60_000)} min`,
+        durationMs: 0,
+      });
+    } else {
+      const targets = trainerTargets(state.agents, ctx.cycleSeq);
+      const out = await timed(async () =>
+        tally(
+          await generateStructured(resolved, {
+            schema: trainerSchema,
+            system: agentSystem(trainer),
+            prompt: trainerPrompt(ctx, targets),
+            mock: () => trainerMock(targets),
+          }),
+        ),
+      );
+      const targetIds = new Set(targets.map((t) => t.id));
+      let created = 0;
+      const dropped: string[] = [];
+      for (const u of out.value.value.upgrades.slice(0, 2)) {
+        /* Forge only touches its assigned queue; an off-target rewrite is dropped. */
+        if (!targetIds.has(u.agentId)) {
+          dropped.push(`${u.agentId} (not in this run's queue)`);
+          continue;
+        }
+        const target = agentById(state, u.agentId);
+        if (state.proposals.some((x) => x.agentId === target.id && x.status === "pending")) continue;
+        if (u.proposedStrategy.length > STRATEGY_BUDGET_CHARS && u.proposedStrategy.length >= target.strategy.length) {
+          dropped.push(`${target.id} (${u.proposedStrategy.length} chars over budget)`);
+          continue;
+        }
+        const proposal: StrategyProposal = {
+          id: newId("prop"),
+          cycleId: run.id,
+          agentId: target.id,
+          fromVersion: target.strategyVersion,
+          currentStrategy: target.strategy,
+          proposedStrategy: u.proposedStrategy,
+          rationale: u.rationale,
+          evidence: u.evidence,
+          status: "pending",
+          createdAt: Date.now(),
+          reviewedAt: null,
+          autoApplied: false,
+        };
+        state.proposals.push(proposal);
+        run.proposalsCreated += 1;
+        created += 1;
+        pushEvent(state, {
+          kind: "proposal.created",
+          agentId: "trainer",
+          title: `Forge proposed v${target.strategyVersion + 1} for ${target.name}`,
+          detail: u.rationale,
+          refId: proposal.id,
+        });
+        if (state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals) {
+          applyProposal(
+            state,
+            proposal,
+            state.settings.autoApproveProposals ? AUTO_APPROVE_NOTE : "Auto-applied by Forge (operator enabled auto-apply)",
+            "trainer",
+          );
+          proposal.autoApplied = true;
+        }
+      }
+      markRan(trainer);
+      const skipNote = out.value.value.skips.map((s) => `${s.agentId}: ${s.reason.slice(0, 80)}`).join(" · ");
+      step({
+        agentId: "trainer",
+        label: "Agent upgrades",
+        status: "ok",
+        summary: `Queue: ${targets.map((t) => `${t.id} v${t.strategyVersion}`).join(", ")} → ${created} upgrade(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : ""}${skipNote ? ` · kept: ${skipNote}` : ""}${dropped.length ? ` · dropped: ${dropped.join(", ")}` : ""}${out.value.usedMock ? " (fallback)" : ""}`,
+        durationMs: out.ms,
+      });
+      await saveState(state);
     }
 
     /* 6. Sage: the collective intelligence pass. Strided at 2x the cycle

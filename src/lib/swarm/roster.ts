@@ -293,6 +293,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
   {
+    id: "trainer",
+    name: "Forge",
+    role: "Agent upgrade engineering (coverage-first evolution)",
+    objective:
+      "Guarantee every agent in the roster keeps evolving: work the upgrade queue in strict rotation — always the least-upgraded agents first — and rewrite their strategies from hard evidence, so no agent sits on a stale strategy while a few favorites soak up all the revisions.",
+    strategy: `Run on a stride. Each run you receive the TWO agents whose strategies are most overdue for an upgrade (lowest version, longest since last revision — chosen deterministically in code so coverage is guaranteed, not discretionary). For each target, read its current strategy against its actual recent record: outputs, reviewer decisions, stats, grade movement since its version went live, and any coaching notes in the notebook. Then either (a) propose a full replacement strategy that keeps what demonstrably works, deletes what the record contradicts, and adds at most two concrete new tactics tied to evidence you cite, or (b) explicitly skip that target with the evidence that its current strategy is performing (a skip with proof is a real verdict, not a failure). You complement Coach: Coach chases this cycle's weakest output, you guarantee nobody is forgotten — including Coach itself, Sage, and the intel voices. Never weaken the charter, never remove risk framing or factual grounding, never turn a strategy into a changelog: replacements are complete operating briefs within the length budget.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
+  {
     id: "smartlp",
     name: "Bands",
     role: "Smart LP analyst",
@@ -356,6 +372,7 @@ export const AGENT_ORDER: AgentId[] = [
   "mint",
   "builder",
   "coach",
+  "trainer",
   "sage",
   "smartlp",
   "nftintel",
@@ -372,6 +389,7 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "mint",
   "builder",
   "coach",
+  "trainer",
   "sage",
   /* Intel agents: they read the public feed routes, they never draft content. */
   "smartlp",

@@ -126,7 +126,11 @@ export const proposalsSchema = z.object({
   proposals: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage"]),
+        /* Every agent except the coach itself (Forge upgrades the coach).
+           smartlp/nftintel/tokenintel/trainer were missing until 2026-09-11 —
+           the intel voices literally could not be upgraded, which is why they
+           sat on v1 while bd reached v16. */
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage", "trainer", "smartlp", "nftintel", "tokenintel"]),
         /* Budget is 3500 (prompted); the schema leaves headroom so a slightly
            long rewrite lands instead of failing to the deterministic mock —
            eight cycles of that appended identical boilerplate to bd on
@@ -868,6 +872,97 @@ export function coachPrompt(ctx: CycleContext): string {
     })
     .join("\n\n");
   return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. LENGTH BUDGET (hard): each lesson text and each notebook entry text at most ${NOTE_TEXT_BUDGET} characters, evidence at most 600; a lesson is one finding with its proof, not an essay. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. LENGTH BUDGET: a strategy is an operating brief, not a changelog — the replacement must be at most ${STRATEGY_BUDGET_CHARS} characters (the roster shows each strategy's current length). Never append an "Added in vN" block to an already long strategy; condense what stays, delete what no longer earns its place, and fold the change into the body. A strategy that already carries duplicated paragraphs is your first target: merge them. COVERAGE (operator directive 2026-09-11: every agent evolves, not only the draft producers): the roster shows each agent's version — when an agent is still on v1 after many cycles (watcher, critic, vault, builder, sage, the intel voices) and you hold concrete evidence about its output (skipped strides, vetoes that missed a pattern, Cafe Bar posts that repeat, a launch that pulled no volume), prefer revising THAT agent over a fifth revision of bd or narrative. Mint's evidence is the pad outcome — 24h volume and non-swarm holders of LAURA's own launches versus the MEME-STOCK MARKET currents it could have ridden. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
+}
+
+/* --------------------------------- Forge ---------------------------------- */
+
+/**
+ * Forge's upgrade queue (operator directive 2026-09-11: "add one more swarm
+ * agent that helps upgrade all the agents"): deterministic, coverage-first.
+ * The least-upgraded agents come first (lowest strategy version, then oldest
+ * adoption), so the intel voices and other v1 stragglers get attention before
+ * a seventeenth revision of bd. cycleSeq rotates tie order so equal-version
+ * agents take turns instead of the same pair monopolizing the slot.
+ */
+export function trainerTargets(agents: Agent[], cycleSeq: number, count = 2): Agent[] {
+  const pool = agents.filter((a) => a.id !== "trainer" && a.status !== "paused");
+  if (pool.length === 0) return [];
+  const rot = cycleSeq % pool.length;
+  const rotated = [...pool.slice(rot), ...pool.slice(0, rot)];
+  /* Stable sort: rotation order breaks ties within a version/adoption class. */
+  return rotated
+    .sort((a, b) => a.strategyVersion - b.strategyVersion || (a.versionAdoptedAt ?? 0) - (b.versionAdoptedAt ?? 0))
+    .slice(0, count);
+}
+
+export const trainerSchema = z.object({
+  /** Full replacement strategies for the assigned targets; skip instead when the record supports the incumbent. */
+  upgrades: z
+    .array(
+      z.object({
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel"]),
+        proposedStrategy: z.string().min(80).max(STRATEGY_SCHEMA_MAX),
+        rationale: z.string().max(1500),
+        evidence: z.array(z.string().max(500)).min(1).max(6),
+      }),
+    )
+    .max(2),
+  /** Recorded verdicts for targets left in place: proof the strategy is performing, not neglect. */
+  skips: z
+    .array(
+      z.object({
+        agentId: z.string().max(24),
+        reason: z.string().min(10).max(500),
+      }),
+    )
+    .max(2),
+});
+
+export type TrainerOut = z.infer<typeof trainerSchema>;
+
+export function trainerPrompt(ctx: CycleContext, targets: Agent[]): string {
+  const noDraftRole = new Set(["scout", "watcher", "critic", "vault", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel"]);
+  const dossiers = targets
+    .map((a) => {
+      const perf =
+        a.gradeAtVersionAdoption !== null
+          ? `Grade when v${a.strategyVersion} went live: ${a.gradeAtVersionAdoption.toFixed(1)}; now ${ctx.grade.score.toFixed(1)}.`
+          : `v${a.strategyVersion} is the original seed strategy — it has NEVER been revised.`;
+      const past = a.history
+        .slice(-3)
+        .map((h) => `v${h.version}: ${h.gradeAtAdoption?.toFixed(1) ?? "?"} -> ${h.gradeAtRetirement?.toFixed(1) ?? "?"} (${h.reason})`)
+        .join("; ");
+      const statsNote = noDraftRole.has(a.id)
+        ? `Stats: this role's output is not drafts (briefs, alerts, vetoes, launches, memos or library writes); judge it by its recent output digest and role fit, 0 drafts is by design.`
+        : `Stats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected.`;
+      return [
+        `### TARGET ${a.id} (${a.name}) — ${a.role}`,
+        `${statsNote} ${perf}${past ? ` Past versions: ${past}` : ""}`,
+        `Current strategy v${a.strategyVersion} (${a.strategy.length} chars${a.strategy.length > STRATEGY_BUDGET_CHARS ? ` — OVER the ${STRATEGY_BUDGET_CHARS} budget, a rewrite must condense it` : ""}):\n${a.strategy}`,
+        `Recent output:\n${recentOutputDigest(ctx.drafts, a.id, 2)}`,
+        `Reviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+  return [
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `GRADES (last 7)\n${gradeDigest(ctx.grades)}`,
+    `TODAY\n${ctx.grade.summary}`,
+    `SWARM MEMORY (lessons the whole swarm has already banked; upgrades must build on these, not rediscover them)\n${lessonsDigest(ctx.lessons)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.trainer ?? "None."}`,
+    `YOUR ASSIGNED TARGETS THIS RUN (chosen in code: the roster's least-upgraded agents — you do not pick targets, you work the queue)\n${dossiers}`,
+    `For EACH target, deliver a verdict: an upgrade (full replacement strategy) or a recorded skip (evidence the incumbent strategy is performing). UPGRADE RULES: return the COMPLETE replacement text, not a diff; keep what the record shows working, delete what it contradicts, add at most two new tactics each tied to cited evidence (a reviewer decision, a grade move, a repeated failure in the output digest, a banked lesson). LENGTH BUDGET (hard): at most ${STRATEGY_BUDGET_CHARS} characters — a strategy is an operating brief, never a changelog; never append "Added in vN" blocks. Never weaken the charter, never remove factual grounding, risk framing or hard-cap references, never change what channels an agent may write to. A v1 seed strategy that has never been revised almost always deserves an upgrade: it was written before any evidence existed. SKIP RULES: a skip needs specific evidence of current performance (recent outputs doing their job, approvals, a grade component this agent moves), not politeness.`,
+  ].join("\n\n");
+}
+
+export function trainerMock(targets: Agent[]): TrainerOut {
+  return {
+    upgrades: [],
+    skips: targets.slice(0, 2).map((t) => ({
+      agentId: t.id,
+      reason: `Deterministic fallback (no LLM key): a strategy rewrite needs a live model reading the record; v${t.strategyVersion} stays in place until the next pass.`,
+    })),
+  };
 }
 
 /* ---------------------------------- Sage ----------------------------------- */

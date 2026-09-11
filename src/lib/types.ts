@@ -282,6 +282,7 @@ export type AgentId =
   | "builder"
   | "coach"
   | "sage"
+  | "trainer"
   | "smartlp"
   | "nftintel"
   | "tokenintel";
