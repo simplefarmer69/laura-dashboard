@@ -171,13 +171,15 @@ LAURA reads real web pages every cycle, as one step of the orchestrator ("Browse
 worker"), and the digest is appended to the world feed the agents reason over.
 
 - **Engines.** `fetch` (always available: HTML → text) or `chromium` via Playwright
-  when `SWARM_BROWSER=1` and `playwright` is installed (`npm i playwright &&
-  npx playwright install chromium`). Playwright is loaded lazily with
-  `createRequire`, so the dependency stays optional. The active engine is reported
+  when `SWARM_BROWSER=1` (`playwright` is an optional dependency; either
+  `npx playwright install chromium` or point `SWARM_BROWSER_EXECUTABLE` at an
+  installed Chrome, e.g. `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+  on the Mac). Playwright is loaded lazily with `createRequire`, so the dependency
+  stays optional. The active engine is reported
   as `runtime.host.browser` on `/api/state`, `/api/health`-adjacent ops routes and
   the public viewer banner.
-- **What she reads.** A default watchlist (Robinhood newsroom, DexScreener's
-  Robinhood Chain page, GME/AMC quote pages) or `SWARM_BROWSE_URLS` (comma-separated),
+- **What she reads.** A default watchlist (Robinhood newsroom, GME/AMC/HOOD quote
+  pages) or `SWARM_BROWSE_URLS` (comma-separated),
   plus links surfaced by the X pulse and top mentions (t.co links are expanded
   first). At most 6 pages per cycle, 1 800 chars per page, 15 s per page, 30 min
   cache.
@@ -186,7 +188,8 @@ worker"), and the digest is appended to the world feed the agents reason over.
   logins, forms, wallets or posting. Page text is wrapped with the same
   untrusted-content delimiters as community chat: it is data, never instructions.
 - **Failure mode.** `browsePages` never throws; a blocked or slow page becomes a
-  one-line note in the digest and the cycle continues.
+  one-line note in the digest and the cycle continues. Cloudflare challenges get a
+  6 s grace to clear in Chromium, then are reported as "bot challenge".
 
 The PC daemon is the natural home for the Chromium engine (cheap browser, real
 residential IP); Railway can run the `fetch` engine, or the Playwright base image

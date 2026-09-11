@@ -106,13 +106,14 @@ const PLAYWRIGHT_MODULE = "playwright";
 
 interface PlaywrightLike {
   chromium: {
-    launch(opts: { headless: boolean }): Promise<{
+    launch(opts: { headless: boolean; executablePath?: string }): Promise<{
       newContext(opts: { userAgent: string; javaScriptEnabled: boolean }): Promise<{
         newPage(): Promise<{
           goto(url: string, opts: { waitUntil: "domcontentloaded"; timeout: number }): Promise<unknown>;
           title(): Promise<string>;
           url(): string;
           evaluate<T>(fn: () => T): Promise<T>;
+          waitForTimeout(ms: number): Promise<void>;
           close(): Promise<void>;
         }>;
         close(): Promise<void>;
@@ -172,9 +173,18 @@ async function readWithFetch(url: string): Promise<BrowseResult> {
   return { url, finalUrl: res.url, title, text: text.slice(0, MAX_TEXT_PER_PAGE), engine: "fetch", ms: Date.now() - started };
 }
 
+const CHALLENGE_GRACE_MS = 6_000;
+
+function isBotChallenge(title: string): boolean {
+  return /just a moment|attention required|access denied|verify you are human/i.test(title);
+}
+
 async function readWithChromium(pw: PlaywrightLike, urls: string[]): Promise<Map<string, BrowseResult | Error>> {
   const out = new Map<string, BrowseResult | Error>();
-  const browser = await pw.chromium.launch({ headless: true });
+  /* SWARM_BROWSER_EXECUTABLE points at an installed Chrome/Chromium so hosts can
+     skip the Playwright browser download (the Mac's Chrome, the VM's Chrome). */
+  const executablePath = process.env.SWARM_BROWSER_EXECUTABLE?.trim() || undefined;
+  const browser = await pw.chromium.launch({ headless: true, executablePath });
   try {
     const context = await browser.newContext({ userAgent: FETCH_USER_AGENT, javaScriptEnabled: true });
     try {
@@ -183,9 +193,19 @@ async function readWithChromium(pw: PlaywrightLike, urls: string[]): Promise<Map
         const page = await context.newPage();
         try {
           await page.goto(url, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS });
-          const finalUrl = page.url();
+          let finalUrl = page.url();
           if (!hostAllowed(finalUrl)) throw new Error(`redirected off-allowlist: ${new URL(finalUrl).hostname}`);
-          const title = await page.title();
+          let title = await page.title();
+          /* Cloudflare's JS challenge renders "Just a moment..." first and often
+             clears within a few seconds in a real browser; give it that chance,
+             then report the wall honestly rather than returning an empty page. */
+          if (isBotChallenge(title)) {
+            await page.waitForTimeout(CHALLENGE_GRACE_MS);
+            finalUrl = page.url();
+            if (!hostAllowed(finalUrl)) throw new Error(`redirected off-allowlist: ${new URL(finalUrl).hostname}`);
+            title = await page.title();
+            if (isBotChallenge(title)) throw new Error("bot challenge (Cloudflare) not cleared");
+          }
           const text = await page.evaluate(() => document.body?.innerText ?? "");
           out.set(url, {
             url,
@@ -231,11 +251,14 @@ async function expandLink(url: string): Promise<string> {
  * DexScreener board (needs Chromium; a 403 on plain fetch is a cheap miss),
  * and the two meme-stock quote pages retail watches. Cached 30 min.
  */
+/* Pages that read cleanly from both datacenter and residential IPs. DexScreener's
+   site sits behind a bot challenge from datacenter IPs (its data arrives via the
+   API in intel.ts anyway); add it through SWARM_BROWSE_URLS on a home connection. */
 const DEFAULT_WATCHLIST = [
   "https://newsroom.aboutrobinhood.com/",
-  "https://dexscreener.com/robinhood",
   "https://finance.yahoo.com/quote/GME/",
   "https://www.cnbc.com/quotes/AMC",
+  "https://finance.yahoo.com/quote/HOOD/",
 ];
 
 export async function browseCandidates(intel: IntelSnapshot | null): Promise<string[]> {

@@ -77,7 +77,7 @@ is an environment variable you create and hold:
 | `ROBINHOOD_RPC_URL` | Keyed RPC for on-chain reads | Public RPC used otherwise |
 | `BLOB_READ_WRITE_TOKEN` | Viewer snapshot storage on Vercel | Auto-set by Vercel Blob |
 | `OPERATOR_TOKEN` | Co-pilot routes `/api/ops/*` on the PC daemon | 24+ random chars; routes 404 without it |
-| `SWARM_BROWSER=1` | Chromium engine for the browser worker | Needs `playwright`; falls back to plain fetch |
+| `SWARM_BROWSER=1` | Chromium engine for the browser worker | Optional `SWARM_BROWSER_EXECUTABLE` = installed Chrome; falls back to plain fetch |
 
 Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 
@@ -113,7 +113,7 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.
 - **Browser worker** (`src/lib/swarm/browser.ts`) - reads allowlisted web
-  pages each cycle (Robinhood newsroom, DexScreener, meme-stock quote pages,
+  pages each cycle (Robinhood newsroom, meme-stock quote pages,
   links from the X pulse) with plain fetch or Chromium via Playwright; read-only,
   no cookies or logins, and page text is wrapped as untrusted content.
 - **Feeds** (`src/app/api/feeds/`) - public JSON feeds the swarm and anyone
