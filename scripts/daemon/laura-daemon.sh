@@ -5,7 +5,7 @@
 #   laura-daemon.sh install    one-time setup (clone, build, PM2 apps, boot persistence hint)
 #   laura-daemon.sh build      build the newest github main release without switching to it
 #   laura-daemon.sh update     fetch github main; if new: build a fresh release, switch at a
-#                              quiet moment, verify health, roll back on failure
+#                              quiet moment (no cycle or forum round), verify health, roll back on failure
 #   laura-daemon.sh updater    loop: `update` every UPDATE_EVERY_SEC (default 300) or as soon
 #                              as data/ops/update.requested appears
 #   laura-daemon.sh watchdog   loop: probe /api/health; after 3 misses `pm2 restart laura`
@@ -45,7 +45,8 @@ pm2() { npx --yes pm2 "$@"; }
 
 health_json() { curl -s -m 8 "$HEALTH" 2>/dev/null || true; }
 health_ok() { [ "$(curl -s -m 8 -o /dev/null -w '%{http_code}' "$HEALTH" 2>/dev/null)" = "200" ]; }
-cycle_in_flight() { health_json | grep -q '"cycleInFlight":true'; }
+# `busy` covers cycles and Cafe Bar rounds; older releases only report cycleInFlight.
+cycle_in_flight() { health_json | grep -qE '"(busy|cycleInFlight)":true'; }
 
 # ---------------------------------------------------------------- install
 cmd_install() {
