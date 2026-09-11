@@ -3,6 +3,7 @@ import { loadState, pushEvent, updateState } from "@/lib/store";
 import { acquireCycleLock, releaseCycleLock } from "@/lib/swarm/cycle-lock";
 import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy";
 import { isCycleRunning, runCycle, runGrader } from "@/lib/swarm/orchestrator";
+import { isForumRoundRunning, lastForumPostAt, runForumRound } from "@/lib/swarm/forum";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
@@ -31,6 +32,17 @@ const DAY_MS = 86_400_000;
 
 /** Minimum gap between cycles even when trigger events fire back-to-back. */
 const MIN_EVENT_GAP_MS = 20 * 60_000;
+
+/**
+ * The Cafe Bar (agent forum) ran only when someone pressed the console button
+ * — it went quiet for hours whenever nobody did (operator report 2026-09-11:
+ * "some parts of the process seem stuck"). The autopilot now opens a round
+ * whenever the venue has been silent this long, in the slot where the next
+ * cycle would start, so rounds and cycles never write the state concurrently.
+ * A round is ~19 LLM calls (one per agent plus the host), so at ~16 min per
+ * round this adds roughly one round per two cycles.
+ */
+const FORUM_QUIET_MS = 60 * 60_000;
 
 /** Event kinds that justify running a cycle early. Deliberately excludes kinds
  *  emitted inside every cycle (grade.stamped, drafts, …) to avoid self-trigger loops.
@@ -229,6 +241,20 @@ async function tick(): Promise<void> {
     }
     if (lock === "unlocked") log("cycle lock unavailable (fs error); proceeding without it");
     try {
+      /* Bar first when it has gone quiet: the round takes the cycle's slot and
+         the cycle follows after the normal rest gap (the round stamps
+         lastCycleAt). Rounds are not counted in the cycle budget; the quiet
+         window bounds them to at most one per hour on its own. */
+      if (Date.now() - lastForumPostAt(state) > FORUM_QUIET_MS && !isForumRoundRunning()) {
+        log("Cafe Bar quiet for over an hour; opening a forum round before the next cycle");
+        const round = await runForumRound();
+        s.lastCycleAt = Date.now();
+        log(
+          `forum round ${round.roundId} done: ${round.threadsOpened} thread(s), ${round.postsWritten} post(s), ${round.llmCalls} LLM call(s)${round.notes.length ? `, notes: ${round.notes.slice(0, 2).join("; ")}` : ""}`,
+        );
+        void maybePublishSnapshot({ force: true });
+        return;
+      }
       log(triggerEvent ? `starting event-driven cycle (${triggerEvent})` : "starting scheduled cycle");
       const run = await runCycle(triggerEvent ? "event" : "scheduler");
       s.lastCycleAt = Date.now();

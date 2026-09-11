@@ -72,6 +72,7 @@ import {
 import { utcDate } from "@/lib/grader/score";
 import type {
   Agent,
+  AgentId,
   CycleRun,
   DailyGrade,
   Draft,
@@ -88,6 +89,9 @@ import type {
    a 2-minute rest gap, which would have fired vault/sage/builder on every
    cycle and multiplied per-cycle LLM spend. The values match the old effective
    spacing at the 75-minute cadence (~2h / ~2.5h / ~4h). */
+/** Agents whose only speaking slot is the Cafe Bar (no orchestrator step). */
+const FORUM_ONLY_AGENTS: AgentId[] = ["smartlp", "nftintel", "tokenintel"];
+
 const VAULT_STRIDE_MS = 2 * 60 * 60_000;
 const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
 const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
@@ -178,7 +182,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     llmRepairs: 0,
   };
   state.runs.push(run);
-  for (const a of state.agents) if (a.status !== "paused") a.status = "running";
+  /* Only agents with a pipeline step light up as "running"; the intel voices
+     (smartlp, nftintel, tokenintel) speak in the Cafe Bar, not here, and
+     showing them "running" for a whole cycle they never take part in read as
+     a stall on the dashboard (operator report 2026-09-11). */
+  for (const a of state.agents) {
+    if (a.status !== "paused" && !FORUM_ONLY_AGENTS.includes(a.id)) a.status = "running";
+  }
   pushEvent(state, {
     kind: "cycle.started",
     agentId: "system",
@@ -188,7 +198,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
   });
   await saveState(state);
 
-  const step = (s: RunStep) => run.steps.push(s);
+  /* A skipped step (stride, gate, pause) ends that agent's turn: flip it back
+     to idle immediately instead of leaving it "running" until the cycle ends. */
+  const step = (s: RunStep) => {
+    run.steps.push(s);
+    if (s.status === "skipped") {
+      const a = state.agents.find((x) => x.id === s.agentId);
+      if (a && a.status === "running") a.status = "idle";
+    }
+  };
   /** Telemetry: every generateStructured result passes through here. */
   const tally = <T extends { usedMock: boolean; repaired: boolean }>(out: T): T => {
     run.llmCalls = (run.llmCalls ?? 0) + 1;

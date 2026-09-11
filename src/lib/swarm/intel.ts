@@ -7,7 +7,10 @@ import type {
   IntelTweet,
   LaunchRadar,
   LaunchRadarToken,
+  MemeMarketIntel,
+  MemeMarketToken,
   Settings,
+  StockTapeEntry,
   XIntel,
 } from "@/lib/types";
 
@@ -54,6 +57,24 @@ export const X_TRACKED: { username: string; id: string | null }[] = [
 const X_SEARCH_QUERY = "$STONKBROKER OR StonkBrokers OR stonkbrokers.cash";
 
 /**
+ * Retail meme-stock conversation (operator directive 2026-09-11): what
+ * meme-stock / stock-token culture is talking about today, independent of us.
+ * Mint reads the top-engaged posts to ride a live narrative instead of
+ * inventing one from protocol stats. Originals only; replies and RTs would
+ * flood the sample with noise.
+ */
+const X_PULSE_QUERY =
+  '("meme stock" OR memestock OR wallstreetbets OR "short squeeze" OR "stock tokens" OR "tokenized stocks" OR "robinhood chain" OR $GME OR $AMC) -is:retweet -is:reply lang:en';
+
+/**
+ * DexScreener search terms that surface meme-stock-themed tokens on any chain
+ * plus the real tokenized stocks on Robinhood Chain (their names carry
+ * "Robinhood Token"). Each term is one keyless call, cached an hour.
+ */
+const MEME_SEARCH_TERMS = ["GME", "AMC", "meme stock", "stonk", "wallstreetbets", "squeeze", "stock token"];
+const STOCK_TOKEN_NEEDLE = "robinhood token";
+
+/**
  * The operator's #1 catalyst: a Robinhood founder engaging an operator
  * account, or talking stock tokens / tokenized equities — the narrative
  * $STONKBROKER rides. Recent-search covers the last 7 days.
@@ -74,6 +95,8 @@ declare global {
         leaders?: Cache<XIntel["leaders"]>;
         tracked?: Cache<NonNullable<XIntel["tracked"]>>;
         catalysts?: Cache<IntelTweet[]>;
+        pulse?: Cache<IntelTweet[]>;
+        memeMarket?: Cache<MemeMarketIntel>;
         /** username -> resolved id, or null for a confirmed miss (negative-cached). */
         trackedIds?: Cache<Record<string, string | null>>;
         eth?: Cache<{ usd: number; change24hPct: number }>;
@@ -99,6 +122,10 @@ const TRACKED_IDS_TTL_MS = 60 * 60_000;
 const ETH_TTL_MS = 10 * 60_000;
 const BLOCKSCOUT_TTL_MS = 30 * 60_000;
 const RADAR_TTL_MS = 15 * 60_000;
+/* Cross-market reads move slower than the chain radar; an hour keeps the
+   seven search calls plus the boosts batch at ~10 keyless calls/hour. */
+const MEME_MARKET_TTL_MS = 60 * 60_000;
+const PULSE_TTL_MS = 60 * 60_000;
 /** DefiLlama refreshes roughly hourly; the Smart LP lens read is one eth_call. */
 const TVL_TTL_MS = 10 * 60_000;
 const BROKERTOOLS_TTL_MS = 10 * 60_000;
@@ -263,6 +290,26 @@ async function fetchXCatalysts(): Promise<IntelTweet[]> {
   return value;
 }
 
+/** Top-engaged meme-stock / stock-token posts of the last 24h (not about us). */
+async function fetchXPulse(): Promise<IntelTweet[]> {
+  const c = caches();
+  if (c.pulse && Date.now() - c.pulse.at < PULSE_TTL_MS) return c.pulse.value;
+  const token = bearer();
+  if (!token) throw new Error("X_BEARER_TOKEN not set");
+  const startTime = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const url =
+    `https://api.x.com/2/tweets/search/recent?query=${encodeURIComponent(X_PULSE_QUERY)}` +
+    `&max_results=50&sort_order=relevancy&start_time=${encodeURIComponent(startTime)}` +
+    `&tweet.fields=public_metrics,created_at,author_id`;
+  const json = await getJson<{ data?: XApiTweet[] }>(url, { authorization: `Bearer ${token}` });
+  const value = (json.data ?? [])
+    .map((t) => toIntelTweet(t))
+    .sort((a, b) => engagementOf(b) - engagementOf(a))
+    .slice(0, 6);
+  c.pulse = { at: Date.now(), value };
+  return value;
+}
+
 /** ETH macro context from CoinGecko (keyless simple price). */
 async function fetchEth(): Promise<{ usd: number; change24hPct: number }> {
   const c = caches();
@@ -383,6 +430,151 @@ export async function fetchLaunchRadar(settings: Settings): Promise<LaunchRadar>
     mission: missionPair ? toRadarToken(missionPair, boosted) : null,
   };
   c.radar = { at: Date.now(), value };
+  return value;
+}
+
+/* ------------------ DexScreener meme-stock market read (keyless) ------------------ */
+
+interface DexSearchPair extends DexPair {
+  quoteToken?: { symbol?: string };
+}
+
+interface DexBoostRef extends DexTokenRef {
+  description?: string;
+}
+
+function toMemeToken(p: DexSearchPair, blurb: string | null): MemeMarketToken {
+  return {
+    chainId: p.chainId ?? "?",
+    symbol: p.baseToken.symbol,
+    name: p.baseToken.name,
+    quoteSymbol: p.quoteToken?.symbol ?? "?",
+    pairCreatedAt: p.pairCreatedAt ?? null,
+    volume24hUsd: p.volume?.h24 ?? 0,
+    marketCapUsd: p.marketCap ?? null,
+    priceChange24hPct: p.priceChange?.h24 ?? null,
+    blurb,
+  };
+}
+
+/**
+ * Cross-market meme-stock read for launch design. Three lenses from
+ * DexScreener's keyless API:
+ *  - STOCK TAPE: real tokenized stocks on this chain (names carry
+ *    "Robinhood Token"), 24h volume summed across every pool — which stock
+ *    lanes retail is actually trading today.
+ *  - MEMES: meme-stock-themed tokens on any chain surfaced by the search
+ *    terms, deepest pair each, by 24h volume — which narratives pull volume.
+ *  - BOOSTED: the top paid boosts anywhere with their profile blurbs, so the
+ *    pitch language of what is being pushed right now is visible.
+ * READ-ONLY: feeds prompts only, never any treasury or launch path.
+ */
+export async function fetchMemeMarket(settings: Settings): Promise<MemeMarketIntel> {
+  const c = caches();
+  if (c.memeMarket && Date.now() - c.memeMarket.at < MEME_MARKET_TTL_MS) return c.memeMarket.value;
+  const missionAddr = settings.tokenAddress.toLowerCase();
+
+  const searches = await Promise.allSettled(
+    MEME_SEARCH_TERMS.map((q) =>
+      getJson<{ pairs?: DexSearchPair[] }>(
+        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`,
+      ),
+    ),
+  );
+  const pairs: DexSearchPair[] = [];
+  for (const s of searches) if (s.status === "fulfilled") pairs.push(...(s.value.pairs ?? []));
+  if (pairs.length === 0 && searches.every((s) => s.status === "rejected")) {
+    throw new Error(`DexScreener search failed: ${String((searches[0] as PromiseRejectedResult).reason)}`);
+  }
+
+  const tape = new Map<string, StockTapeEntry & { seen: Set<string> }>();
+  const memeBest = new Map<string, DexSearchPair>();
+  for (const p of pairs) {
+    const addr = p.baseToken.address.toLowerCase();
+    if (addr === missionAddr) continue;
+    /* Real stock tokens carry a short ticker; a spam token can put the needle
+       in its name, so the symbol shape is the second gate. */
+    const isStock =
+      p.chainId === settings.chainSlug &&
+      p.baseToken.name.toLowerCase().includes(STOCK_TOKEN_NEEDLE) &&
+      /^[A-Z0-9.]{1,8}$/.test(p.baseToken.symbol);
+    if (isStock) {
+      const key = p.baseToken.symbol.toUpperCase();
+      const entry = tape.get(key) ?? {
+        symbol: key,
+        name: p.baseToken.name.replace(/\s*•.*$/, ""),
+        pools: 0,
+        volume24hUsd: 0,
+        priceChange24hPct: p.priceChange?.h24 ?? null,
+        seen: new Set<string>(),
+      };
+      const poolKey = `${p.dexId}:${p.quoteToken?.symbol ?? "?"}:${p.pairCreatedAt ?? 0}`;
+      if (!entry.seen.has(poolKey)) {
+        entry.seen.add(poolKey);
+        entry.pools += 1;
+        entry.volume24hUsd += p.volume?.h24 ?? 0;
+      }
+      tape.set(key, entry);
+      continue;
+    }
+    const key = `${p.chainId}:${addr}`;
+    const prior = memeBest.get(key);
+    if (!prior || (p.liquidity?.usd ?? 0) > (prior.liquidity?.usd ?? 0)) memeBest.set(key, p);
+  }
+
+  const stockTape: StockTapeEntry[] = [...tape.values()]
+    .map((e) => ({ symbol: e.symbol, name: e.name, pools: e.pools, volume24hUsd: e.volume24hUsd, priceChange24hPct: e.priceChange24hPct }))
+    .sort((a, b) => b.volume24hUsd - a.volume24hUsd)
+    .slice(0, 8);
+  const memes = [...memeBest.values()]
+    .filter((p) => (p.volume?.h24 ?? 0) >= 1_000)
+    .sort((a, b) => (b.volume?.h24 ?? 0) - (a.volume?.h24 ?? 0))
+    .slice(0, 8)
+    .map((p) => toMemeToken(p, null));
+
+  /* Top boosts: group by chain, one stats batch for each of the two busiest
+     chains (30-address cap per call), keep the blurb as the narrative hint. */
+  let boosted: MemeMarketToken[] = [];
+  try {
+    const boosts = await getJson<DexBoostRef[]>("https://api.dexscreener.com/token-boosts/top/v1");
+    const byChain = new Map<string, DexBoostRef[]>();
+    for (const b of boosts) {
+      if (!b.chainId || !b.tokenAddress) continue;
+      byChain.set(b.chainId, [...(byChain.get(b.chainId) ?? []), b]);
+    }
+    const chains = [...byChain.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 2);
+    const stats = await Promise.allSettled(
+      chains.map(([chain, refs]) =>
+        getJson<DexSearchPair[]>(
+          `https://api.dexscreener.com/tokens/v1/${chain}/${refs.slice(0, 30).map((r) => r.tokenAddress).join(",")}`,
+        ),
+      ),
+    );
+    const blurbs = new Map<string, string>();
+    for (const b of boosts) {
+      if (b.chainId && b.tokenAddress && b.description) blurbs.set(`${b.chainId}:${b.tokenAddress.toLowerCase()}`, b.description);
+    }
+    const best = new Map<string, DexSearchPair>();
+    for (const s of stats) {
+      if (s.status !== "fulfilled") continue;
+      for (const p of s.value) {
+        const key = `${p.chainId}:${p.baseToken.address.toLowerCase()}`;
+        if (!blurbs.has(key) && !boosts.some((b) => `${b.chainId}:${b.tokenAddress?.toLowerCase()}` === key)) continue;
+        if (p.baseToken.address.toLowerCase() === missionAddr) continue;
+        const prior = best.get(key);
+        if (!prior || (p.liquidity?.usd ?? 0) > (prior.liquidity?.usd ?? 0)) best.set(key, p);
+      }
+    }
+    boosted = [...best.entries()]
+      .sort((a, b) => (b[1].volume?.h24 ?? 0) - (a[1].volume?.h24 ?? 0))
+      .slice(0, 6)
+      .map(([key, p]) => toMemeToken(p, blurbs.get(key)?.slice(0, 90) ?? null));
+  } catch {
+    /* boosts are a bonus lens; the search lenses stand on their own */
+  }
+
+  const value: MemeMarketIntel = { fetchedAt: Date.now(), stockTape, memes, boosted };
+  c.memeMarket = { at: Date.now(), value };
   return value;
 }
 
@@ -574,7 +766,7 @@ export async function collectIntel(
   settings: Settings,
   prev: IntelSnapshot | null,
 ): Promise<IntelSnapshot> {
-  const [search, leaders, tracked, catalysts, eth, chain, radar, tvl, brokerTools] =
+  const [search, leaders, tracked, catalysts, eth, chain, radar, tvl, brokerTools, pulse, memeMarket] =
     await Promise.allSettled([
       fetchXMentions(),
       fetchXLeaders(),
@@ -585,6 +777,8 @@ export async function collectIntel(
       fetchLaunchRadar(settings),
       fetchTvl(settings),
       fetchBrokerTools(settings),
+      fetchXPulse(),
+      fetchMemeMarket(settings),
     ]);
   const sources: string[] = [];
   const warnings: string[] = [];
@@ -624,6 +818,9 @@ export async function collectIntel(
   const catalystsOk = catalysts.status === "fulfilled";
   if (catalystsOk) sources.push("x-catalysts");
   else warnings.push(`X catalyst search: ${String(catalysts.reason)}`);
+  const pulseOk = pulse.status === "fulfilled";
+  if (pulseOk) sources.push("x-meme-pulse");
+  else warnings.push(`X meme-stock pulse: ${String(pulse.reason)}`);
 
   if (searchOk || leadersOk) {
     x = {
@@ -634,6 +831,7 @@ export async function collectIntel(
       leaders: leadersOk ? leaders.value : (prev?.x?.leaders ?? []),
       tracked: trackedOk ? tracked.value : (prev?.x?.tracked ?? []),
       catalysts: catalystsOk ? catalysts.value : (prev?.x?.catalysts ?? []),
+      pulse: pulseOk ? pulse.value : (prev?.x?.pulse ?? []),
       note: xNotes.join("; "),
     };
   }
@@ -674,6 +872,14 @@ export async function collectIntel(
     warnings.push(`TVL (DefiLlama/Smart LP): ${String(tvl.reason)}`);
   }
 
+  let memeMarketIntel: MemeMarketIntel | null = null;
+  if (memeMarket.status === "fulfilled") {
+    sources.push("dexscreener-meme-market");
+    memeMarketIntel = memeMarket.value;
+  } else {
+    warnings.push(`DexScreener meme market: ${String(memeMarket.reason)}`);
+  }
+
   let brokerToolsIntel: BrokerToolsIntel | null = null;
   if (brokerTools.status === "fulfilled") {
     sources.push("brokertools");
@@ -692,6 +898,7 @@ export async function collectIntel(
     launchRadar,
     tvl: liveTvl,
     brokerTools: brokerToolsIntel,
+    memeMarket: memeMarketIntel,
     sources,
     warnings,
   };
@@ -790,6 +997,43 @@ export function launchRadarDigest(radar: LaunchRadar | null | undefined): string
   return lines.join("\n");
 }
 
+/** Renders the cross-market meme-stock section; "" when nothing came back. */
+export function memeMarketDigest(mm: MemeMarketIntel | null | undefined): string {
+  if (!mm || (mm.stockTape.length === 0 && mm.memes.length === 0 && mm.boosted.length === 0)) return "";
+  const lines = [
+    "MEME-STOCK MARKET (DexScreener, live — design for VOLUME from this, not from protocol stats alone):",
+  ];
+  if (mm.stockTape.length > 0) {
+    lines.push(
+      `- Tokenized-stock tape on this chain (24h volume, all pools): ${mm.stockTape
+        .map((s) => `${s.symbol} ${compactUsd(s.volume24hUsd)}/${s.pools}p ${radarPct(s.priceChange24hPct)}`)
+        .join(", ")} — the lane whose stock retail is trading TODAY is where a launch finds buyers.`,
+    );
+  }
+  for (const m of mm.memes.slice(0, 6)) {
+    lines.push(
+      `- ${m.symbol} "${m.name}" [${m.chainId}/${m.quoteSymbol}]: ${ageOfMs(m.pairCreatedAt)}, vol24 ${compactUsd(m.volume24hUsd)}, mcap ${compactUsd(m.marketCapUsd)}, ${radarPct(m.priceChange24hPct)} 24h`,
+    );
+  }
+  for (const b of mm.boosted.slice(0, 4)) {
+    lines.push(
+      `- boosted ${b.symbol} [${b.chainId}]: vol24 ${compactUsd(b.volume24hUsd)}, ${radarPct(b.priceChange24hPct)} 24h${b.blurb ? ` — pitch: "${b.blurb}"` : ""}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/** Renders the X meme-stock pulse; "" when no posts came back. */
+export function memePulseDigest(x: XIntel | null | undefined): string {
+  const posts = x?.pulse ?? [];
+  if (posts.length === 0) return "";
+  const lines = ["X MEME-STOCK PULSE (top-engaged retail posts on meme stocks / stock tokens, last 24h — ride a live narrative, never quote or impersonate):"];
+  for (const t of posts.slice(0, 5)) {
+    lines.push(`- (${engagementOf(t)} eng, ${ago(t.createdAt)}): "${t.text.replace(/\s+/g, " ").slice(0, 150)}"`);
+  }
+  return lines.join("\n");
+}
+
 /**
  * Compact prompt injection: what the live internet says TODAY. The X/macro/
  * holder section keeps its ~1500-char budget; the live-TVL line (~320), the
@@ -857,5 +1101,7 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
   const tvl = tvlDigest(current.tvl).slice(0, 320);
   const brokerTools = brokerToolsDigest(current.brokerTools).slice(0, 600);
   const radar = launchRadarDigest(current.launchRadar).slice(0, 900);
-  return [main, tvl, brokerTools, radar].filter(Boolean).join("\n");
+  const memeMarket = memeMarketDigest(current.memeMarket).slice(0, 1200);
+  const pulse = memePulseDigest(current.x).slice(0, 900);
+  return [main, tvl, brokerTools, radar, memeMarket, pulse].filter(Boolean).join("\n");
 }

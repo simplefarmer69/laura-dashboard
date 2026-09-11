@@ -468,16 +468,28 @@ function barIntel(intel: string): string {
     .join("\n");
 }
 
-let roundRunning = false;
+/* On globalThis for the same reason as the cycle guard: under dev HMR each
+   compile owns a module copy, and the scheduler's copy must see a round the
+   console button started (and vice versa). */
+declare global {
+  var __lauraForumRoundRunning: boolean | undefined;
+}
 
 export function isForumRoundRunning(): boolean {
-  return roundRunning;
+  return globalThis.__lauraForumRoundRunning === true;
+}
+
+/** Timestamp of the newest post in the venue; 0 when the bar has never opened. */
+export function lastForumPostAt(state: SwarmState): number {
+  let last = 0;
+  for (const t of state.forum ?? []) for (const p of t.posts) if (p.ts > last) last = p.ts;
+  return last;
 }
 
 /** One full round: every active agent takes a turn, in rotating order, seeing the venue live. */
 export async function runForumRound(): Promise<ForumRoundResult> {
-  if (roundRunning) throw new Error("A forum round is already running");
-  roundRunning = true;
+  if (isForumRoundRunning()) throw new Error("A forum round is already running");
+  globalThis.__lauraForumRoundRunning = true;
   const startedAt = Date.now();
   const roundId = newId("fround");
   try {
@@ -574,6 +586,12 @@ export async function runForumRound(): Promise<ForumRoundResult> {
             refId: post.id,
           });
         }
+        /* A bar turn is real work: stamp it so the dashboard shows the intel
+           voices (whose only slot is this venue) alive instead of "never ran". */
+        if (turn.newThread || turn.replies.length > 0) {
+          const live = state.agents.find((a) => a.id === agent.id);
+          if (live) live.lastRunAt = Date.now();
+        }
         await saveState(state);
       } catch (err) {
         result.notes.push(`${agent.id}: turn failed (${String(err).slice(0, 160)})`);
@@ -592,6 +610,6 @@ export async function runForumRound(): Promise<ForumRoundResult> {
     await saveState(state);
     return result;
   } finally {
-    roundRunning = false;
+    globalThis.__lauraForumRoundRunning = false;
   }
 }

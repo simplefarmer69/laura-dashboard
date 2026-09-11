@@ -67,6 +67,8 @@ export interface XIntel {
   tracked?: { username: string; tweets: IntelTweet[] }[];
   /** Founder tweets engaging operator accounts or stock-token themes — the operator's #1 catalyst. Optional: absent on pre-tracking snapshots. */
   catalysts?: IntelTweet[];
+  /** Top engaged meme-stock / stock-token conversation on X in the last 24h (retail mood, not about us). Optional: absent on older snapshots. */
+  pulse?: IntelTweet[];
   /** Which X endpoints answered vs were rate-limited/blocked this cycle. */
   note: string;
 }
@@ -104,6 +106,12 @@ export interface IntelSnapshot {
    * same archive-compatibility reason; null when the fetch failed.
    */
   brokerTools?: BrokerToolsIntel | null;
+  /**
+   * Cross-market meme-stock read (DexScreener search + top boosts): stock
+   * tape on this chain, meme-stock tokens anywhere, boosted narratives.
+   * Optional for archive compatibility; null when the fetch failed.
+   */
+  memeMarket?: MemeMarketIntel | null;
   /** Endpoints that returned real data this cycle. */
   sources: string[];
   warnings: string[];
@@ -191,6 +199,44 @@ export interface LaunchRadar {
   tokens: LaunchRadarToken[];
   /** $STONKBROKER's own deepest pair stats when DexScreener lists it. */
   mission: LaunchRadarToken | null;
+}
+
+/** One meme token anywhere on DexScreener that a meme-stock search surfaced. */
+export interface MemeMarketToken {
+  chainId: string;
+  symbol: string;
+  name: string;
+  /** Quote asset of the deepest pair (which lane the market chose). */
+  quoteSymbol: string;
+  pairCreatedAt: number | null;
+  volume24hUsd: number;
+  marketCapUsd: number | null;
+  priceChange24hPct: number | null;
+  /** DexScreener profile blurb when the token bought a boost (narrative hint). */
+  blurb: string | null;
+}
+
+/** A tokenized stock on Robinhood Chain and the retail volume it pulled across all its pools. */
+export interface StockTapeEntry {
+  symbol: string;
+  name: string;
+  pools: number;
+  volume24hUsd: number;
+  priceChange24hPct: number | null;
+}
+
+/**
+ * READ-ONLY cross-market read for launch design (operator directive
+ * 2026-09-11: Mint must design from DexScreener + X context, not from
+ * protocol stats alone). Which tokenized stocks retail is actually trading
+ * on this chain today, which meme-stock-themed tokens pull volume on any
+ * chain, and what the top paid boosts are pitching. Feeds prompts only.
+ */
+export interface MemeMarketIntel {
+  fetchedAt: number;
+  stockTape: StockTapeEntry[];
+  memes: MemeMarketToken[];
+  boosted: MemeMarketToken[];
 }
 
 export interface GradeComponent {
