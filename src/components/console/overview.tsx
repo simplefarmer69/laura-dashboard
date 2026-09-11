@@ -208,6 +208,12 @@ export function Overview({
               <Chain label="Brokers in circulation" value={metrics.onchain.brokersInCirculation.toLocaleString()} sub="of 4,444" />
               <Chain label="Brokers in Anvil vault" value={metrics.onchain.brokersInVault.toLocaleString()} sub="swap 666,666 $STONKBROKER" />
               <Chain label="Token supply" value={`${(metrics.onchain.tokenTotalSupply / 1e9).toFixed(4)}B`} sub="falls with activation burns" />
+              {typeof metrics.onchain.tokenHolders === "number" && (
+                <Chain label="$STONKBROKER holders" value={metrics.onchain.tokenHolders.toLocaleString()} sub="distinct wallets · Blockscout" />
+              )}
+              {typeof metrics.onchain.nftHolders === "number" && (
+                <Chain label="Broker holders" value={metrics.onchain.nftHolders.toLocaleString()} sub="distinct wallets · Blockscout" />
+              )}
             </CardContent>
           </Card>
         )}

@@ -28,8 +28,11 @@ read half of Phase 3; later phases are specified here so they can be built in or
 | ETH/USD | Derived from the deepest ETH-quoted pair (`priceUsd / priceNative`) | DexScreener |
 
 All feeds were verified live during the build; the grader runs on them today with
-no keys required. Blockscout's API (holder counts) sits behind a browser challenge
-and is deferred to a keyed indexer in Phase 3.
+no keys required. Blockscout's `tokens/{addr}/counters` endpoint supplies distinct
+$STONKBROKER and broker NFT holder counts as best-effort optional reads: they are
+null (and hidden) when the indexer answers with its Cloudflare challenge, which is the
+case from datacenter IPs, and populate when LAURA runs from a residential host such as
+the Mac daemon. One-hour cache either way.
 
 ---
 
@@ -199,9 +202,10 @@ is in place.
 ### Phase 3 — On-chain read layer *(read half done)*
 - Done: Clock In v2 pot (ETH and USD), brokers in the Anvil vault vs in circulation,
   token total supply, block number — via the public RPC every cycle, shown on the
-  Overview and fed to every agent.
+  Overview and fed to every agent. Holder counts ($STONKBROKER wallets, broker NFT
+  wallets) via Blockscout counters, optional and null when the indexer is blocked.
 - Next: activation counts (Activation Manager ABI), loan vault utilisation, locker fee
-  accrual, up. gauge weights, holder counts via a keyed indexer (Alchemy/Blockscout).
+  accrual, up. gauge weights.
 - These become grader inputs with small weights and give Steward/Ledger exact figures
   ("pot is 62% to the next Clock In") instead of DefiLlama roll-ups.
 

@@ -37,6 +37,10 @@ export interface OnchainReads {
   brokersInCirculation: number;
   /** Current $STONKBROKER total supply; falls as activation fees burn */
   tokenTotalSupply: number;
+  /** Distinct $STONKBROKER holders (Blockscout counters); null when the indexer is unreachable */
+  tokenHolders?: number | null;
+  /** Distinct broker NFT holders (Blockscout counters); null when the indexer is unreachable */
+  nftHolders?: number | null;
 }
 
 /** One tweet worth remembering from the live X reads (clipped for storage). */

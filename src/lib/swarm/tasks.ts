@@ -231,7 +231,11 @@ export function scoutMock(ctx: CycleContext): BriefOut {
       `Token DEX volume (${usd(m.tokenDexVolume24hUsd)}) is running well above protocol-surface volume, so attention is concentrated in swaps rather than Anvil, loans or lockers.`,
       `Hook for today: the Clock In mechanism converts fee flow into stock-token drops; explain the fee pot state and who can trigger it.`,
       m.onchain
-        ? `On-chain: Clock In pot holds ${m.onchain.clockInPotEth.toFixed(3)} ETH (${usd(m.onchain.clockInPotUsd)}); ${m.onchain.brokersInCirculation} of 4444 brokers are in holders' hands, ${m.onchain.brokersInVault} sit in the Anvil vault.`
+        ? `On-chain: Clock In pot holds ${m.onchain.clockInPotEth.toFixed(3)} ETH (${usd(m.onchain.clockInPotUsd)}); ${m.onchain.brokersInCirculation} of 4444 brokers are in holders' hands, ${m.onchain.brokersInVault} sit in the Anvil vault.${
+            typeof m.onchain.tokenHolders === "number" ? ` ${m.onchain.tokenHolders.toLocaleString()} wallets hold $STONKBROKER` : ""
+          }${typeof m.onchain.nftHolders === "number" ? `, ${m.onchain.nftHolders.toLocaleString()} hold a broker NFT` : ""}${
+            typeof m.onchain.tokenHolders === "number" || typeof m.onchain.nftHolders === "number" ? " (Blockscout)." : ""
+          }`
         : `Weakest grade lever: ${weakest.label.toLowerCase()} (${weakest.score.toFixed(0)}/100). Caveat: DexScreener aggregates ${m.pairCount} pairs, some near-empty; quote liquidity-weighted figures only.`,
     ],
   };
