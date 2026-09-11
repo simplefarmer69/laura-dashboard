@@ -98,34 +98,36 @@ async function tick(): Promise<void> {
   const latestRun = state.runs.at(-1);
   if (latestRun) s.lastCycleAt = Math.max(s.lastCycleAt, latestRun.finishedAt ?? latestRun.startedAt);
 
-  /* Self-heal: a process death mid-cycle leaves the newest run permanently
-     unfinished and its agents shown as "running" forever (this is what made
-     the swarm look stalled on 2026-09-10 and needed a manual finalize).
-     Cadence already tolerates the orphan; this closes the record honestly.
-     45 min is double the longest observed cycle, and isCycleRunning() covers
-     every in-process cycle whatever its trigger, so a live cycle is never
-     clipped. */
-  if (
-    latestRun &&
-    !latestRun.finishedAt &&
-    Date.now() - latestRun.startedAt > 45 * 60_000 &&
-    !isCycleRunning()
-  ) {
+  /* Self-heal: a process death or host suspension mid-cycle leaves runs
+     permanently unfinished and agents shown as "running" forever (made the
+     swarm look stalled on 2026-09-10, and again after the 02:27-07:17 UTC
+     suspension on 2026-09-11 — that orphan was no longer the NEWEST run by
+     the time anyone looked, so the sweep covers every stale run, not just
+     the latest). 45 min is double the longest observed cycle, and
+     isCycleRunning() covers every in-process cycle whatever its trigger, so
+     a live cycle is never clipped. Agents reset only when no cycle is in
+     flight for the same reason. */
+  const staleIds = state.runs
+    .filter((r) => !r.finishedAt && Date.now() - r.startedAt > 45 * 60_000)
+    .map((r) => r.id);
+  if (staleIds.length > 0 && !isCycleRunning()) {
     await updateState((st) => {
-      const orphan = st.runs.find((r) => r.id === latestRun.id);
-      if (!orphan || orphan.finishedAt) return;
-      orphan.finishedAt = Date.now();
-      orphan.error = orphan.error ?? "orphaned: process died mid-cycle; finalized by scheduler self-heal";
+      for (const id of staleIds) {
+        const orphan = st.runs.find((r) => r.id === id);
+        if (!orphan || orphan.finishedAt) continue;
+        orphan.finishedAt = Date.now();
+        orphan.error = orphan.error ?? "orphaned: process died or host suspended mid-cycle; finalized by scheduler self-heal";
+        pushEvent(st, {
+          kind: "cycle.finished",
+          agentId: "system",
+          title: `Cycle ${orphan.id} finalized by self-heal (orphaned mid-cycle)`,
+          detail: "The process running this cycle stopped before it finished; the record is closed so nothing waits on it.",
+          refId: orphan.id,
+        });
+      }
       for (const a of st.agents) if (a.status === "running") a.status = "idle";
-      pushEvent(st, {
-        kind: "cycle.finished",
-        agentId: "system",
-        title: `Cycle ${orphan.id} finalized by self-heal (orphaned mid-cycle)`,
-        detail: "The process running this cycle died before it finished; the record is closed so nothing waits on it.",
-        refId: orphan.id,
-      });
     });
-    log(`self-heal: finalized orphaned run ${latestRun.id}`);
+    log(`self-heal: finalized orphaned run(s) ${staleIds.join(", ")}`);
   }
 
   const today = utcDate();
