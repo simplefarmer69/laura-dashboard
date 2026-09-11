@@ -78,6 +78,8 @@ function formatQuote(lane: PadLane, wei: bigint): number {
 
 /** Env override for the claim dust threshold (ETH-equivalent). */
 const envClaimMinEth = Number(process.env.FEE_CLAIM_MIN_ETH);
+/** Env override for the eager-collect threshold (ETH-equivalent). */
+const envCollectEagerEth = Number(process.env.FEE_COLLECT_EAGER_ETH);
 
 export const EARNINGS_POLICY = {
   /** Scheduler refresh cadence for the on-chain snapshot */
@@ -89,8 +91,17 @@ export const EARNINGS_POLICY = {
    * lanes convert through the lens USD views; override with FEE_CLAIM_MIN_ETH.
    */
   claimMinEthEquiv: Number.isFinite(envClaimMinEth) && envClaimMinEth > 0 ? envClaimMinEth : 0.0005,
-  /** At most one claim attempt per launch per day */
+  /** At most one claim attempt per launch per day (unless the eager threshold fires) */
   claimCadenceMs: 24 * 3600_000,
+  /**
+   * Eager-collect bypass: when a launch's pending value reaches this much in
+   * ETH-equivalent terms, claim/collect immediately instead of waiting out the
+   * daily cadence. Added 2026-09-11 after $LAURA's high-velocity bonded pool
+   * re-accrued ~0.5 WETH of LP fees within hours of a collect — real income
+   * should not sit uncollected for a day. Gas on Robinhood Chain is trivial
+   * relative to this threshold. Override with FEE_COLLECT_EAGER_ETH.
+   */
+  collectEagerEthEquiv: Number.isFinite(envCollectEagerEth) && envCollectEagerEth > 0 ? envCollectEagerEth : 0.02,
   /** getLogs chunk size the RPC tolerates */
   logChunkBlocks: 400_000n,
 } as const;
@@ -715,7 +726,8 @@ declare global {
  * and, ONLY when settings.autoClaimEarnings is on, runs the fee-claim pass:
  * flushes any fallback creator ledger and collects locked-LP swap fees on
  * bonded launches, each above the ETH-equivalent dust threshold (max one
- * claim attempt per launch per day per stream).
+ * claim attempt per launch per day per stream, except that pending value
+ * above collectEagerEthEquiv fires immediately regardless of cadence).
  * Never throws — a flaky RPC must not take down the tick.
  */
 export async function runEarningsMaintenance(state: SwarmState): Promise<void> {
@@ -738,9 +750,20 @@ export async function runEarningsMaintenance(state: SwarmState): Promise<void> {
 
   if (!state.settings.autoClaimEarnings) return;
   for (const entry of snapshot.launches) {
+    /* Eager bypass: a big-enough pending value (ETH-equivalent) skips the
+       daily cadence — high-velocity pools like $LAURA's must not idle a day
+       between collects. Rate is read once per entry, only when needed; an
+       unpriced lane (null rate) never fires the bypass. */
+    const wantsClaim = entry.claimableQuote > 0;
+    const wantsLpCollect = (entry.lpPendingQuote ?? 0) > 0 && !entry.lpStaked;
+    const rate = wantsClaim || wantsLpCollect ? await quoteEthRate(entry.lane) : null;
+    const eager = (pendingQuote: number): boolean =>
+      rate !== null && pendingQuote * rate >= EARNINGS_POLICY.collectEagerEthEquiv;
+
     /* Pass 1: flush the fallback creator-fee ledger (curve-phase income). */
     const cadenceOk = !entry.lastClaimAt || now - entry.lastClaimAt >= EARNINGS_POLICY.claimCadenceMs;
-    if (entry.claimableQuote > 0 && cadenceOk) {
+    if (wantsClaim && (cadenceOk || eager(entry.claimableQuote))) {
+      if (!cadenceOk) log(`eager claim for $${entry.symbol}: pending ${entry.claimableQuote.toFixed(6)} quote exceeds the ${EARNINGS_POLICY.collectEagerEthEquiv} ETH-equiv threshold, bypassing the daily cadence`);
       try {
         const res = await claimEarnings(entry.proposalId);
         if (res.ok && res.sent) log(`claimed ${res.claimedQuote} for $${entry.symbol} (tx ${res.txHash})`);
@@ -752,7 +775,8 @@ export async function runEarningsMaintenance(state: SwarmState): Promise<void> {
     /* Pass 2: collect locked-LP swap fees on bonded launches (post-graduation
        income via the creator lock NFT). Threshold + gating live inside. */
     const lpCadenceOk = !entry.lpLastCollectAt || now - entry.lpLastCollectAt >= EARNINGS_POLICY.claimCadenceMs;
-    if ((entry.lpPendingQuote ?? 0) > 0 && !entry.lpStaked && lpCadenceOk) {
+    if (wantsLpCollect && (lpCadenceOk || eager(entry.lpPendingQuote ?? 0))) {
+      if (!lpCadenceOk) log(`eager LP collect for $${entry.symbol}: pending ${(entry.lpPendingQuote ?? 0).toFixed(6)} quote exceeds the ${EARNINGS_POLICY.collectEagerEthEquiv} ETH-equiv threshold, bypassing the daily cadence`);
       try {
         const res = await collectLpFees(entry.proposalId);
         if (res.ok && res.sent) {
