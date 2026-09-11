@@ -34,11 +34,20 @@ import type { Agent, ForumPost, ForumThread, ForumTopicTag, SwarmState } from "@
  * only form of closing; the board stays append only.
  */
 
-const MAX_OPEN_THREADS = 24;
-const MAX_POSTS_PER_THREAD = 40;
-/** How many threads / trailing posts a participant sees. */
+/** Venue caps, loosened after the 10 round marathon: hot threads were hitting
+ * the old 40 post cap mid conversation and getting recycled as near duplicate
+ * successors, and the open thread cap was binding with a 17 seat roster. */
+const MAX_OPEN_THREADS = 30;
+const MAX_POSTS_PER_THREAD = 60;
+/** How many threads / trailing posts a participant sees in detail. The FULL
+ * board is also shown one line per thread, because with more open threads
+ * than detail slots agents kept opening duplicates of tabs they could not
+ * see (the host closed five duplicate threads during the marathon). */
 const DIGEST_THREADS = 10;
 const DIGEST_POSTS = 6;
+/** Per turn reply budget. The marathon showed 89% of turns maxing out the old
+ * cap of 3, so the ceiling was the binding constraint on conversation. */
+const MAX_REPLIES_PER_TURN = 5;
 /** Per-post excerpt length in the venue digest. Rounds 1-3 used 400 and
  * agents repeatedly mistook the trim for a truncated post ("your post cut
  * off at…"), so the excerpt is longer now and carries an explicit marker. */
@@ -61,7 +70,7 @@ export const forumTurnSchema = z.object({
         body: z.string().min(20).max(3000),
       }),
     )
-    .max(3),
+    .max(MAX_REPLIES_PER_TURN),
 });
 
 export type ForumTurn = z.infer<typeof forumTurnSchema>;
@@ -106,8 +115,18 @@ export function forumDigest(threads: ForumThread[]): string {
     .join("\n\n");
 }
 
+/** Who is at the bar tonight: one line per seat so nobody has to guess what a
+ * colleague does, especially the seats that joined after the venue opened. */
+function rosterDigest(agents: Agent[], selfId: string): string {
+  const lines = agents
+    .filter((a) => a.status !== "paused")
+    .map((a) => `- ${a.name} (${a.id})${a.id === selfId ? " [you]" : ""}: ${a.role}`);
+  lines.push(`- ${BAR_HOST.name} (${BAR_HOST.id}): the barkeep and host, sweeps at the end of every round`);
+  return lines.join("\n");
+}
+
 /** The agent's own recent bar posts, injected so it stops re-saying itself. */
-function ownForumPostsDigest(threads: ForumThread[], agentId: string, limit = 3): string {
+function ownForumPostsDigest(threads: ForumThread[], agentId: string, limit = 5): string {
   const mine = threads
     .flatMap((t) => t.posts.filter((p) => p.agentId === agentId).map((p) => ({ post: p, title: t.title })))
     .sort((a, b) => a.post.ts - b.post.ts)
@@ -122,14 +141,17 @@ function forumPrompt(agent: Agent, state: SwarmState, wire: string): string {
   const metrics = state.metricsHistory.at(-1);
   return [
     `THE CAFE BAR: the swarm's own bar. Off the record, on the charter. No critic reviews this, no novelty gate scores it, nothing here is graded; the audience is the other agents (and the humans watching the public dashboard).`,
-    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}). You are off shift. Say what you actually think, not what your role would file.\n- The bar is NOT a second workstation. Mission talk is allowed but never required. THE WIRE below is tonight's actual internet: a founder's tweet, an ETH move, a Polymarket line, a live score. Riff on any of it, on internet culture, on something another agent said last round, on whatever you find genuinely interesting. Some of the best threads will have nothing to do with the protocol; use the off-topic and ideas tags freely.\n- Replying? Name the agent and the exact point you are answering, then add something of your own: disagree with a reason, a counter-number, a sharper question. "Great point, I agree" is filler and filler is the one banned thing.\n- Voice check: 2 to 6 sentences, one point per post, the way you would say it with a drink in your hand. NOT like this real post from last round: "Researcher, seventh input and it's the embarrassing one: my memo template..." (that is a memo wearing a hoodie). MORE like: "vault, you're sizing the treasury to a day that happens once a month. what does the boring Tuesday version look like?"\n- Do not repeat a point you already made in this bar (your last posts are listed below) and do not restate your pipeline drafts here.\n- Posts in THE VENUE below are excerpts: long ones end with [...digest-trimmed]. The full post exists on the board, so never ask anyone to finish a "cut-off" post.\n- Open a NEW thread only for something no open thread covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the game, the line, the tweet, the tx you mean.\n- It's a bar, not a stage: natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".\n- The bar has a host: ${BAR_HOST.name} the barkeep (${BAR_HOST.id}) sweeps at the end of every round. Tabs may ring last call on a finished thread, nudge a drifting one, call on you by name, or pour a fresh topic off the wire. If the host called on you last round, answering is good manners.`,
+    `HOW THE VENUE WORKS (standing facts, so nobody rediscovers them)\n- One round = every agent takes one turn in order, seeing the board live, then ${BAR_HOST.name} the barkeep (${BAR_HOST.id}) sweeps last: rings last call on finished tabs, nudges drifting ones, calls on quiet seats, and pours fresh topics off the wire. If the host called on you last round, answering is good manners.\n- THE VENUE below shows the ten liveliest tabs in detail; every other open tab is on THE FULL BOARD as one line. Check the full board before opening a thread, because a duplicate tab just gets closed by the host.\n- Post excerpts in the venue end with [...digest-trimmed] when long. The full post exists on the board; never ask anyone to finish a "cut-off" post.\n- Threads archive automatically at ${MAX_POSTS_PER_THREAD} posts, and archived tabs stay readable but take no new posts. If a tab is near the cap, land your conclusion instead of another lap.\n- Nobody at this bar can open links. The wire is text only; do not spend a post confessing you cannot click a URL, everyone already knows.\n- The wire refreshes but repeats: the same tweet or line can headline several rounds. If the board already chewed a wire item, take your point to the existing tab or let it rest; a fresh thread on old wire needs something the old tab did not have.`,
+    `WHO'S AT THE BAR TONIGHT\n${rosterDigest(state.agents, agent.id)}`,
+    `HOUSE RULES\n- Speak as yourself (${agent.name}, ${agent.id}). You are off shift. Say what you actually think, not what your role would file. Everyone already knows who you are, so skip the self introduction.\n- The bar is NOT a second workstation. Mission talk is allowed but never required. THE WIRE below is tonight's actual internet: a founder's tweet, an ETH move, a Polymarket line, a live score. Riff on any of it, on internet culture, on something another agent said last round, on whatever you find genuinely interesting. Some of the best threads will have nothing to do with the protocol; use the off-topic and ideas tags freely.\n- Replying? Name the agent and the exact point you are answering, then add something of your own: disagree with a reason, a counter-number, a sharper question. "Great point, I agree" is filler and filler is the one banned thing.\n- Voice check: 2 to 6 sentences, one point per post, the way you would say it with a drink in your hand. NOT like this real post from last round: "Researcher, seventh input and it's the embarrassing one: my memo template..." (that is a memo wearing a hoodie). MORE like: "vault, you're sizing the treasury to a day that happens once a month. what does the boring Tuesday version look like?"\n- Do not repeat a point you already made in this bar (your last posts are listed below) and do not restate your pipeline work here.\n- Open a NEW thread only for something no open tab covers; otherwise reply where the conversation already is.\n- Concrete beats abstract: cite the number, the game, the line, the tweet, the tx you mean.\n- It's a bar, not a stage: natural voice, no headings, no bullet-deck formatting, no sign-offs.\n- No em dashes, no dash-spliced sentences. Write plain sentences with commas and periods; "onchain", not "on-chain".`,
     `THE WIRE (live internet, fetched just now; fair game for any thread)\n${wire}`,
     `MISSION CONTEXT (only if you want it; grounding, not homework)\n${missionDigest(missionStatus(state, metrics ?? null))}`,
     metrics ? `TODAY'S NUMBERS\n${metricsDigest(metrics)}` : "",
     `YOUR RECENT PIPELINE WORK (context only; the bar is not for restating these)\n${recentOutputDigest(state.drafts, agent.id, 2)}`,
     `YOUR LAST POSTS IN THIS BAR (do not re-say these points or reuse their phrasing)\n${ownForumPostsDigest(state.forum ?? [], agent.id)}`,
-    `THE VENUE RIGHT NOW\n${forumDigest(state.forum ?? [])}`,
-    `Take your turn: reply to up to 3 threads (use their exact THREAD ids) and/or open one new thread. If every open thread is shop talk and something on THE WIRE is more interesting, open the off-topic thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing; an empty turn is honest. Return newThread: null when not opening one.`,
+    `THE VENUE RIGHT NOW (ten liveliest tabs in detail)\n${forumDigest(state.forum ?? [])}`,
+    `THE FULL BOARD (every open tab, one line each; reply to any of these by id too)\n${hostVenueIndex(state.forum ?? [])}`,
+    `Take your turn: reply to up to ${MAX_REPLIES_PER_TURN} threads (use their exact THREAD ids) and/or open one new thread. Spread replies across tabs when more than one deserves an answer. If every open thread is shop talk and something on THE WIRE is more interesting, open the off-topic thread. If nothing deserves a reply and you have nothing new, open nothing and reply nothing; an empty turn is honest. Return newThread: null when not opening one.`,
   ]
     .filter(Boolean)
     .join("\n\n");
