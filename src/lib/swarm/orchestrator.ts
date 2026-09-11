@@ -12,7 +12,7 @@ import { collectOnchainDigest } from "@/lib/swarm/onchain";
 import { laneMenuDigest, recentLaunchLanes, resolveLane } from "@/lib/launchpad/lanes";
 import { nextDesignSlotAt } from "@/lib/launchpad/capacity";
 import { AGENT_ORDER, NON_PRODUCER_AGENTS } from "@/lib/swarm/roster";
-import { applyProposal } from "@/lib/swarm/strategy";
+import { applyProposal, healDuplicatedStrategies } from "@/lib/swarm/strategy";
 import { checkNovelty } from "@/lib/swarm/novelty";
 import {
   agentSystem,
@@ -1097,6 +1097,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     /* 5. Coach: lessons + proposals */
     const coach = agentById(state, "coach");
     if (coach.status !== "paused") {
+      /* Self-heal first so the coach reads clean strategies: identical
+         "Added in vN" blocks stacked by the fallback path collapse to one. */
+      const healed = healDuplicatedStrategies(state);
+      if (healed.length > 0) {
+        step({ agentId: "coach", label: "Strategy self-heal", status: "ok", summary: `Collapsed duplicated fallback blocks: ${healed.join(", ")}`, durationMs: 0 });
+        await saveState(state);
+      }
       const out = await timed(async () =>
         tally(
           await generateStructured(resolved, {

@@ -38,6 +38,42 @@ export function adoptStrategy(
   });
 }
 
+/**
+ * Collapse repeated "Added in vN: …" blocks whose text is identical (the
+ * deterministic coach fallback stacked them on bd across eight cycles on
+ * 2026-09-11). Keeps the first occurrence, drops exact repeats, leaves every
+ * other paragraph untouched. Returns the cleaned text and how many blocks went.
+ */
+export function dedupeStrategyAppends(strategy: string): { text: string; removed: number } {
+  const blocks = strategy.split(/\n{2,}/);
+  const seen = new Set<string>();
+  let removed = 0;
+  const kept = blocks.filter((block) => {
+    const m = /^Added in v\d+:\s*([\s\S]+)$/.exec(block.trim());
+    if (!m) return true;
+    const key = m[1].replace(/\s+/g, " ").trim();
+    if (seen.has(key)) {
+      removed += 1;
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  return { text: removed ? kept.join("\n\n") : strategy, removed };
+}
+
+/** Self-heal pass: applies dedupeStrategyAppends to every agent, as a versioned adoption so history stays honest. */
+export function healDuplicatedStrategies(state: SwarmState): string[] {
+  const healed: string[] = [];
+  for (const agent of state.agents) {
+    const { text, removed } = dedupeStrategyAppends(agent.strategy);
+    if (removed === 0) continue;
+    adoptStrategy(state, agent, text, `Self-heal: removed ${removed} duplicated "Added in vN" block(s) left by the fallback coach`, "coach");
+    healed.push(`${agent.id} (-${removed})`);
+  }
+  return healed;
+}
+
 export function applyProposal(
   state: SwarmState,
   proposal: StrategyProposal,

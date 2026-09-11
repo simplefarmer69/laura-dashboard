@@ -82,6 +82,15 @@ const skillEditSchema = z.object({
   rationale: z.string().min(10).max(500),
 });
 
+/**
+ * Strategy text budget. A strategy is an operating brief, not an archive:
+ * every revision must fit STRATEGY_BUDGET_CHARS by condensing what it keeps.
+ * The schema allows STRATEGY_SCHEMA_MAX so a rewrite a little over budget
+ * still applies rather than failing the whole coach turn.
+ */
+export const STRATEGY_BUDGET_CHARS = 3500;
+export const STRATEGY_SCHEMA_MAX = 6000;
+
 export const proposalsSchema = z.object({
   lessons: z
     .array(
@@ -104,7 +113,11 @@ export const proposalsSchema = z.object({
     .array(
       z.object({
         agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage"]),
-        proposedStrategy: z.string().min(80).max(4000),
+        /* Budget is 3500 (prompted); the schema leaves headroom so a slightly
+           long rewrite lands instead of failing to the deterministic mock —
+           eight cycles of that appended identical boilerplate to bd on
+           2026-09-11. */
+        proposedStrategy: z.string().min(80).max(STRATEGY_SCHEMA_MAX),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
       }),
@@ -793,10 +806,11 @@ export function coachPrompt(ctx: CycleContext): string {
       const statsNote = noDraftRole[a.id]
         ? `Stats: N/A — ${noDraftRole[a.id]}.`
         : `Stats: ${a.stats.drafts} drafts, ${a.stats.approved} approved, ${a.stats.rejected} rejected.`;
-      return `### ${a.id} (${a.name}, v${a.strategyVersion})\n${statsNote} ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy:\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
+      const lengthNote = `${a.strategy.length} chars${a.strategy.length > STRATEGY_BUDGET_CHARS ? ` — OVER the ${STRATEGY_BUDGET_CHARS} budget; any revision must condense it` : ""}`;
+      return `### ${a.id} (${a.name}, v${a.strategyVersion})\n${statsNote} ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy (${lengthNote}):\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. COVERAGE (operator directive 2026-09-11: every agent evolves, not only the draft producers): the roster shows each agent's version — when an agent is still on v1 after many cycles (watcher, critic, vault, builder, sage, the intel voices) and you hold concrete evidence about its output (skipped strides, vetoes that missed a pattern, Cafe Bar posts that repeat, a launch that pulled no volume), prefer revising THAT agent over a fifth revision of bd or narrative. Mint's evidence is the pad outcome — 24h volume and non-swarm holders of LAURA's own launches versus the MEME-STOCK MARKET currents it could have ridden. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. LENGTH BUDGET: a strategy is an operating brief, not a changelog — the replacement must be at most ${STRATEGY_BUDGET_CHARS} characters (the roster shows each strategy's current length). Never append an "Added in vN" block to an already long strategy; condense what stays, delete what no longer earns its place, and fold the change into the body. A strategy that already carries duplicated paragraphs is your first target: merge them. COVERAGE (operator directive 2026-09-11: every agent evolves, not only the draft producers): the roster shows each agent's version — when an agent is still on v1 after many cycles (watcher, critic, vault, builder, sage, the intel voices) and you hold concrete evidence about its output (skipped strides, vetoes that missed a pattern, Cafe Bar posts that repeat, a launch that pulled no volume), prefer revising THAT agent over a fifth revision of bd or narrative. Mint's evidence is the pad outcome — 24h volume and non-swarm holders of LAURA's own launches versus the MEME-STOCK MARKET currents it could have ridden. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
 }
 
 /* ---------------------------------- Sage ----------------------------------- */
@@ -963,6 +977,12 @@ export function coachMock(ctx: CycleContext): ProposalsOut {
         : weakest.key === "volume"
           ? "Aim each piece at one concrete flow-routing counterparty (aggregator, launchpad user, LP) and name the next step they can take this week."
           : "Tighten to the formats reviewers approved most recently and drop any section that was rejected twice.";
+  /* The fallback is deterministic, so it must be idempotent: if this exact
+     addition is already in the strategy, or the strategy has no room left,
+     propose nothing rather than stack identical "Added in vN" blocks. */
+  if (target.strategy.includes(addition) || target.strategy.length + addition.length + 40 > STRATEGY_BUDGET_CHARS) {
+    return { lessons, notebook: [], proposals: [], skillEdit: null };
+  }
   return {
     lessons,
     notebook: [],
