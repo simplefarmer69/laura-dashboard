@@ -304,30 +304,36 @@ export async function browsePages(urls: string[]): Promise<{ results: BrowseResu
     else todo.push(url);
   }
   const pw = loadPlaywright();
-  const engine: BrowserEngine = pw ? "chromium" : "fetch";
+  let engine: BrowserEngine = pw ? "chromium" : "fetch";
+  const keep = (url: string, r: BrowseResult) => {
+    results.push(r);
+    c.set(url, { at: Date.now(), value: r });
+  };
+  const readAllWithFetch = async (urls: string[]) => {
+    const settled = await Promise.allSettled(urls.map((u) => readWithFetch(u)));
+    settled.forEach((s, i) => {
+      if (s.status === "fulfilled") keep(urls[i], s.value);
+      else errors.push(`${urls[i]}: ${String(s.reason).slice(0, 120)}`);
+    });
+  };
   if (todo.length > 0) {
+    let pending = todo;
     if (pw) {
       try {
         const read = await readWithChromium(pw, todo);
         for (const [url, r] of read) {
           if (r instanceof Error) errors.push(`${url}: ${r.message.slice(0, 120)}`);
-          else {
-            results.push(r);
-            c.set(url, { at: Date.now(), value: r });
-          }
+          else keep(url, r);
         }
+        pending = [];
       } catch (err) {
-        errors.push(`chromium: ${String(err).slice(0, 160)}`);
+        /* The engine itself failed (no browser binary, launch error): the pages
+           are still worth reading, so fall back to plain fetch for this pass. */
+        errors.push(`chromium unavailable, fell back to fetch: ${String(err).slice(0, 140)}`);
+        engine = "fetch";
       }
-    } else {
-      const settled = await Promise.allSettled(todo.map((u) => readWithFetch(u)));
-      settled.forEach((s, i) => {
-        if (s.status === "fulfilled") {
-          results.push(s.value);
-          c.set(todo[i], { at: Date.now(), value: s.value });
-        } else errors.push(`${todo[i]}: ${String(s.reason).slice(0, 120)}`);
-      });
     }
+    if (pending.length > 0) await readAllWithFetch(pending);
   }
   return { results, errors, engine };
 }
