@@ -170,7 +170,31 @@ export const PAD_ABI = [
       { name: "externalToken", type: "bool", indexed: false },
     ],
   },
+  /* Custom errors the V2 pads throw from createLaunch/armLaunch, so viem
+     decodes them by name instead of printing a bare selector. Selectors
+     confirmed via openchain: BadEconomics() = 0x89f17dee. */
+  { type: "error", name: "BadEconomics", inputs: [] },
+  { type: "error", name: "BadParam", inputs: [] },
 ] as const;
+
+/**
+ * Turns a viem contract error into the one line a human needs. Known pad
+ * errors get the rule they encode; anything else keeps its first meaningful
+ * line (the full stack stays in the process log).
+ */
+export function explainPadError(err: unknown): string {
+  const text = String(err);
+  if (/BadEconomics|0x89f17dee/.test(text))
+    return "Pad rejected the curve economics (BadEconomics): the start tax must be an exact multiple of the per-minute decay and the decay window must be 10-99 minutes. The executor snaps the spec onto the rule before the next attempt.";
+  if (/BadParam/.test(text))
+    return "Pad rejected a launch parameter (BadParam): closed-window sales (openEnded=false) and unsoldMode above 1 revert on every V2 pad.";
+  if (/insufficient funds/i.test(text)) return "Wallet has insufficient ETH for the deploy fee plus gas.";
+  const firstLine = text
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l && !/^(Docs|Version|Details):/.test(l));
+  return (firstLine ?? text).slice(0, 300);
+}
 
 /** Minimal ERC-20 surface used to load launch supply into the pad. */
 export const ERC20_MIN_ABI = [

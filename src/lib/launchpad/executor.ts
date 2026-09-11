@@ -1,6 +1,7 @@
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
 import type { LaunchProposal, SwarmState } from "@/lib/types";
 import { beginChainWork, chainWorkOpen } from "@/lib/chain-work";
+import { explainPadError } from "@/lib/launchpad/contracts";
 import {
   LAUNCH_CAPS,
   armLaunch,
@@ -189,16 +190,17 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       const l = s.launches.find((x) => x.id === id);
       if (!l) return;
       l.status = "approved"; // return to approved so it can retry
-      l.error = String(err);
+      l.error = explainPadError(err);
       pushEvent(s, {
         kind: "launch.failed",
         agentId: "system",
         title: `Deploy failed: ${l.name} ($${l.symbol})`,
-        detail: String(err),
+        detail: explainPadError(err),
         refId: l.id,
       });
     });
-    return { ok: false, error: String(err), httpStatus: 502 };
+    log(`deploy error detail: ${String(err).split("\n").slice(0, 3).join(" / ").slice(0, 400)}`);
+    return { ok: false, error: explainPadError(err), httpStatus: 502 };
   } finally {
     doneChainWork();
   }
