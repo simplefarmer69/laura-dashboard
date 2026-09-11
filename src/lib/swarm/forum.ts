@@ -119,11 +119,14 @@ function topicTokens(text: string): Set<string> {
   );
 }
 
-/** Overlap normalized by the smaller set, so a short title against a long opener still registers. */
-function topicOverlap(a: Set<string>, b: Set<string>): number {
+/** Overlap normalized by the smaller set, so a short title against a long opener still registers.
+ *  minShared guards tiny sets: two short titles sharing 2 generic tokens can
+ *  hit 0.5+ by normalization alone without being the same story. */
+function topicOverlap(a: Set<string>, b: Set<string>, minShared = 0): number {
   if (a.size === 0 || b.size === 0) return 0;
   let inter = 0;
   for (const x of a) if (b.has(x)) inter++;
+  if (inter < minShared) return 0;
   return inter / Math.min(a.size, b.size);
 }
 
@@ -146,8 +149,12 @@ function findRecentDuplicate(threads: ForumThread[], title: string, body: string
     /* Max of combined and title-only overlap: a re-pour often retells the
        story from a fresh angle (bodies diverge) while the titles still name
        the same game and numbers — the Seattle triple-pour scored 0.34
-       combined but 0.58 on titles alone. */
-    const overlap = Math.max(topicOverlap(proposed, existing), topicOverlap(proposedTitle, topicTokens(t.title)));
+       combined but 0.58 on titles alone. The title path needs 4 shared
+       tokens so short titles cannot match on normalization alone. */
+    const overlap = Math.max(
+      topicOverlap(proposed, existing, 6),
+      topicOverlap(proposedTitle, topicTokens(t.title), 4),
+    );
     if (overlap >= REPOUR_OVERLAP && (!best || overlap > best.overlap)) best = { thread: t, overlap };
   }
   return best?.thread ?? null;
