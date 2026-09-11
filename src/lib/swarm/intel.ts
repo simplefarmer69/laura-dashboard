@@ -105,7 +105,13 @@ const BROKERTOOLS_TTL_MS = 10 * 60_000;
 
 async function getJson<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
   const res = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": "stonk-swarm/0.1", ...headers },
+    /* Mozilla-prefixed UA: Cloudflare in front of Blockscout 403s bare bot UAs
+       but passes browser-shaped ones; verified 403 vs 200 on 2026-09-11. */
+    headers: {
+      accept: "application/json",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) laura-swarm/1.0",
+      ...headers,
+    },
     cache: "no-store",
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
