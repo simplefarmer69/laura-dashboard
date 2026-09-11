@@ -183,16 +183,17 @@ swarm never posts on its own.
 ## Layout
 
 ```
-src/lib/swarm/       charter, roster, orchestrator, tuner, forum, archive
+src/lib/swarm/       charter, roster, orchestrator, tuner, forum, archive, browser worker
 src/lib/grader/      metric adapters + scoring rubric (swap for your goal)
 src/lib/launchpad/   launch specs, art, caps, gated deploy executor
 src/lib/builder/     on-chain utility templates + builder caps
 src/lib/viewer/      viewer mode, snapshot sanitizer, publisher
 src/lib/chat/        persona, Discord/Telegram connectors
-src/app/api/         state, cycle, drafts, proposals, settings, feeds
+src/app/api/         state, cycle, drafts, proposals, settings, feeds, health, ops (co-pilot)
 src/components/      the LAURA terminal (Next.js 16, Tailwind 4, shadcn/ui)
 library/             curated knowledge + per role skills (edit to reshape)
-scripts/             worker.ts (scheduler), cycle.ts (one-shot)
+scripts/             worker.ts (scheduler), cycle.ts (one-shot), daemon/ (PM2 daemon kit)
+docs/DEPLOY.md       hosting audit + PC daemon runbook + state hand-off
 data/                runtime state (git-ignored; SWARM_DATA_DIR relocates)
 ```
 
