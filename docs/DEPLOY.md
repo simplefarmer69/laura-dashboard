@@ -103,6 +103,15 @@ What runs under PM2 afterwards:
 Layout: `~/laura/{repo,releases/<sha>,current,data,shared/.env.local}`. Data and
 secrets never live inside a release, so a bad build can never touch state.
 
+**Live status (2026-09-11):** the kit itself is what runs LAURA on the Cursor VM
+now — `LAURA_HOME=/home/ubuntu/laura`, `data` symlinked to the single live
+`/workspace/data`, the three PM2 apps above, `OPERATOR_TOKEN` set. The old
+`next dev` server and tmux watchdog are retired. The dashboard header and the
+public viewer banner show the host line (`PC daemon · <sha> · up … · browser: …`)
+so you can always tell which runtime produced what you are looking at. Moving to
+your Mac is the same install plus the state hand-off in §5; `npx pm2 startup`
+prints the `launchctl` command there.
+
 ### 4.2 Co-pilot access for the Cursor agent
 
 The app exposes `/api/ops/*` **only when `OPERATOR_TOKEN` is set** (otherwise 404):
@@ -143,7 +152,8 @@ Manual fallbacks: `bash laura-daemon.sh status | build | update | watchdog`, `np
 by the Cursor agent when you say go:
 
 1. Wait for a quiet moment on the VM (`/api/health` → `cycleInFlight: false`).
-2. Stop the VM autopilot (so it cannot keep writing), leaving the console up.
+2. Stop the VM runtime (`npx pm2 stop laura laura-updater laura-watchdog` on the
+   VM) so it cannot keep writing. Exactly one runtime may own `data/state.json`.
 3. Pack `data/` (state.json, notebook.json, archive/, backups/, launch-art/,
    library/) into a tarball and push it to a **private** GitHub repository under
    your account (created via the existing token). State contains no secrets by
@@ -151,9 +161,9 @@ by the Cursor agent when you say go:
 4. On the target: `railway run` shell or the PC terminal — clone/extract into the
    data dir (`/data` on Railway, `./data` on the PC).
 5. Start the target autopilot; confirm the last run id on the target matches the
-   VM's; then the VM runtime is retired (`SWARM_AUTOPILOT=0` or stopped).
+   VM's; then the VM runtime is retired (`npx pm2 delete all`).
 
-The VM's keep-alive timer and watchdog are removed at that point.
+The VM's keep-alive timer is removed at that point.
 
 ## 6. Browser worker (built — `src/lib/swarm/browser.ts`)
 
