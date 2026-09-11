@@ -69,10 +69,10 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
           <CardDescription>Cadence, output budget and autonomy level.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field label="Cycle interval (minutes)" hint="Base LLM-cycle cadence; trigger events (launch live, milestone) can run a cycle up to this much earlier">
+          <Field label="Rest gap between cycles (minutes)" hint="LAURA runs around the clock: the next LLM cycle starts this many minutes after the previous one ends; trigger events (launch live, milestone) can cut a longer gap short">
             <Input
               type="number"
-              min={30}
+              min={1}
               max={1440}
               value={form.cycleIntervalMinutes}
               onChange={(e) => set("cycleIntervalMinutes", Number(e.target.value))}
@@ -82,7 +82,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
             <Input
               type="number"
               min={1}
-              max={48}
+              max={96}
               value={form.maxLlmCyclesPerDay}
               onChange={(e) => set("maxLlmCyclesPerDay", Number(e.target.value))}
             />
@@ -185,7 +185,7 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               {state.runtime.autopilot ? "running in-process" : "off"}
             </span>
             {state.runtime.autopilot
-              ? `: a cycle every ${state.settings.cycleIntervalMinutes} min (max ${state.settings.maxLlmCyclesPerDay}/day, plus event triggers) and a grade stamp every UTC day.`
+              ? `: continuous cycles with a ${state.settings.cycleIntervalMinutes}-min rest gap between them (max ${state.settings.maxLlmCyclesPerDay}/day, plus event triggers) and a grade stamp every UTC day.`
               : ". Set SWARM_AUTOPILOT=1 (default) or run npm run worker."}
           </p>
         </CardContent>

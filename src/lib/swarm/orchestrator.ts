@@ -83,6 +83,15 @@ import type {
   UtilityProject,
 } from "@/lib/types";
 
+/* Wall-clock strides for the slow-clock agents. These used to be multiples of
+   cycleIntervalMinutes; with continuous operation (2026-09-11) that setting is
+   a 2-minute rest gap, which would have fired vault/sage/builder on every
+   cycle and multiplied per-cycle LLM spend. The values match the old effective
+   spacing at the 75-minute cadence (~2h / ~2.5h / ~4h). */
+const VAULT_STRIDE_MS = 2 * 60 * 60_000;
+const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
+const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
+
 /* On globalThis, not module scope: under dev HMR every compile gets its own
    module copy, and two copies (e.g. the scheduler loop and a manual /api/cycle
    request) each saw a null module-level guard and ran cycles concurrently
@@ -584,7 +593,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
        draft, so the critic reviews it below like everything else; execution
        stays exclusively in the capped scheduler/executor paths. */
     const vault = agentById(state, "vault");
-    const vaultStrideMs = 1.5 * state.settings.cycleIntervalMinutes * 60_000;
+    const vaultStrideMs = VAULT_STRIDE_MS;
     if (vault.status === "paused") {
       step({ agentId: "vault", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
     } else if (vault.lastRunAt !== null && Date.now() - vault.lastRunAt < vaultStrideMs) {
@@ -896,7 +905,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     /* 4b. Builder: utility projects for LAURA's launched tokens (strided;
        runs about every third cycle so builds stay curated, never automatic). */
     const builder = agentById(state, "builder");
-    const builderStrideMs = 3 * Math.max(30, state.settings.cycleIntervalMinutes) * 60_000;
+    const builderStrideMs = BUILDER_STRIDE_MS;
     const builderDue = (builder.lastRunAt ?? 0) <= Date.now() - builderStrideMs;
     const builderBlocked = builderGate(state);
     if (builder.status === "paused") {
@@ -1125,7 +1134,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
        write path (operator docs denied in code), the coach's writeSkill
        machinery, and the notebook. Never code, caps, guards or executors. */
     const sage = agentById(state, "sage");
-    const sageStrideMs = 2 * state.settings.cycleIntervalMinutes * 60_000;
+    const sageStrideMs = SAGE_STRIDE_MS;
     if (sage.status === "paused") {
       step({ agentId: "sage", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
     } else if (sage.lastRunAt !== null && Date.now() - sage.lastRunAt < sageStrideMs) {

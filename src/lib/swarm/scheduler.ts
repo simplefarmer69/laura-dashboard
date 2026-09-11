@@ -14,13 +14,17 @@ import type { SwarmEventKind, SwarmState } from "@/lib/types";
 
 /**
  * LAURA's autopilot. Cascade design: the per-minute tick does only cost-free
- * checks (launch queue, budget, capacity, trigger events); LLM cycles run on a
- * base cadence of `cycleIntervalMinutes` (read live from settings) PLUS early
- * event-driven cycles when something worth reacting to lands (a launch goes
- * live, a milestone hits). A hard rolling-24h budget (`maxLlmCyclesPerDay`)
- * bounds API cost whatever the cadence and triggers do. The grader is stamped
- * every UTC day even if no cycle landed on it. Safe to call more than once per
- * process: only the first call starts the loop.
+ * checks (launch queue, budget, capacity, trigger events); LLM cycles run
+ * around the clock: `cycleIntervalMinutes` (read live from settings) is the
+ * REST GAP between the end of one cycle and the start of the next, not a
+ * wall-clock period — operator directive 2026-09-11: "LAURA should run around
+ * the clock improving all the time, calling keys as needed", replacing the
+ * old 75-minute pause that left the swarm idle ~75% of the day. Event-driven
+ * cycles (a launch goes live, a milestone hits) can still cut a longer gap
+ * short. A hard rolling-24h budget (`maxLlmCyclesPerDay`) bounds API cost
+ * whatever the gap and triggers do. The grader is stamped every UTC day even
+ * if no cycle landed on it. Safe to call more than once per process: only the
+ * first call starts the loop.
  */
 const TICK_MS = 60_000;
 const DAY_MS = 86_400_000;
@@ -90,7 +94,10 @@ async function tick(): Promise<void> {
      guard lives inside; non-fatal on failure, no-op until configured). */
   void maybePublishSnapshot();
   const state = await loadState();
-  const intervalMs = Math.max(30, state.settings.cycleIntervalMinutes) * 60_000;
+  /* Floor of one minute (one tick): the gap exists so the finished cycle's
+     state save, snapshot publish and lock release settle before the next run
+     opens — not to ration work. Rationing is the 24h budget's job. */
+  const intervalMs = Math.max(1, state.settings.cycleIntervalMinutes) * 60_000;
   /* Anchor cadence to the latest run's activity, not only to finished runs:
      a run orphaned by a dev-server restart never gets finishedAt, and anchoring
      on 0 would make every fresh process fire a cycle immediately (and treat
@@ -176,6 +183,17 @@ async function tick(): Promise<void> {
      autoExecuteUtility flag and stay inside BUILDER_CAPS. Never throws. */
   await runBuilderTick(state);
 
+  /* Daily grade first: with back-to-back cycles the "nothing due" branch
+     below may never be reached, so the stamp must not depend on it. One
+     tick's delay for the next cycle is the whole cost. */
+  if (!hasGradeToday && s.lastGradeDate !== today) {
+    log("stamping daily grade");
+    const grade = await runGrader();
+    s.lastGradeDate = today;
+    log(`grade ${grade.date}: ${grade.letter} ${grade.score.toFixed(1)}`);
+    return;
+  }
+
   const sinceLastCycle = Date.now() - s.lastCycleAt;
   const due = sinceLastCycle >= intervalMs;
   const used = cyclesInLast24h(state);
@@ -226,14 +244,6 @@ async function tick(): Promise<void> {
         log("cycle lock released");
       }
     }
-    return;
-  }
-
-  if (!hasGradeToday && s.lastGradeDate !== today) {
-    log("stamping daily grade");
-    const grade = await runGrader();
-    s.lastGradeDate = today;
-    log(`grade ${grade.date}: ${grade.letter} ${grade.score.toFixed(1)}`);
     return;
   }
 

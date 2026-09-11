@@ -7,8 +7,13 @@ export const DEFAULT_SETTINGS: Settings = {
   llamaSlug: "stonkbrokers",
   projectName: "StonkBrokers",
   projectSite: "https://www.stonkbrokers.cash",
-  cycleIntervalMinutes: 75,
-  maxLlmCyclesPerDay: 28,
+  /* Continuous operation (operator directive 2026-09-11): the interval is the
+     rest gap after a cycle ends, so at ~23-minute cycles this is roughly one
+     cycle every 25 minutes around the clock (~55-60/day). The budget is the
+     hard brake — set above the natural rate so it only bites on a runaway
+     (fast-failing cycles), never on healthy work. */
+  cycleIntervalMinutes: 2,
+  maxLlmCyclesPerDay: 72,
   autoApplyStrategyProposals: false,
   maxDraftsPerCycle: 6,
   llmModel: "",

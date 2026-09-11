@@ -9,6 +9,26 @@ import { newId } from "@/lib/store";
 
 const DAY_MS = 86_400_000;
 
+/** Fallback cycle length until enough finished runs exist to measure one. */
+const ASSUMED_CYCLE_MINUTES = 25;
+
+/**
+ * Cycles the swarm can realistically land in a day. `cycleIntervalMinutes` is
+ * the rest gap between cycles (continuous operation), so the period is that
+ * gap plus the median observed cycle duration — dividing 1440 by a 2-minute
+ * gap alone would set a 720-cycle target no swarm could meet.
+ */
+export function expectedCyclesPerDay(state: SwarmState): number {
+  const durations = state.runs
+    .filter((r) => r.finishedAt && !r.error)
+    .slice(-12)
+    .map((r) => ((r.finishedAt as number) - r.startedAt) / 60_000)
+    .sort((a, b) => a - b);
+  const median = durations.length >= 3 ? durations[Math.floor(durations.length / 2)] : ASSUMED_CYCLE_MINUTES;
+  const periodMinutes = Math.max(1, state.settings.cycleIntervalMinutes) + median;
+  return Math.max(1, Math.min(state.settings.maxLlmCyclesPerDay, Math.floor(1440 / periodMinutes)));
+}
+
 export const WEIGHTS = { price: 0.35, revenue: 0.3, volume: 0.2, execution: 0.15 } as const;
 
 function clamp(n: number, lo = 0, hi = 100): number {
@@ -111,10 +131,7 @@ export function scoreExecution(state: SwarmState, now: number): GradeComponent {
   const recent = state.drafts.filter((d) => d.createdAt >= since);
   const reviewed = recent.filter((d) => d.status !== "pending");
   const approved = reviewed.filter((d) => d.status === "approved" || d.status === "published");
-  const cyclesPerDay = Math.max(
-    1,
-    Math.min(state.settings.maxLlmCyclesPerDay, Math.floor(1440 / state.settings.cycleIntervalMinutes)),
-  );
+  const cyclesPerDay = expectedCyclesPerDay(state);
   const target = state.settings.maxDraftsPerCycle * cyclesPerDay * 0.5;
   const proposals = state.proposals.filter((p) => p.createdAt >= since);
   const adopted = proposals.filter((p) => p.status === "approved");

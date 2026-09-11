@@ -5,10 +5,14 @@ const DAY_MS = 86_400_000;
 
 /** Hard rails the tuner can never leave, whatever the data says. */
 export const TUNER_RAILS = {
-  minCycleMinutes: 45,
-  maxCycleMinutes: 360,
+  /* The interval is the rest gap between cycles (continuous operation,
+     2026-09-11): the tuner may widen it as backpressure when drafts flood,
+     but never past a 30-minute pause — around-the-clock work is the
+     operator's standing directive, not a tunable. */
+  minCycleMinutes: 1,
+  maxCycleMinutes: 30,
   /** Step size for cadence adjustments */
-  cycleStepMinutes: 30,
+  cycleStepMinutes: 5,
   minDraftsPerCycle: 3,
   maxDraftsPerCycle: 8,
   /** Minimum reviewed drafts before approval-rate rules fire */
