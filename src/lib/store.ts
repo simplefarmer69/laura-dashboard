@@ -334,6 +334,13 @@ export async function saveState(state: SwarmState): Promise<void> {
       const base = normalizeState(JSON.parse(baseRaw) as Partial<SwarmState>);
       const current = normalizeState(JSON.parse(diskRaw) as Partial<SwarmState>);
       toWrite = mergeStates(base, state, current);
+      /* One line per rebased commit so the daemon log shows overlapping
+         writers being reconciled (the 2026-09-10 clobber was silent). Forum
+         post totals are the canary: merged >= max(writer, disk) always. */
+      const posts = (s: SwarmState) => (s.forum ?? []).reduce((n, t) => n + t.posts.length, 0);
+      console.log(
+        `[store ${new Date().toISOString()}] rebased commit onto a newer state.json (forum posts writer ${posts(state)} / disk ${posts(current)} / merged ${posts(toWrite)}; events ${state.events.length} / ${current.events.length} / ${toWrite.events.length})`,
+      );
     }
     /* Deep memory: mirror every stream into the append-only SQLite archive
        BEFORE the caps below evict anything, so nothing is ever lost. Additive
