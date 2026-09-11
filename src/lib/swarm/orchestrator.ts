@@ -912,6 +912,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             message: spec.message,
             artMotif: spec.artMotif,
             artPalette: spec.artPalette,
+            artStyle: spec.artStyle,
             status: autonomous ? "approved" : "pending",
             reviewedAt: autonomous ? Date.now() : null,
             reviewerNote: autonomous ? "Auto-approved: operator granted full launch autonomy" : null,

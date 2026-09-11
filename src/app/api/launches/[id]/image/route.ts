@@ -30,6 +30,7 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/launches/[i
       symbol: launch.symbol,
       motif: launch.artMotif,
       palette: launch.artPalette,
+      style: launch.artStyle,
     };
     const bytes = isViewerMode()
       ? await generateTokenArt(spec)

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { newId, pushEvent, updateState } from "@/lib/store";
 import type { LaunchProposal } from "@/lib/types";
-import { ensureLaunchArt } from "@/lib/launchpad/art";
+import { ART_STYLES, ensureLaunchArt } from "@/lib/launchpad/art";
 import { ART_PALETTES, isDuplicateLaunch, launchSpecShape, reservedLaunchNameHit } from "@/lib/launchpad/spec";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,7 @@ const createSchema = z.object({
   message: z.string().min(10).max(500).optional(),
   artMotif: z.string().min(2).max(80),
   artPalette: z.enum(ART_PALETTES),
+  artStyle: z.enum(ART_STYLES).optional(),
   priority: z.number().min(0).max(100).optional(),
   approve: z.boolean().default(false),
 });
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
       message: p.message ?? null,
       artMotif: p.artMotif,
       artPalette: p.artPalette,
+      artStyle: p.artStyle ?? null,
       priority: p.priority ?? 0,
       status: p.approve ? "approved" : "pending",
       reviewedAt: p.approve ? Date.now() : null,
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
       symbol: launch.symbol,
       motif: launch.artMotif,
       palette: launch.artPalette,
+      style: launch.artStyle,
     });
   } catch {
     /* art regenerates on demand */

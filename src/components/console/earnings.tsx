@@ -41,12 +41,19 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
           <p className="text-muted-foreground">First on-chain snapshot pending (refreshes every ~10 min).</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-5">
               <Stat label="treasury ETH" value={t.ethBalance.toFixed(5)} />
-              <Stat label="WETH (fees)" value={t.wethBalance.toFixed(6)} />
-              <Stat label="total earned" value={t.totalEarnedQuote.toFixed(6)} />
+              <Stat label="WETH in wallet" value={t.wethBalance.toFixed(6)} />
+              <Stat label="curve fees earned" value={t.totalEarnedQuote.toFixed(6)} />
+              <Stat label="LP fees collected" value={(t.totalLpCollectedQuote ?? 0).toFixed(6)} />
               <Stat label="claimable" value={t.totalClaimableQuote.toFixed(6)} />
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              WETH in the wallet is the sum of two income streams: curve-trade fees pushed per trade on
+              WETH-lane launches, plus swap fees collected from bonded pools&apos; locked LP. &quot;Curve fees
+              earned&quot; alone understates her income — the LP line is the rest of it. Non-WETH lanes earn in
+              their own quote token (STONK, USDG), so the totals mix units on purpose.
+            </p>
             {t.launches.length === 0 ? (
               <p className="text-xs text-muted-foreground">No deployed launches to track yet.</p>
             ) : (

@@ -13,10 +13,18 @@ import { ART_PALETTES as PALETTE_NAMES } from "@/lib/launchpad/spec";
  * orbital framing and a restyled LAURA signature — futuristic guardianship,
  * the future of humanity and security. Stored art is versioned: launches
  * rendered before V2 keep their original files untouched.
+ *
+ * V3 adds COMPOSITION variety (operator report 2026-09-11: "mint is making
+ * tokens that all use the same image style"). Five distinct layouts share the
+ * palette/motif language; Mint picks one per token (artStyle) or the seed
+ * assigns one, so consecutive launches stop looking like one template.
  */
 
 /** Bump when the composition changes so old launches keep their stored art. */
-export const ART_VERSION = 2;
+export const ART_VERSION = 3;
+
+export const ART_STYLES = ["orbital", "poster", "badge", "glitch", "minimal"] as const;
+export type ArtStyle = (typeof ART_STYLES)[number];
 
 /* Keyed by the palette tuple in spec.ts (the zod-enum source of truth), so a
    palette added on either side is a compile error until both agree. */
@@ -179,41 +187,33 @@ export interface TokenArtSpec {
   symbol: string;
   motif?: string | null;
   palette?: string | null;
+  /** Composition (one of ART_STYLES); seeded from the spec when absent. */
+  style?: string | null;
 }
 
-function buildSvg(spec: TokenArtSpec): string {
-  const paletteKey = (spec.palette && spec.palette in ART_PALETTES ? spec.palette : "emerald") as ArtPalette;
-  const c = ART_PALETTES[paletteKey];
-  const rng = mulberry32(hashSeed(`${spec.symbol}:${spec.name}`));
-  const glyph = motifGlyph(spec.motif ?? "chart", c);
+const MONO = "Cascadia Mono, DejaVu Sans Mono, monospace";
 
-  const sym = `$${spec.symbol.slice(0, 10)}`;
-  const fontSize = Math.min(70, Math.floor(390 / sym.length));
+interface ArtCtx {
+  c: { glow: string; accent: string; dim: string };
+  rng: () => number;
+  glyph: string;
+  sym: string;
+}
 
-  /* Sparse starfield seeded by the spec — deep space, not terminal noise */
+function starfield(ctx: ArtCtx, count: number): string {
   let specks = "";
-  for (let i = 0; i < 30; i++) {
-    const x = Math.floor(rng() * 512);
-    const y = Math.floor(rng() * 512);
-    const o = (0.06 + rng() * 0.18).toFixed(2);
-    const r = rng() > 0.85 ? 2.4 : 1.3;
-    const fill = rng() > 0.75 ? c.accent : c.glow;
+  for (let i = 0; i < count; i++) {
+    const x = Math.floor(ctx.rng() * 512);
+    const y = Math.floor(ctx.rng() * 512);
+    const o = (0.06 + ctx.rng() * 0.18).toFixed(2);
+    const r = ctx.rng() > 0.85 ? 2.4 : 1.3;
+    const fill = ctx.rng() > 0.75 ? ctx.c.accent : ctx.c.glow;
     specks += `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" opacity="${o}"/>`;
   }
+  return specks;
+}
 
-  let grid = "";
-  for (let i = 1; i < 8; i++) {
-    const p = i * 64;
-    grid += `<path d="M${p} 0 L${p} 512 M0 ${p} L512 ${p}" stroke="${c.glow}" stroke-width="1" opacity="0.045"/>`;
-  }
-
-  /* Orbital guardianship ring behind the glyph — the sentinel-era signature */
-  const orbitTilt = Math.floor(rng() * 24) - 12 - 14;
-  const orbit = `<g transform="rotate(${orbitTilt} 256 206)">
-    <ellipse cx="256" cy="206" rx="196" ry="58" fill="none" stroke="${c.glow}" stroke-width="2" opacity="0.4"/>
-    <circle cx="${256 - 196}" cy="196" r="4.5" fill="${c.glow}" opacity="0.9" filter="url(#glow)"/>
-  </g>`;
-
+function svgShell(c: ArtCtx["c"], body: string, bg?: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <radialGradient id="bg" cx="50%" cy="38%" r="78%">
@@ -221,24 +221,158 @@ function buildSvg(spec: TokenArtSpec): string {
       <stop offset="52%" stop-color="#050a12"/>
       <stop offset="100%" stop-color="#02040a"/>
     </radialGradient>
+    <linearGradient id="beam" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${c.glow}" stop-opacity="0.22"/>
+      <stop offset="55%" stop-color="${c.glow}" stop-opacity="0"/>
+    </linearGradient>
     <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
       <feGaussianBlur stdDeviation="7" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  ${grid}
-  ${specks}
-  ${orbit}
+  <rect width="512" height="512" fill="${bg ?? "url(#bg)"}"/>
+  ${body}
+</svg>`;
+}
+
+/** V2 look: grid + starfield, orbital ring, glyph high, symbol low, footer signature. */
+function styleOrbital(ctx: ArtCtx): string {
+  const { c, rng, glyph, sym } = ctx;
+  const fontSize = Math.min(70, Math.floor(390 / sym.length));
+  let grid = "";
+  for (let i = 1; i < 8; i++) {
+    const p = i * 64;
+    grid += `<path d="M${p} 0 L${p} 512 M0 ${p} L512 ${p}" stroke="${c.glow}" stroke-width="1" opacity="0.045"/>`;
+  }
+  const orbitTilt = Math.floor(rng() * 24) - 26;
+  return svgShell(
+    c,
+    `${grid}
+  ${starfield(ctx, 30)}
+  <g transform="rotate(${orbitTilt} 256 206)">
+    <ellipse cx="256" cy="206" rx="196" ry="58" fill="none" stroke="${c.glow}" stroke-width="2" opacity="0.4"/>
+    <circle cx="60" cy="196" r="4.5" fill="${c.glow}" opacity="0.9" filter="url(#glow)"/>
+  </g>
   <path d="M26 26 L26 62 M26 26 L62 26 M486 26 L486 62 M486 26 L450 26 M26 486 L26 450 M26 486 L62 486 M486 486 L486 450 M486 486 L450 486" stroke="${c.glow}" stroke-width="3" opacity="0.45" fill="none"/>
   <g transform="translate(126, 66) scale(2.6)" filter="url(#glow)">${glyph}</g>
-  <text x="256" y="400" text-anchor="middle" font-family="Cascadia Mono, DejaVu Sans Mono, monospace" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="3" filter="url(#glow)">${sym}</text>
+  <text x="256" y="400" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="3" filter="url(#glow)">${sym}</text>
   <g opacity="0.85">
     <path d="M118 456 L216 456 M296 456 L394 456" stroke="${c.glow}" stroke-width="1.5" opacity="0.6"/>
-    <path d="M108 456 L114 450 L120 456 L114 462 Z M404 456 L398 450 L392 456 L398 462 Z" fill="${c.glow}" opacity="0.8"/>
-    <text x="256" y="463" text-anchor="middle" font-family="Cascadia Mono, DejaVu Sans Mono, monospace" font-size="20" fill="${c.glow}" letter-spacing="8">LAURA</text>
+    <text x="256" y="463" text-anchor="middle" font-family="${MONO}" font-size="20" fill="${c.glow}" letter-spacing="8">LAURA</text>
+  </g>`,
+  );
+}
+
+/** Full-bleed glyph, diagonal light beams, solid symbol bar, vertical signature. */
+function stylePoster(ctx: ArtCtx): string {
+  const { c, rng, glyph, sym } = ctx;
+  const fontSize = Math.min(56, Math.floor(330 / sym.length));
+  const beamTilt = Math.floor(rng() * 20) - 10;
+  return svgShell(
+    c,
+    `<g transform="rotate(${beamTilt} 256 256)">
+    <rect x="-120" y="-80" width="380" height="700" fill="url(#beam)"/>
+    <rect x="330" y="-80" width="90" height="700" fill="url(#beam)" opacity="0.6"/>
   </g>
-</svg>`;
+  ${starfield(ctx, 14)}
+  <g transform="translate(76, 40) scale(3.6)" filter="url(#glow)" opacity="0.96">${glyph}</g>
+  <rect x="0" y="404" width="512" height="76" fill="${c.dim}" opacity="0.88"/>
+  <path d="M0 404 L512 404" stroke="${c.glow}" stroke-width="2" opacity="0.7"/>
+  <text x="30" y="456" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="2">${sym}</text>
+  <text x="488" y="452" text-anchor="end" font-family="${MONO}" font-size="17" fill="${c.glow}" letter-spacing="6" opacity="0.9">LAURA</text>
+  <text x="486" y="120" font-family="${MONO}" font-size="15" fill="${c.glow}" letter-spacing="7" opacity="0.5" transform="rotate(90 486 120)">SENTINEL</text>`,
+  );
+}
+
+/** Circular emblem: concentric rings with tick marks, glyph centered, symbol chip below. */
+function styleBadge(ctx: ArtCtx): string {
+  const { c, rng, glyph, sym } = ctx;
+  const fontSize = Math.min(44, Math.floor(300 / sym.length));
+  let ticks = "";
+  const tickCount = 24 + Math.floor(rng() * 12) * 4;
+  for (let i = 0; i < tickCount; i++) {
+    const a = (i / tickCount) * Math.PI * 2;
+    const long = i % 6 === 0;
+    const r1 = long ? 186 : 194;
+    ticks += `<path d="M${(256 + Math.cos(a) * r1).toFixed(1)} ${(226 + Math.sin(a) * r1).toFixed(1)} L${(256 + Math.cos(a) * 202).toFixed(1)} ${(226 + Math.sin(a) * 202).toFixed(1)}" stroke="${c.glow}" stroke-width="${long ? 3 : 1.5}" opacity="${long ? 0.7 : 0.35}"/>`;
+  }
+  return svgShell(
+    c,
+    `${starfield(ctx, 12)}
+  <circle cx="256" cy="226" r="202" fill="none" stroke="${c.glow}" stroke-width="2" opacity="0.5"/>
+  <circle cx="256" cy="226" r="160" fill="${c.dim}" opacity="0.35"/>
+  <circle cx="256" cy="226" r="160" fill="none" stroke="${c.glow}" stroke-width="2.5" opacity="0.8"/>
+  <circle cx="256" cy="226" r="146" fill="none" stroke="${c.accent}" stroke-width="1" opacity="0.3"/>
+  ${ticks}
+  <g transform="translate(151, 121) scale(2.1)" filter="url(#glow)">${glyph}</g>
+  <rect x="${256 - (sym.length * fontSize * 0.62 + 44) / 2}" y="436" width="${sym.length * fontSize * 0.62 + 44}" height="56" rx="10" fill="${c.dim}" opacity="0.85" stroke="${c.glow}" stroke-width="1.5"/>
+  <text x="256" y="476" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="2">${sym}</text>
+  <text x="256" y="26" text-anchor="middle" font-family="${MONO}" font-size="15" fill="${c.glow}" letter-spacing="9" opacity="0.7">LAURA</text>`,
+  );
+}
+
+/** RGB-split glyph, scanlines and slice bars — terminal interference. */
+function styleGlitch(ctx: ArtCtx): string {
+  const { c, rng, glyph, sym } = ctx;
+  const fontSize = Math.min(62, Math.floor(360 / sym.length));
+  let scan = "";
+  for (let y = 8; y < 512; y += 14) scan += `<path d="M0 ${y} L512 ${y}" stroke="#000" stroke-width="4" opacity="0.14"/>`;
+  let bars = "";
+  for (let i = 0; i < 5; i++) {
+    const y = Math.floor(rng() * 460);
+    const h = 4 + Math.floor(rng() * 12);
+    const dx = Math.floor(rng() * 40) - 20;
+    bars += `<rect x="${dx}" y="${y}" width="512" height="${h}" fill="${c.glow}" opacity="0.10"/>`;
+  }
+  const off = 5 + Math.floor(rng() * 4);
+  return svgShell(
+    c,
+    `${bars}
+  <g transform="translate(${120 - off}, 96) scale(2.7)" opacity="0.5">${glyph.replaceAll(ctx.c.glow, "#f0335f").replaceAll(ctx.c.accent, "#f0335f")}</g>
+  <g transform="translate(${120 + off}, 96) scale(2.7)" opacity="0.5">${glyph.replaceAll(ctx.c.glow, "#22d3ee").replaceAll(ctx.c.accent, "#22d3ee")}</g>
+  <g transform="translate(120, 96) scale(2.7)" filter="url(#glow)">${glyph}</g>
+  <text x="${258 + off}" y="422" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="#f0335f" letter-spacing="3" opacity="0.55">${sym}</text>
+  <text x="${254 - off}" y="418" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="#22d3ee" letter-spacing="3" opacity="0.55">${sym}</text>
+  <text x="256" y="420" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="3" filter="url(#glow)">${sym}</text>
+  ${scan}
+  <text x="30" y="490" font-family="${MONO}" font-size="16" fill="${c.glow}" letter-spacing="7" opacity="0.8">LAURA//SIGNAL</text>`,
+  );
+}
+
+/** Near-black field, thin frame, huge symbol, small glyph as a corner mark. */
+function styleMinimal(ctx: ArtCtx): string {
+  const { c, glyph, sym } = ctx;
+  const fontSize = Math.min(96, Math.floor(430 / sym.length));
+  return svgShell(
+    c,
+    `<rect x="22" y="22" width="468" height="468" fill="none" stroke="${c.glow}" stroke-width="1.5" opacity="0.55"/>
+  <rect x="30" y="30" width="452" height="452" fill="none" stroke="${c.glow}" stroke-width="0.75" opacity="0.25"/>
+  <g transform="translate(48, 48) scale(0.9)" opacity="0.9" filter="url(#glow)">${glyph}</g>
+  <text x="256" y="${276 + fontSize * 0.36}" text-anchor="middle" font-family="${MONO}" font-weight="700" font-size="${fontSize}" fill="${c.accent}" letter-spacing="4" filter="url(#glow)">${sym}</text>
+  <path d="M170 330 L342 330" stroke="${c.glow}" stroke-width="2" opacity="0.6"/>
+  <text x="256" y="452" text-anchor="middle" font-family="${MONO}" font-size="17" fill="${c.glow}" letter-spacing="9" opacity="0.85">LAURA</text>`,
+    "#04070d",
+  );
+}
+
+const STYLE_RENDERERS: Record<ArtStyle, (ctx: ArtCtx) => string> = {
+  orbital: styleOrbital,
+  poster: stylePoster,
+  badge: styleBadge,
+  glitch: styleGlitch,
+  minimal: styleMinimal,
+};
+
+function buildSvg(spec: TokenArtSpec): string {
+  const paletteKey = (spec.palette && spec.palette in ART_PALETTES ? spec.palette : "emerald") as ArtPalette;
+  const c = ART_PALETTES[paletteKey];
+  const rng = mulberry32(hashSeed(`${spec.symbol}:${spec.name}`));
+  const style: ArtStyle =
+    spec.style && (ART_STYLES as readonly string[]).includes(spec.style)
+      ? (spec.style as ArtStyle)
+      : ART_STYLES[hashSeed(`style:${spec.symbol}:${spec.name}`) % ART_STYLES.length];
+  const ctx: ArtCtx = { c, rng, glyph: motifGlyph(spec.motif ?? "chart", c), sym: `$${spec.symbol.slice(0, 10)}` };
+  return STYLE_RENDERERS[style](ctx);
 }
 
 const LOGO_MAX_BYTES = 48 * 1024;

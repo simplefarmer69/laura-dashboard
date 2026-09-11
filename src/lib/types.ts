@@ -619,6 +619,8 @@ export interface LaunchProposal {
   /** Visual identity chosen by Mint; rendered procedurally into the token logo */
   artMotif?: string | null;
   artPalette?: string | null;
+  /** Logo composition (orbital, poster, badge, glitch, minimal); seeded when absent */
+  artStyle?: string | null;
   status: LaunchStatus;
   reviewedAt: number | null;
   reviewerNote: string | null;
