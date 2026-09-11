@@ -6,6 +6,8 @@ import type {
   CycleRun,
   DailyGrade,
   Draft,
+  ForumPost,
+  ForumThread,
   IntelSnapshot,
   LaunchProposal,
   Lesson,
@@ -51,7 +53,8 @@ export type ArchiveStream =
   | "milestones"
   | "notebook"
   | "metrics"
-  | "intel";
+  | "intel"
+  | "forum";
 
 export interface ArchiveRow {
   stream: ArchiveStream;
@@ -277,6 +280,34 @@ function metricsRow(m: MetricsSnapshot): ArchiveRow {
   };
 }
 
+/** Thread metadata row; post bodies live in their own rows so each survives independently. */
+function forumThreadRow(t: ForumThread): ArchiveRow {
+  const { posts: _posts, ...meta } = t;
+  return {
+    stream: "forum",
+    id: t.id,
+    cycleId: null,
+    agentId: null,
+    ts: t.createdAt,
+    json: JSON.stringify({ ...meta, postCount: t.posts.length }),
+    text: clip(
+      `bar thread [${t.tag}] "${t.title}" by ${t.createdBy} (${t.status}${t.closedReason ? ` · closed: ${t.closedReason}` : ""})`,
+    ),
+  };
+}
+
+function forumPostRow(t: ForumThread, p: ForumPost): ArchiveRow {
+  return {
+    stream: "forum",
+    id: p.id,
+    cycleId: null,
+    agentId: p.agentId,
+    ts: p.ts,
+    json: JSON.stringify(p),
+    text: clip(`bar post in "${t.title}" by ${p.agentId} (round ${p.roundId}): ${p.body}`),
+  };
+}
+
 /**
  * Archive every stream of the hot state. Called from saveState after each
  * successful write; also serves as the one-shot backfill (first call in a
@@ -297,6 +328,7 @@ export function archiveState(state: SwarmState): void {
       ...state.milestones.map(milestoneRow),
       ...state.metricsHistory.map(metricsRow),
       ...(state.intelHistory ?? []).map(intelRow),
+      ...(state.forum ?? []).flatMap((t) => [forumThreadRow(t), ...t.posts.map((p) => forumPostRow(t, p))]),
     ]);
   } catch (err) {
     console.error(`[archive] state archive failed: ${String(err)}`);
