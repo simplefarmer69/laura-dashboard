@@ -1,4 +1,5 @@
-import { buildPublicSnapshot } from "@/lib/viewer/snapshot";
+import { gzipSync } from "node:zlib";
+import { SNAPSHOT_SOFT_BUDGET_BYTES, buildPublicSnapshot, snapshotBreakdown } from "@/lib/viewer/snapshot";
 import { isViewerMode } from "@/lib/viewer/mode";
 
 /**
@@ -116,26 +117,45 @@ export function startLivePublishing(): () => void {
   return () => clearInterval(timer);
 }
 
+/**
+ * The body goes up gzipped (JSON compresses ~6x) under an explicit
+ * `x-snapshot-encoding: gzip` header rather than Content-Encoding, so no proxy
+ * on the way is tempted to transcode it and the viewer's 4.5 MB request cap is
+ * measured against the small wire size. A viewer build that predates the
+ * header answers 400 (it tries to JSON.parse the bytes) — that attempt falls
+ * back to plain JSON, so the two sides can be upgraded in either order.
+ */
 async function publishOnce(state: PublisherState, url: string, secret: string): Promise<void> {
-  let body: string;
+  let json: string;
+  let snapshot: Record<string, unknown>;
   try {
-    body = JSON.stringify(await buildPublicSnapshot());
+    snapshot = await buildPublicSnapshot();
+    json = JSON.stringify(snapshot);
   } catch (err) {
     log(`snapshot build failed: ${String(err)}`);
     return;
   }
+  const rawBytes = Buffer.byteLength(json, "utf8");
+  if (rawBytes > SNAPSHOT_SOFT_BUDGET_BYTES) {
+    log(`snapshot over budget even after trimming: ${(rawBytes / 1024).toFixed(0)} KB — ${snapshotBreakdown(snapshot)}`);
+  }
+  const gz = gzipSync(json);
 
   const endpoint = `${url.replace(/\/+$/, "")}/api/snapshot`;
   let failure = "unknown";
+  let useGzip = true;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${secret}`,
-        },
-        body,
+        headers: useGzip
+          ? {
+              "content-type": "application/octet-stream",
+              "x-snapshot-encoding": "gzip",
+              authorization: `Bearer ${secret}`,
+            }
+          : { "content-type": "application/json", authorization: `Bearer ${secret}` },
+        body: useGzip ? new Uint8Array(gz) : json,
         signal: AbortSignal.timeout(20_000),
       });
       if (res.ok) {
@@ -144,11 +164,17 @@ async function publishOnce(state: PublisherState, url: string, secret: string): 
           state.lastFailure = null;
           state.failureCount = 0;
         }
-        log(`snapshot published (${(body.length / 1024).toFixed(0)} KB → ${endpoint})`);
+        log(
+          `snapshot published (${(rawBytes / 1024).toFixed(0)} KB${useGzip ? `, ${(gz.length / 1024).toFixed(0)} KB gzipped` : ""} → ${endpoint})`,
+        );
         return;
       }
       failure = `HTTP ${res.status}`;
       if (isAuthRejection(res.status)) break; // config problem — retry can't help
+      if (useGzip && res.status === 400) {
+        useGzip = false; // older viewer without gzip ingest — resend as JSON
+        continue;
+      }
     } catch (err) {
       failure = String(err);
     }

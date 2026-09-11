@@ -10,7 +10,7 @@ import { loadSkills } from "@/lib/swarm/skills";
 import { LAUNCHPAD } from "@/lib/launchpad/contracts";
 import { LAUNCH_CAPS, allPadStates, launcherGrid, walletStatus } from "@/lib/launchpad/service";
 import { launchQueueInfo } from "@/lib/launchpad/capacity";
-import type { Settings, SwarmState } from "@/lib/types";
+import type { ForumThread, Settings, SwarmState } from "@/lib/types";
 
 /**
  * Builds the sanitized, read-only snapshot the VM publishes for the public
@@ -45,7 +45,70 @@ const SETTINGS_KEYS: (keyof Settings)[] = [
 
 /** Optional state sections (newer work streams); all public-safe by content:
     X-read intel snapshots and on-chain treasury buys (tx hashes are public). */
-const OPTIONAL_STATE_KEYS = ["intelHistory", "treasuryBuys", "intel", "influence", "forum", "utilityProjects"] as const;
+const OPTIONAL_STATE_KEYS = ["treasuryBuys", "intel", "influence", "utilityProjects"] as const;
+
+/**
+ * Size budget. The viewer runs on Vercel, whose functions cap request AND
+ * response bodies at 4.5 MB. On 2026-09-11 the full-history snapshot crossed
+ * 4.4 MB, every publish came back HTTP 413 and the public site froze for half
+ * an hour while LAURA was mid-cycle. The snapshot is a live window, not the
+ * archive (that stays on the host in data/): recent streams are trimmed to
+ * what the console renders, and if the result is still over SOFT_BUDGET the
+ * limits halve once more. Whole-history counts stay in `window` so the UI can
+ * say "showing the last N of M".
+ */
+export const SNAPSHOT_SOFT_BUDGET_BYTES = 2_500_000;
+
+interface WindowLimits {
+  events: number;
+  drafts: number;
+  runs: number;
+  proposals: number;
+  researchBriefs: number;
+  lessons: number;
+  intelHistory: number;
+  metricsHistory: number;
+  /** Archived Cafe Bar threads kept in full (open threads always ship whole). */
+  archivedThreads: number;
+}
+
+const WINDOW: WindowLimits = {
+  events: 500,
+  drafts: 80,
+  runs: 20,
+  proposals: 20,
+  researchBriefs: 10,
+  lessons: 30,
+  intelHistory: 8,
+  metricsHistory: 600,
+  archivedThreads: 20,
+};
+
+function halve(limits: WindowLimits): WindowLimits {
+  const out = { ...limits };
+  for (const key of Object.keys(out) as (keyof WindowLimits)[]) out[key] = Math.max(1, Math.floor(out[key] / 2));
+  return out;
+}
+
+function tail<T>(items: T[] | undefined, n: number): T[] {
+  return (items ?? []).slice(-n);
+}
+
+function threadHeat(t: ForumThread): number {
+  return t.posts.at(-1)?.ts ?? t.createdAt;
+}
+
+/** Every open thread plus the N most recently active archived ones. */
+function forumWindow(threads: ForumThread[] | undefined, archivedThreads: number): ForumThread[] {
+  const all = threads ?? [];
+  const open = all.filter((t) => t.status === "open");
+  const archived = all
+    .filter((t) => t.status !== "open")
+    .sort((a, b) => threadHeat(b) - threadHeat(a))
+    .slice(0, archivedThreads);
+  const keep = new Set([...open, ...archived].map((t) => t.id));
+  return all.filter((t) => keep.has(t.id));
+}
 
 function pickSettings(settings: Settings): Partial<Settings> {
   const out: Record<string, unknown> = {};
@@ -53,41 +116,90 @@ function pickSettings(settings: Settings): Partial<Settings> {
   return out as Partial<Settings>;
 }
 
+/** Byte length of the snapshot as it will be sent. */
+export function snapshotBytes(snapshot: Record<string, unknown>): number {
+  return Buffer.byteLength(JSON.stringify(snapshot), "utf8");
+}
+
+/** Per-top-level-key sizes, largest first — for the publisher's budget log. */
+export function snapshotBreakdown(snapshot: Record<string, unknown>, top = 6): string {
+  return Object.entries(snapshot)
+    .map(([k, v]) => [k, Buffer.byteLength(JSON.stringify(v) ?? "", "utf8")] as const)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, top)
+    .map(([k, n]) => `${k} ${(n / 1024).toFixed(0)}KB`)
+    .join(", ");
+}
+
 export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
   const state = await loadState();
+  const shared = await loadSharedSections(state);
+  let limits = WINDOW;
+  let snapshot = assembleSnapshot(state, shared, limits);
+  if (snapshotBytes(snapshot) > SNAPSHOT_SOFT_BUDGET_BYTES) {
+    limits = halve(limits);
+    snapshot = assembleSnapshot(state, shared, limits);
+  }
+  return snapshot;
+}
+
+type SharedSections = Awaited<ReturnType<typeof loadSharedSections>>;
+
+async function loadSharedSections(state: SwarmState) {
   const model = resolveModel(state.settings.llmModel);
-  const [notebook, skills, wallet, pads, grid] = await Promise.all([
+  const [notebook, skills, wallet, pads, grid, host] = await Promise.all([
     loadNotebook(),
     loadSkills(),
     walletStatus().catch(() => null),
     allPadStates().catch(() => []),
     launcherGrid("new", 10).catch(() => []),
+    hostInfo(),
   ]);
-  const xs = xStatus();
+  return { model, notebook, skills, wallet, pads, grid, host, xs: xStatus() };
+}
+
+function assembleSnapshot(state: SwarmState, shared: SharedSections, limits: WindowLimits): Record<string, unknown> {
+  const { model, notebook, skills, wallet, pads, grid, host, xs } = shared;
 
   const optional: Record<string, unknown> = {};
   for (const key of OPTIONAL_STATE_KEYS) {
     const value = (state as SwarmState & Record<string, unknown>)[key];
     if (value !== undefined) optional[key] = value;
   }
+  const forum = forumWindow(state.forum, limits.archivedThreads);
 
   return {
     version: state.version,
     settings: pickSettings(state.settings),
     agents: state.agents,
-    drafts: state.drafts,
-    proposals: state.proposals,
-    runs: state.runs,
+    drafts: tail(state.drafts, limits.drafts),
+    proposals: tail(state.proposals, limits.proposals),
+    runs: tail(state.runs, limits.runs),
     grades: state.grades,
-    metricsHistory: state.metricsHistory.slice(-600),
-    researchBriefs: state.researchBriefs,
-    events: state.events,
-    lessons: state.lessons,
+    metricsHistory: tail(state.metricsHistory, limits.metricsHistory),
+    researchBriefs: tail(state.researchBriefs, limits.researchBriefs),
+    events: tail(state.events, limits.events),
+    lessons: tail(state.lessons, limits.lessons),
     milestones: state.milestones,
     launches: state.launches,
     treasury: state.treasury ?? null,
     lastTuneDate: state.lastTuneDate,
     ...optional,
+    intelHistory: tail(state.intelHistory, limits.intelHistory),
+    forum,
+    /* Whole-history counts behind the trimmed streams above. */
+    window: {
+      events: state.events.length,
+      drafts: state.drafts.length,
+      runs: state.runs.length,
+      proposals: state.proposals.length,
+      researchBriefs: state.researchBriefs.length,
+      lessons: state.lessons.length,
+      forumThreads: state.forum?.length ?? 0,
+      forumPosts: (state.forum ?? []).reduce((n, t) => n + t.posts.length, 0),
+      forumThreadsShown: forum.length,
+      forumPostsShown: forum.reduce((n, t) => n + t.posts.length, 0),
+    },
     mission: missionStatus(state, state.metricsHistory.at(-1) ?? null),
     evolution: {
       notebookCount: notebook.length,
@@ -106,7 +218,7 @@ export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
       x: { appKeys: xs.appKeys, accessKeys: xs.accessKeys, ready: xs.ready, missing: [] },
       /* Where LAURA runs (daemon/dev), release sha, uptime, browser engine — the
          public site reflects the host so visitors can see she is live. */
-      host: await hostInfo(),
+      host,
     },
     /* Everything the Launchpad tab needs, captured on the VM so the viewer
        never touches the RPC or wallet code. All of it is on-chain public. */

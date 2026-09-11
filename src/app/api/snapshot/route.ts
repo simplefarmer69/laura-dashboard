@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { gunzipSync } from "node:zlib";
 import { NextResponse, type NextRequest } from "next/server";
 import { isViewerMode } from "@/lib/viewer/mode";
 import { readSnapshot, storeSnapshot } from "@/lib/viewer/store";
@@ -30,7 +31,19 @@ export async function POST(req: NextRequest) {
   if (!secretMatches(req.headers.get("authorization")))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const text = await req.text();
+  /* The VM sends gzip under an explicit header (see lib/viewer/publish.ts);
+     plain JSON is still accepted for older publishers. */
+  let text: string;
+  try {
+    const raw = Buffer.from(await req.arrayBuffer());
+    if (req.headers.get("x-snapshot-encoding") === "gzip") {
+      text = gunzipSync(raw, { maxOutputLength: MAX_BODY_BYTES }).toString("utf8");
+    } else {
+      text = raw.toString("utf8");
+    }
+  } catch {
+    return NextResponse.json({ error: "Body could not be decoded" }, { status: 400 });
+  }
   if (text.length > MAX_BODY_BYTES)
     return NextResponse.json({ error: "Snapshot too large" }, { status: 413 });
   let snapshot: Record<string, unknown>;
