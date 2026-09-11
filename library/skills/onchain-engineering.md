@@ -62,6 +62,20 @@ source pages with `readNext` when you need the full code patterns:
 - Retryable tickets and L1→L2 messages: out of LAURA's scope — never build them.
 - Chain id 4663, gas token ETH, explorer robinhoodchain.blockscout.com. Verify stock
   token addresses against Robinhood's asset registry, never by symbol.
+- Stock tokens (ethskills `l2s`/`addresses`, verified Aug 20, 2026): 18 decimals, one
+  Chainlink feed each, blocklist-gated, and every one is pausable, blockable, mintable,
+  confiscatable (`adminBurn`) and upgradeable through a shared `AccessControlsRegistry`
+  (`0xe10b6f6B275de231345c20D14Ab812db62151b00`) **with no timelock**. A stock-lane
+  launch's quote asset can therefore be paused by the issuer; design and disclose for
+  that (a paused quote means a frozen curve, not a rug by LAURA).
+- Splits and dividends adjust `uiMultiplier()` (draft ERC-8056 "Scaled UI Amount");
+  raw balances never rebase. Index and compare raw amounts, render with the multiplier.
+- **USDG is 6 decimals** (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`); WETH is
+  `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`. Any usdg-lane math that assumes 18
+  decimals is off by 1e12.
+- Censorship model: ArbOS 61 tx filtering can reject any tx hash, including L1
+  force-included ones; Stage 0 on L2Beat, two whitelisted validators, no exit window.
+  Anything censorship-sensitive fails the CROPS gate on this chain by construction.
 
 ## Testing that finds real bugs
 

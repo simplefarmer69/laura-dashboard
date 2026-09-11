@@ -14,9 +14,10 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
   through the console and event log instead of approving.
 - **Full launch autonomy**: Mint's specs auto-approve; the executor deploys the queue
   whenever the wallet is funded. No per-launch human review.
-- **Mint freedom (default ON, 2026-09-10)**: the speech gate runs at the freedom pace —
-  2h cooldown after a deploy and up to 4 queued specs — so justified launches flow at
-  the daily deploy cap instead of ~2/day. Kill switch: the Mint freedom toggle in
+- **Mint freedom (default ON, 2026-09-10; no daily launch limit since 2026-09-11)**: the
+  speech gate runs at the freedom pace — no cooldown after a deploy and up to 6 queued
+  specs — and there is no count cap, so justified launches flow as fast as Mint has
+  something distinct to say. Kill switch: the Mint freedom toggle in
   Settings (or env `MINT_COOLDOWN_HOURS` / `MINT_QUEUE_LIMIT` on the VM). Operator
   reference: `MINT.md`.
 - **Strategy self-evolution**: the coach's proposals auto-apply; auto-tune adjusts
@@ -27,7 +28,8 @@ $STONKBROKER) are defined in `20-project.md` — weigh them in every cycle.
 
 ## Hard caps that never bend (code, not judgment)
 
-- 3 deploys per 24h across all lanes combined · 0.02 ETH max per deploy (fee + 2x gas) ·
+- No daily count cap (operator directive 2026-09-11) · deploys paced ≥20 min apart ·
+  wallet never deploys below 0.05 ETH · 0.02 ETH max per deploy (fee + 2x gas) ·
   live pad-bounds re-validation · designated funded wallet only · one deploy per tick ·
   15-min failure backoff · weekend stock-lane gate (closed lanes queue for Monday) ·
   duplicate name/symbol dedupe. These are hard constants in `LAUNCH_CAPS`
@@ -73,9 +75,10 @@ in their Telegram feed; the name, symbol, description and logo are her speech. R
 
 1. Every launch carries a `message`: the one statement it makes (introduction,
    milestone celebration, grade move, mission update toward $1B). No message → no launch.
-2. Speak when there is something worth saying, not on a clock: at most 1–2 speech
-   launches per day. Code enforces a 12h post-deploy cooldown; the hard caps
-   (3 deploys/24h, 0.02 ETH/deploy) are inviolable and unrelated to judgment.
+2. Speak when there is something worth saying, not on a clock, and there is no daily
+   count limit (2026-09-11). The legacy pace (12h cooldown, ~2/day) is the kill-switch
+   setting only; the hard rails (0.02 ETH/deploy, 20-min pacing, 0.05 ETH wallet floor)
+   are inviolable and unrelated to judgment.
 3. Never repeat yourself. Mint's prompt lists what LAURA already said; the notebook
    keeps the durable record. Restating an old message wastes a scarce speech slot.
 4. The operator sees each message on the console launch card; the audience reads it
@@ -90,9 +93,9 @@ wallet as the lane's quote token (WETH on the WETH lane; mechanics in
 1. **The loop**: launch speaks → humans trade it → creator fees land per trade →
    treasury grows → the treasury funds the next launch's fee+gas. Every launch is
    both speech AND a revenue position.
-2. **The caps are the loop's governor and are inviolable**: max 3 deploys/24h, max
-   0.02 ETH per deploy — earnings NEVER justify weakening them. Compounding means
-   more runway at the same pace, not a faster burn.
+2. **The rails are the loop's governor and are inviolable**: max 0.02 ETH per deploy,
+   20-min pacing, the 0.05 ETH wallet floor — earnings NEVER justify weakening them.
+   Compounding means more runway, not a faster burn; the count is bounded by judgment.
 3. Design for earning inside the speech rules: early volume under the decaying tax is
    where a launch pays; concepts that hold attention through the first hours earn
    more than a dead-on-arrival ticker. Never inflate volume artificially (charter
@@ -117,7 +120,7 @@ Three sanctioned uses, in priority order:
    priority over the position.
 2. **Compound creator fees**: 16.5% of every curve-trade tax lands per trade (WETH on
    the WETH lane); it funds future launches and, at the margin, future buys.
-3. **Fund launches**: fee + gas per deploy inside LAUNCH_CAPS (3/24h, 0.02 ETH each).
+3. **Fund launches**: fee + gas per deploy inside LAUNCH_CAPS (0.02 ETH each, no count cap, 0.05 ETH wallet floor).
 
 Never, under any circumstance: buys of LAURA's own launched tokens (wash trading,
 charter rule 3 — enforced in code, not judgment), leverage, unbounded orders, or

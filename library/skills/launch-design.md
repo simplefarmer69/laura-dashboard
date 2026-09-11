@@ -27,15 +27,30 @@ notable live event, a mission update. If you cannot state what the launch says i
 
 ### Cadence
 
-Operator directive (2026-09-10, mint freedom pace inside the standing caps): keep the
-launch pipeline loaded and work at the freedom pace. Target the full daily deploy cap
-(3/24h ACROSS ALL LANES COMBINED; LAUNCH CAPACITY in your prompt shows the live
-number) whenever there are that many distinct messages worth making — every launch
-also earns creator fees (16.5% of trade tax, push-paid in the lane's quote token:
-WETH on the weth lane, $STONKBROKER on the stonk lane), so a justified launch is
-revenue as well as speech. The hard caps (3 deploys/24h, 0.02 ETH/deploy) and the
-code cooldown never bend; with freedom on the cooldown is short (2h), so the real
-limit is having something worth saying inside the day's 3 deploy slots.
+Operator directive (2026-09-10 freedom pace; 2026-09-11 **no daily launch limit**):
+keep the launch pipeline loaded and speak whenever there is something distinct worth
+saying. There is no count cap: the executor paces deploys about 20 minutes apart so
+each token gets its own arrival on the floor and in Telegram, and the pad's launch fee
+is 0 wei, so a launch costs gas only. Every launch also earns creator fees (16.5% of
+trade tax, push-paid in the lane's quote token: WETH on the weth lane, $STONKBROKER on
+the stonk lane), so a justified launch is revenue as well as speech. The hard rails
+(0.02 ETH/deploy, the 20-minute pacing, the 0.05 ETH wallet floor, live pad bounds)
+never bend; with freedom on there is no cooldown and the queue holds 6 open specs, so
+the real limit is having something worth saying — and not repeating yourself.
+
+### Latitude (operator directive 2026-09-11)
+
+Mint has wide latitude in WHAT she launches. Live currents (the tokenized-stock tape,
+meme-stock volume on any chain, the X pulse) are the strongest material and the
+default, but they are a preference, not a gate. Also fair game when they carry a clear
+message: StonkBrokers lore pieces, wider crypto-culture riffs, a live game or a
+prediction market resolving today, something the community asked for in chat, a
+milestone or grade move, and deliberate economics experiments (a tax shape or a lane
+nobody has tried, a $1k-start micro launch to test a hypothesis). Name the KIND in the
+rationale (live-current, lore, culture, event, community, experiment) so outcomes can
+be graded per kind. Vary kind, lane, scale, supply and tax shape across consecutive
+launches; with no count cap, sameness is the failure mode. The hard rules stay: original
+non-deceptive names, no reserved needles, no duplicates, a real message, honesty.
 
 ## Lane choice
 
@@ -87,11 +102,11 @@ definition. A LAURA token on the floor is **healthy** only if ALL THREE hold:
 A token failing ANY test does not block the next launch: the floor has room. A token
 passing all three is doing its job and does not need a sibling crowding it unless the
 new launch says something genuinely different. This test refines the skip decision
-only — it never overrides the real gates (dedupe, caps, nothing-new-to-say).
+only — it never overrides the real gates (dedupe, pacing, nothing-new-to-say).
 
-**Pre-stage when capped.** The deploy cap being exhausted is NOT a skip reason. Check
-LAUNCH CAPACITY for when headroom returns; if the queue is empty, propose the next
-launch now — approved specs queue and auto-deploy the minute the window reopens.
+**Pre-stage when the window is shut.** A pacing wait or a closed stock lane is NOT a
+skip reason. Check LAUNCH CAPACITY for when the window reopens; propose the next launch
+now — approved specs queue and auto-deploy, one every 20 minutes, the moment it does.
 
 **A quiet floor is not a skip reason either.** Existing LAURA tokens sitting at 1
 trade/1 holder means distribution needs work (Quill/Catalyst's job), not that the next
@@ -136,9 +151,10 @@ in mind; protocol revenue is a graded lever.
 - Baseline failure to avoid: re-proposing an existing concept. Check pending and
   deployed launches first; a duplicate symbol or name is auto-dropped and wastes the cycle.
 - Skip is a valid output — but only for the right reason: nothing new to say, or the
-  launch queue at its limit (4 open specs with mint freedom on, 2 on the legacy pace). Already-deployed tokens
-  living on the floor do not count against the queue. A justified skip grades better
-  than a mediocre deploy; a skip on cap or quiet-floor grounds is not justified.
+  launch queue at its limit (6 open specs with mint freedom on, 2 on the legacy pace).
+  Already-deployed tokens living on the floor do not count against the queue. A
+  justified skip grades better than a mediocre deploy; a skip on "cap" grounds (there
+  is none), pacing grounds or quiet-floor grounds is not justified.
 
 ## Curve parameters (proven ranges)
 

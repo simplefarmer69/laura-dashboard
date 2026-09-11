@@ -23,7 +23,8 @@ LAURA's browse allowlist, so any agent can `readNext` a page and have it next cy
 | `building-blocks` | Uniswap V4 hooks (STORMM context), Aero, Arbitrum stack, composability guardrails |
 | `indexing` | events as the read API; never loop blocks — relevant to the on-chain read layer |
 | `protocol` | what actually shipped vs roadmap; forkcast.org before fork claims |
-| `why`, `gas`, `l2s` | numbers for writers: costs, upgrades, the agent angle |
+| `why`, `gas`, `l2s` | numbers for writers: costs, upgrades, the agent angle. **`l2s` gained a Robinhood Chain section on 2026-08-20** (settles directly to Ethereum with blob DA, stock tokens are Jersey-issued debt securities not available to US persons, shared admin registry with no timelock, ArbOS 61 tx filtering defeats force inclusion, USDG is 6 decimals) — distilled into `ethereum-literacy` and `onchain-engineering` on 2026-09-11 |
+| `addresses` | verified (cast-checked Aug 20, 2026) Robinhood Chain addresses: NVDA/TSLA/AAPL/MSFT/AMZN/GOOGL/META/COIN/SPCX/SPY/QQQ stock tokens, USDG, WETH, `AccessControlsRegistry`, plus the mainnet bridge and rollup core — the only place to copy an address from besides Blockscout |
 | `crops` | architecture review lens (censorship resistance, open/free, privacy, security) |
 | `frontend-ux`, `frontend-playbook`, `orchestration` | not LAURA's job (viewer is read-only) |
 

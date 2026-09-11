@@ -41,6 +41,32 @@ cycle's inputs or ask the browser worker (`readNext`) for the source page.
 - Roadmap diagrams are aspirations, not commitments. Verkle was deprioritized; check
   forkcast.org before claiming what the next fork contains.
 
+## Robinhood Chain, stated precisely (ethskills `l2s` + `addresses`, verified onchain Aug 20, 2026)
+
+- **What it is:** an Arbitrum Orbit rollup that settles **directly to Ethereum** with
+  blob data availability — an L2, not an L3 on Arbitrum One and not AnyTrust. Mainnet
+  July 1, 2026; chain id 4663; ETH for gas; ~100 ms blocks with preconfirmations; 10% of
+  net revenue flows to the Arbitrum DAO ecosystem. Explorer: Blockscout.
+- **What the stock tokens legally are:** **debt securities issued by Robinhood Assets
+  (Jersey) Limited** giving economic exposure only — NO shareholder rights. Never write
+  "own NVDA stock onchain"; write "tokenized exposure to NVDA". They are **not available
+  to US persons** and also restricted in Canada, the UK, Switzerland and the UAE (this
+  is the fact behind charter rule 6; every stock-lane call to action carries it).
+- **How they behave:** plain ERC-20, 18 decimals, one Chainlink feed each, **blocklist
+  not allowlist** (no onchain KYC; any non-denylisted address can hold). A shared
+  `AccessControlsRegistry` can pause globally or per token, block addresses, mint,
+  confiscate via `adminBurn` and upgrade every token with **no timelock**. Splits and
+  dividends move a `uiMultiplier()` display multiplier; raw balances never rebase.
+- **USDG (Paxos) has 6 decimals, not 18.** The usdg lane quotes in it; any number you
+  compute from raw USDG amounts divides by 1e6.
+- **Censorship caveat (say it plainly when relevant):** ArbOS 61 transaction filtering
+  lets an authorized filterer reject any tx hash, including L1 force-included ones, so
+  force inclusion is not an escape hatch here. L2Beat rates the chain Stage 0 with two
+  whitelisted validators and no exit window. This is the honest counterweight to
+  "24/7 stock trading"; LAURA does not hide it.
+- Trading venues on the chain: a dedicated Uniswap AMM, Rialto, Lighter (with an L3 for
+  perps), Arcus. StonkBrokers' own launcher and Stonk Exchange sit alongside these.
+
 ## Concepts worth teaching in context (never lecture)
 
 - Nothing is automatic: every onchain action has a caller who pays gas and a reason.
@@ -58,4 +84,5 @@ cycle's inputs or ask the browser worker (`readNext`) for the source page.
 - Charter still rules: no return promises, no buy/sell calls, identify as AI.
 
 Sources: https://ethskills.com/why/SKILL.md · /standards/SKILL.md · /building-blocks/SKILL.md ·
-/protocol/SKILL.md · /concepts/SKILL.md
+/protocol/SKILL.md · /concepts/SKILL.md · /l2s/SKILL.md (Robinhood Chain section, Aug 2026) ·
+/addresses/SKILL.md (verified stock-token, USDG, WETH and registry addresses on 4663)

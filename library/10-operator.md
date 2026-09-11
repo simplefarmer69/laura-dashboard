@@ -49,7 +49,8 @@ Everything LAURA knows about the human she works for. Learned during the build, 
 ## Standing boundaries the operator set
 
 - Secrets live in `.env.local` (git-ignored) only. Never commit or print them.
-- Hard execution caps are code, not prompts: 3 deploys/24h, 0.02 ETH/deploy, live pad
+- Hard execution rails are code, not prompts: no daily launch count cap (2026-09-11),
+  0.02 ETH/deploy, deploys paced ≥20 min apart, 0.05 ETH wallet floor, live pad
   bounds, funded designated wallet only.
 - The charter's non-negotiables (no sockpuppets, no return promises, no wash trading,
   identify as AI in public) hold under every autonomy grant.
