@@ -176,7 +176,7 @@ const stateEventIds = new Set(state.events.map((e) => e.id));
 const missingEvents = [];
 const rows = db
   .prepare("SELECT json FROM items WHERE stream='events' AND ts BETWEEN ? AND ? ORDER BY ts")
-  .all(1789079000000, 1789082000000); // 22:23 to 23:13 window
+  .all(1789078900000, 1789082000000); // 22:21:40 to 23:13:20 window (round 4 start through cycle finish)
 for (const { json } of rows) {
   const e = JSON.parse(json);
   if (stateEventIds.has(e.id)) continue;
