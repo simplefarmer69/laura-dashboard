@@ -47,5 +47,8 @@
     "tsx": "^4.23.13",
     "typescript": "^5"
   },
-  "description": "Human-supervised growth swarm for StonkBrokers with a live daily grader."
+  "description": "Human-supervised growth swarm for StonkBrokers with a live daily grader.",
+  "optionalDependencies": {
+    "playwright": "^1.63.0"
+  }
 }
