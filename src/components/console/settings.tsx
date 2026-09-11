@@ -151,9 +151,10 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
             <div>
               <Label className="text-xs">Mint freedom</Label>
               <p className="text-[11px] text-muted-foreground">
-                Wide launch mandate: a short cooldown between launches and a deeper launch queue, so
-                justified launches flow at the daily deploy cap. Hard caps still bound deploys per day
-                and spend per deploy. Off returns Mint to the slow pace.
+                Wide launch mandate: no cooldown between launches and a deeper launch queue, so
+                justified launches flow as fast as Mint has something to say; there is no daily
+                launch limit. Hard rails still bound spend per deploy, pacing (20 min apart) and
+                the wallet floor. Off returns Mint to the slow pace (12h cooldown, 2 open specs).
               </p>
             </div>
             <Switch

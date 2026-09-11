@@ -173,20 +173,22 @@ export function coachProposalBudget(state: SwarmState): number {
 /**
  * Speaking cadence: launches are LAURA's voice, so the gate paces speech, not
  * just deploys. Two paces, picked by settings.mintFreedom:
- *   freedom ON (default): 2h cooldown after the last deploy, up to 4 open
- *     specs. The gate only prevents a runaway queue; the LAUNCH_CAPS daily
- *     deploy ceiling does the real bounding.
+ *   freedom ON (default): no cooldown after the last deploy, up to 6 open
+ *     specs. Operator directive 2026-09-11: no limit on launches per day, so
+ *     the only thing the gate prevents is a runaway queue that the executor
+ *     (paced one deploy per 20 min) could not drain; Mint's own "nothing new
+ *     to say" skip is the real throttle.
  *   freedom OFF (kill switch): the legacy pace. 12h cooldown, 2 open specs,
  *     roughly 2 speech launches/day.
  * Env overrides (checked on every call, clamped): MINT_COOLDOWN_HOURS,
  * MINT_QUEUE_LIMIT. This gate sits inside the executor's inviolable hard
- * caps (LAUNCH_CAPS deploys/day + spend/deploy); it shapes cadence, they
- * stop runaways.
+ * rails (LAUNCH_CAPS spend/deploy, pacing gap, wallet floor); it shapes
+ * cadence, they stop runaways.
  */
 const SPEECH_COOLDOWN_HOURS = 12;
-const FREEDOM_COOLDOWN_HOURS = 2;
+const FREEDOM_COOLDOWN_HOURS = 0;
 const OPEN_QUEUE_LIMIT = 2;
-const FREEDOM_QUEUE_LIMIT = 4;
+const FREEDOM_QUEUE_LIMIT = 6;
 
 function gateEnv(name: string): number | null {
   const raw = Number(process.env[name]);

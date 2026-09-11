@@ -456,12 +456,13 @@ export interface Settings {
   autoExecuteUtility: boolean;
   /**
    * Mint freedom: the wide launch mandate. When true the speech gate runs at
-   * the freedom pace (2h cooldown after a deploy, up to 4 open specs) so
-   * approved launches flow at the daily deploy cap instead of ~2/day. The
-   * hard LAUNCH_CAPS (deploys/day, spend/deploy), live pad-bounds
-   * revalidation, weekend stock-lane gate, duplicate dedupe and the funded
-   * wallet floor all still apply and fail closed. Kill switch: flip off to
-   * return to the legacy pace (12h cooldown, 2 open specs).
+   * the freedom pace (no cooldown after a deploy, up to 6 open specs) so
+   * approved launches flow as fast as Mint has something worth saying; there
+   * is no daily count cap. The hard LAUNCH_CAPS (spend/deploy, pacing gap,
+   * wallet floor), live pad-bounds revalidation, weekend stock-lane gate,
+   * duplicate dedupe and the funded wallet all still apply and fail closed.
+   * Kill switch: flip off to return to the legacy pace (12h cooldown, 2 open
+   * specs).
    */
   mintFreedom: boolean;
   /**
