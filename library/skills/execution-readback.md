@@ -49,5 +49,6 @@ must not execute.
 
 Only $STONKBROKER (0xe934e36a439c94017b64a3fece66af12099abf50) is ever bought;
 never LAURA's own launched tokens. Max 0.005 ETH/buy, 0.01 ETH/24h, 6h gap,
-0.35 ETH floor; LP total 0.02 ETH-equiv. 3 deploys/24h, 0.02 ETH/deploy.
+0.35 ETH floor; LP total 0.02 ETH-equiv. Launches: no daily count cap, 20-min pacing,
+0.05 ETH wallet floor, 0.02 ETH/deploy.
 Every position states its mission rationale as an event.

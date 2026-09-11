@@ -27,8 +27,9 @@ The `mintFreedom` setting (Settings tab on the dashboard, or PATCH
 
 | Limit | Freedom ON (default) | Freedom OFF (kill switch) |
 | --- | --- | --- |
-| Cooldown after a deploy | 2h | 12h |
-| Open specs (pending + approved) | 4 | 2 |
+| Cooldown after a deploy | none (since 2026-09-11) | 12h |
+| Open specs (pending + approved) | 6 | 2 |
+| Deploys per day | unlimited (paced 20 min apart) | unlimited (the cooldown makes it ~2) |
 
 Flipping it off is the one-toggle way to return Mint to the legacy
 ~2 launches/day pace. Approval autonomy is unchanged either way.
@@ -60,10 +61,13 @@ These are correctness gates, deliberately untouched by mint freedom:
 
 - **Per-deploy spend cap** (`LAUNCH_CAPS.maxSpendEthPerDeploy`, 0.02 ETH) -
   re-checked fail-closed inside `deployLaunch` after gas estimation.
-- **Daily deploy ceiling** (`LAUNCH_CAPS.maxDeploysPerDay`, 3/24h) - enforced
-  in the executor before every deploy, counted over the rolling 24h.
-- **Funded wallet floor** - the executor holds the whole queue while the
-  designated swarm wallet sits at or below 0.002 ETH.
+- **No daily deploy ceiling** (`LAUNCH_CAPS.maxDeploysPerDay` is `null` since
+  2026-09-11, operator directive: no limit on launches per day). What paces the
+  queue instead is `LAUNCH_CAPS.minDeployGapMinutes` (20): consecutive deploys
+  go out at least 20 minutes apart so each gets its own arrival on the floor.
+- **Wallet floor** (`LAUNCH_CAPS.walletFloorEth`, 0.05 ETH) - the executor holds
+  the whole queue whenever balance minus the per-deploy budget would dip below
+  it, and the funded-wallet gate (>0.002 ETH) still applies first.
 - **Live pad-bounds revalidation** - every spec is re-checked against the
   pad's on-chain bounds at deploy time.
 - **Weekend stock-lane gate** (`src/lib/launchpad/lanes.ts`) - stock lanes
