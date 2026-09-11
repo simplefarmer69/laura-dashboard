@@ -51,6 +51,7 @@ import {
   vaultSchema,
   watcherMock,
   watcherPrompt,
+  STRATEGY_BUDGET_CHARS,
   type CycleContext,
   type SageInputs,
 } from "@/lib/swarm/tasks";
@@ -1160,10 +1161,18 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         }
       }
       const proposalBudget = coachProposalBudget(state);
+      const overBudgetDropped: string[] = [];
       for (const p of out.value.value.proposals.slice(0, proposalBudget)) {
         const target = agentById(state, p.agentId);
         const hasPending = state.proposals.some((x) => x.agentId === target.id && x.status === "pending");
         if (hasPending) continue;
+        /* Length rail: a revision may exceed the budget only if it shrinks the
+           strategy; otherwise strategies ratchet upward forever (bd reached
+           4546 chars on 2026-09-11 despite the prompted budget). */
+        if (p.proposedStrategy.length > STRATEGY_BUDGET_CHARS && p.proposedStrategy.length >= target.strategy.length) {
+          overBudgetDropped.push(`${target.id} (${p.proposedStrategy.length} chars, current ${target.strategy.length}, budget ${STRATEGY_BUDGET_CHARS})`);
+          continue;
+        }
         const proposal: StrategyProposal = {
           id: newId("prop"),
           cycleId: run.id,
@@ -1202,7 +1211,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         agentId: "coach",
         label: "Lessons & proposals",
         status: "ok",
-        summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}`,
+        summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}${overBudgetDropped.length ? ` · dropped over-budget revision for ${overBudgetDropped.join(", ")}` : ""}`,
         durationMs: out.ms,
       });
     }
