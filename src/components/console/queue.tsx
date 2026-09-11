@@ -176,6 +176,9 @@ function DraftCard({
         {draft.status !== "pending" && draft.reviewerNote && (
           <p className="text-xs text-muted-foreground">Reviewer: {draft.reviewerNote}</p>
         )}
+        {draft.autoPublishNote && (
+          <p className="text-xs text-[var(--sb-gold)]">X rail: {draft.autoPublishNote}</p>
+        )}
         {draft.publishedUrl && (
           <a
             href={draft.publishedUrl}

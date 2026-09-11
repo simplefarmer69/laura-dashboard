@@ -22,6 +22,7 @@ const settingsSchema = z
     autoApproveProposals: z.boolean(),
     autoClaimEarnings: z.boolean(),
     mintFreedom: z.boolean(),
+    autoPublishX: z.boolean(),
   })
   .partial();
 

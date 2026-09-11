@@ -161,6 +161,20 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               onCheckedChange={(v) => set("mintFreedom", Boolean(v))}
             />
           </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Autonomous X publishing</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Fresh approved X drafts (under 6h old) post themselves, one per tick, inside the shared-account
+                guards: 30 min between posts, 6 per 24h, duplicate memory, never engaging the account itself.
+                Idle until X_ACCESS_TOKEN and X_ACCESS_TOKEN_SECRET exist. Older approvals never auto-post.
+              </p>
+            </div>
+            <Switch
+              checked={form.autoPublishX}
+              onCheckedChange={(v) => set("autoPublishX", Boolean(v))}
+            />
+          </div>
           <Button className="w-full" disabled={busy} onClick={() => void save()}>
             <Save className="size-3.5" /> Save settings
           </Button>

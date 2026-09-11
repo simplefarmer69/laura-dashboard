@@ -181,10 +181,18 @@ still answers core topics deterministically from live data.
 
 ## Publish to X
 
-Approved drafts targeting channel "X" get a **Publish to X** button that posts
-for real (threads become reply chains). Posting needs the OAuth 1.0a user
-context vars from the secrets table above. Publishing is operator-clicked; the
-swarm never posts on its own.
+Approved drafts targeting channel "X" post for real (threads become reply
+chains). Posting needs the OAuth 1.0a user context vars from the secrets table
+above. Two paths share the same guards (`src/lib/publish/x-guard.ts`: 30 min
+between posts, 6 per 24h, duplicate memory, never engaging the account itself):
+
+- **Autonomous rail** (`src/lib/publish/auto.ts`, setting `autoPublishX`, on by
+  default): fresh approved X drafts under 6 hours old post themselves, one per
+  scheduler tick. The very first live post is a short smoke test (≤3 tweets).
+  Older approvals never auto-post, so enabling the keys cannot flush a backlog.
+- **Publish to X** button on any approved X draft, for the operator.
+
+Both are silent no-ops until `X_ACCESS_TOKEN` and `X_ACCESS_TOKEN_SECRET` exist.
 
 ## Layout
 

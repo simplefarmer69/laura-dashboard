@@ -40,6 +40,10 @@ export const DEFAULT_SETTINGS: Settings = {
      launches flow at the daily deploy cap. Flip off to return to the legacy
      pace (12h cooldown, 2 open specs). LAUNCH_CAPS always applies. */
   mintFreedom: true,
+  /* Full autonomy (operator directive 2026-09-11): fresh approved X drafts
+     post themselves once the access keys exist, inside the x-guard caps.
+     Until the keys land this is a no-op that logs once. */
+  autoPublishX: true,
 };
 
 /**

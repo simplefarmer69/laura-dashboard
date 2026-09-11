@@ -348,6 +348,8 @@ export interface Draft {
   reviewerNote: string | null;
   /** Set when the draft was published through a connected channel (e.g. X). */
   publishedUrl?: string | null;
+  /** Why the autonomous X rail skipped or failed this draft (it stays approved for manual publishing). */
+  autoPublishNote?: string | null;
 }
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
@@ -462,6 +464,14 @@ export interface Settings {
    * return to the legacy pace (12h cooldown, 2 open specs).
    */
   mintFreedom: boolean;
+  /**
+   * Autonomous X publishing: approved X drafts from the freshest cycles post
+   * on their own, one per tick, inside the shared-account guards (30 min
+   * between posts, 6 per 24h, duplicate memory, no self-interaction). Fails
+   * closed while X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET are absent. Older
+   * approved drafts never auto-post. Kill switch: flip off for a manual gate.
+   */
+  autoPublishX: boolean;
 }
 
 export type SwarmEventKind =

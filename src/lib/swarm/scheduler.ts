@@ -9,6 +9,7 @@ import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
 import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { runBuilderTick } from "@/lib/builder/executor";
+import { runXPublishTick } from "@/lib/publish/auto";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import { clearFlag, flagPending, RESTART_FLAG } from "@/lib/ops";
@@ -206,6 +207,14 @@ async function tick(): Promise<void> {
      actions (bag buys, template deploys) additionally require the operator's
      autoExecuteUtility flag and stay inside BUILDER_CAPS. Never throws. */
   await runBuilderTick(state);
+
+  /* Outbound: fresh approved X drafts post themselves inside the x-guard
+     caps (one per tick); silent no-op until the access keys exist. */
+  try {
+    await runXPublishTick(state);
+  } catch (err) {
+    log(`x auto-publish tick failed: ${String(err)}`);
+  }
 
   /* Daily grade first: with back-to-back cycles the "nothing due" branch
      below may never be reached, so the stamp must not depend on it. One

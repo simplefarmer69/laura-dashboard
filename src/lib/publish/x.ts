@@ -3,8 +3,9 @@ import { checkXGuards, recordXPost, type XGuardVerdict } from "@/lib/publish/x-g
 
 /**
  * X (Twitter) publishing rail. Posting uses OAuth 1.0a user context, signed
- * locally with node:crypto — no SDK needed. Publishing stays human-gated: it
- * only runs when the operator clicks "Publish to X" on an approved draft.
+ * locally with node:crypto — no SDK needed. Two callers: the operator's
+ * "Publish to X" button and the autonomous rail in publish/auto.ts; both
+ * pass the shared-account guards in x-guard.ts before anything is sent.
  *
  * Required env for posting: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN,
  * X_ACCESS_TOKEN_SECRET. X_BEARER_TOKEN alone is read-only.
