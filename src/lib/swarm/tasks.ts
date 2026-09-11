@@ -603,34 +603,38 @@ export function spokenLaunchesDigest(launches: LaunchProposal[], limit = 8): str
  * creators, not just LAURA) so Mint learns parameter and concept choices from
  * real outcomes instead of guessing.
  */
-export function padOutcomeStudy(grid: GridToken[]): string {
-  if (grid.length === 0) return "No pad history available this cycle.";
+export function padOutcomeStudy(recent: GridToken[], byVolume: GridToken[]): string {
+  if (recent.length === 0 && byVolume.length === 0) return "No pad history available this cycle.";
   const now = Date.now();
   const dayMs = 86_400_000;
-  const grads = grid.filter((t) => t.graduated).sort((a, b) => b.mcapUsd - a.mcapUsd);
-  const stalled = grid.filter(
+  /* The "new" sort carries degraded stats for graduated rows (mcap ~$0, 1
+     holder — verified 2026-09-11), so base rates come from the recent sample
+     and winner stats from the volume sort, where graduated tokens keep real
+     mcap/holder numbers. */
+  const stalled = recent.filter(
     (t) => !t.graduated && now - new Date(t.createdAt).getTime() > dayMs && t.curvePct < 10,
   );
-  const working = grid.length - grads.length - stalled.length;
+  const gradCount = recent.filter((t) => t.graduated).length;
+  const working = recent.length - gradCount - stalled.length;
+  const winners = byVolume.filter((t) => t.graduated && t.holderCount > 1).sort((a, b) => b.holderCount - a.holderCount);
   const median = (xs: number[]): number => {
     if (xs.length === 0) return 0;
     const s = [...xs].sort((a, b) => a - b);
     return s[Math.floor(s.length / 2)];
   };
   const lines = [
-    `Sampled ${grid.length} recent pad tokens (all creators): ${grads.length} graduated, ${stalled.length} stalled (>24h old, <10% curve), ${working} still working the curve.`,
+    `Recent sample (${recent.length} newest pad tokens, all creators): ${gradCount} graduated, ${stalled.length} stalled (>24h old, <10% curve), ${working} still working the curve — most launches die; yours must earn holders to be the exception.`,
   ];
-  if (grads.length > 0) {
-    const top = grads
+  if (winners.length > 0) {
+    const top = winners
       .slice(0, 3)
       .map((t) => `${t.name} ($${t.symbol}) mcap $${Math.round(t.mcapUsd).toLocaleString()}, ${t.holderCount} holders`)
       .join(" · ");
-    lines.push(`Graduated winners to study: ${top}.`);
     lines.push(
-      `Median holders — graduated ${median(grads.map((t) => t.holderCount))} vs stalled ${median(stalled.map((t) => t.holderCount))}: holder distribution, not launch-day mcap, is what separates bonds from corpses. Design for reasons to hold.`,
+      `All-time volume winners that bonded (study their shape, never their names): ${top}. Median holders — winners ${median(winners.map((t) => t.holderCount))} vs recent stalls ${median(stalled.map((t) => t.holderCount))}: holder distribution is what separates bonds from corpses. Design for reasons to hold.`,
     );
   } else {
-    lines.push("No graduation in this sample: the bar for bonding is high — an achievable gradMcapUsd matters.");
+    lines.push("No bonded winners visible this cycle: the bar for bonding is high — an achievable gradMcapUsd matters.");
   }
   return lines.join("\n");
 }

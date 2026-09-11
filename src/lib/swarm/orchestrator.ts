@@ -747,10 +747,14 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       try {
         let floor = "Launcher floor data unavailable this cycle.";
         try {
-          /* Wide sample: the newest 10 render as live floor lines; all 60 feed
-             the outcome study so Mint learns from graduations and corpses
-             across every creator, not just the current page. */
-          const grid = await launcherGrid("new", 60);
+          /* Wide sample: the newest 10 render as live floor lines; the full
+             "new" sample plus the volume sort feed the outcome study so Mint
+             learns from graduations and corpses across every creator (the
+             volume sort is where graduated rows keep real mcap/holder stats). */
+          const [grid, byVolume] = await Promise.all([
+            launcherGrid("new", 60),
+            launcherGrid("volume", 20).catch(() => [] as Awaited<ReturnType<typeof launcherGrid>>),
+          ]);
           const lines = grid
             .slice(0, 10)
             .map(
@@ -758,7 +762,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
                 `- ${t.name} ($${t.symbol}): mcap $${Math.round(t.mcapUsd).toLocaleString()}, curve ${t.curvePct.toFixed(1)}%, ${t.holderCount} holders${t.graduated ? ", graduated" : ""}`,
             )
             .join("\n");
-          floor = `${lines}\n\nPAD OUTCOME STUDY\n${padOutcomeStudy(grid)}`;
+          floor = `${lines}\n\nPAD OUTCOME STUDY\n${padOutcomeStudy(grid, byVolume)}`;
         } catch {
           /* floor context is optional */
         }
