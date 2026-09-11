@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { postJson, useSwarmState } from "@/components/console/use-swarm-state";
+import { postJson, useSwarmState, type LinkStatus } from "@/components/console/use-swarm-state";
 import { VIEWER_MODE, ViewerBanner, ViewerShield } from "@/components/console/viewer";
 import { Overview } from "@/components/console/overview";
 import { ReviewQueue } from "@/components/console/queue";
@@ -38,7 +38,7 @@ const TAB_CLASS =
   "sb-ticker text-[11px] tracking-[0.08em] after:bg-primary dark:data-active:text-primary";
 
 export function Console() {
-  const { state, error, loading, refresh } = useSwarmState();
+  const { state, link, loading, refresh } = useSwarmState();
   const [tab, setTab] = useState("overview");
   const [starting, setStarting] = useState(false);
 
@@ -174,16 +174,11 @@ export function Console() {
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-        {error && (
-          <div className="mb-4 flex flex-wrap items-center gap-3 border border-destructive/40 border-l-2 border-l-destructive bg-destructive/10 px-3 py-2 text-sm">
-            <span className="sb-ticker text-[10px] text-destructive">link down</span>
-            <span className="min-w-0 flex-1 truncate text-destructive/90">{error}</span>
-            <Button size="sm" variant="outline" disabled={loading} onClick={() => void refresh()}>
-              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Retry
-            </Button>
-          </div>
+        {link.message && state && (
+          <MaintenanceNotice link={link} loading={loading} onRetry={() => void refresh()} compact />
         )}
-        {!state && loading && <ConsoleSkeleton />}
+        {!state && loading && !link.message && <ConsoleSkeleton />}
+        {!state && link.message && <MaintenanceNotice link={link} loading={loading} onRetry={() => void refresh()} />}
         {state && (
           <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="gap-4">
             <TabsList variant="line" className="w-full justify-start overflow-x-auto">
@@ -289,6 +284,67 @@ export function Console() {
 }
 
 /** Structured loading state: the exact shell the data will occupy, one light sweep. */
+/**
+ * Maintenance state instead of exception text. Compact: a strip above the
+ * last-known data (still shown, timestamped). Full: the card visitors see when
+ * nothing has loaded yet. Both count down to the automatic retry.
+ */
+function MaintenanceNotice({
+  link,
+  loading,
+  onRetry,
+  compact = false,
+}: {
+  link: LinkStatus;
+  loading: boolean;
+  onRetry: () => void;
+  compact?: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const retryIn = link.nextRetryAt ? Math.max(0, Math.ceil((link.nextRetryAt - now) / 1000)) : null;
+  const lastGood = link.lastGoodAt ? new Date(link.lastGoodAt).toUTCString().slice(17, 25) : null;
+  if (compact) {
+    return (
+      <div className="mb-4 flex flex-wrap items-center gap-3 border border-[var(--sb-gold)]/40 border-l-2 border-l-[var(--sb-gold)] bg-[var(--sb-gold)]/10 px-3 py-2 text-sm">
+        <span className="sb-ticker text-[10px] text-[var(--sb-gold)]">maintenance</span>
+        <span className="min-w-0 flex-1 text-foreground/90">
+          {link.message}
+          {lastGood && <span className="text-muted-foreground"> Showing data from {lastGood} UTC.</span>}
+        </span>
+        <span className="sb-ticker text-[10px] text-muted-foreground">
+          {loading ? "reconnecting…" : retryIn !== null ? `retry in ${retryIn}s` : ""}
+        </span>
+        <Button size="sm" variant="outline" disabled={loading} onClick={onRetry}>
+          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Retry now
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="mx-auto mt-10 max-w-xl border border-[var(--sb-gold)]/40 bg-black/50 p-6 text-center shadow-[0_0_24px_rgba(0,0,0,0.4)]">
+      <p className="sb-ticker text-[10px] tracking-[0.2em] text-[var(--sb-gold)]">MAINTENANCE</p>
+      <h2 className="mt-2 text-lg font-semibold text-primary sb-glow-text">LAURA is between ticks</h2>
+      <p className="mt-2 text-sm text-foreground/85">{link.message}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        The swarm, its launches and its treasury rules run on LAURA&apos;s host, not in this page — nothing stops
+        while the console is unreachable.
+      </p>
+      <div className="mt-4 flex items-center justify-center gap-3">
+        <span className="sb-ticker text-[10px] text-muted-foreground">
+          {loading ? "reconnecting…" : retryIn !== null ? `automatic retry in ${retryIn}s` : ""}
+        </span>
+        <Button size="sm" variant="outline" disabled={loading} onClick={onRetry}>
+          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} /> Retry now
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ConsoleSkeleton() {
   return (
     <div aria-busy="true" className="space-y-4">
