@@ -82,10 +82,16 @@ import type {
   UtilityProject,
 } from "@/lib/types";
 
-let cycleInFlight: Promise<CycleRun> | null = null;
+/* On globalThis, not module scope: under dev HMR every compile gets its own
+   module copy, and two copies (e.g. the scheduler loop and a manual /api/cycle
+   request) each saw a null module-level guard and ran cycles concurrently
+   (run_6220e642, 2026-09-11). One process, one cycle, whichever module runs it. */
+declare global {
+  var __lauraCycleInFlight: Promise<CycleRun> | null | undefined;
+}
 
 export function isCycleRunning(): boolean {
-  return cycleInFlight !== null;
+  return (globalThis.__lauraCycleInFlight ?? null) !== null;
 }
 
 /** Collects metrics, grades, records milestones. Shared by cycles and the daily stamp. */
@@ -135,11 +141,13 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ value: T; ms: number }>
 }
 
 export function runCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
-  if (cycleInFlight) return cycleInFlight;
-  cycleInFlight = executeCycle(trigger).finally(() => {
-    cycleInFlight = null;
+  const inFlight = globalThis.__lauraCycleInFlight ?? null;
+  if (inFlight) return inFlight;
+  const p = executeCycle(trigger).finally(() => {
+    globalThis.__lauraCycleInFlight = null;
   });
-  return cycleInFlight;
+  globalThis.__lauraCycleInFlight = p;
+  return p;
 }
 
 async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
