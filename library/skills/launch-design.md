@@ -162,7 +162,7 @@ in mind; protocol revenue is a graded lever.
 |---|---|---|
 | startMcapUsd | 5,000 | Cheap entry, room to run |
 | gradMcapUsd | 25–100x start | Honest curve; ≥2x is enforced |
-| startTaxBps | 2000–3000 decaying 200–300/min | Anti-snipe, gone in ~10 min |
+| startTaxBps | 2000–3000 decaying 200–300/min | Anti-snipe, gone in ~10 min. **Pad rule:** startTax must be an exact multiple of the decay and the window startTax/decay must be 10–99 min, else `BadEconomics()` (pinned by simulation 2026-09-11: 2000/250 = 8 min reverts, 2000/200 passes) |
 | bufferSecs | 600; 900 for story-heavy tokens | Humans read before trading opens |
 | sellsEnabled | true (mandatory) | Buy-only reverts BadEconomics() on all V2 pads |
 | postTaxBps | 100 (pad minimum) | Sustained fees without strangling volume |

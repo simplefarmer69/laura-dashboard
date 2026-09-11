@@ -7,6 +7,7 @@ import {
   deployLaunch,
   findOrphanDeploy,
   getAccount,
+  normalizeTaxDecay,
   verifyLaunchVisible,
   walletStatus,
 } from "@/lib/launchpad/service";
@@ -76,6 +77,20 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
       error: capacity.reason ?? `Pacing: launches go out at least ${LAUNCH_CAPS.minDeployGapMinutes} min apart`,
       httpStatus: 429,
     };
+
+  /* Pad economics rule: snap the tax decay onto what the pads accept (exact
+     multiple, 10-99 min window) instead of burning a deploy attempt on
+     BadEconomics(). The adjustment is recorded on the launch so the readback
+     is honest about what changed. */
+  const snapped = normalizeTaxDecay(launch.startTaxBps, launch.taxDecayPerMinuteBps);
+  if (snapped.startTaxBps !== launch.startTaxBps || snapped.taxDecayPerMinuteBps !== launch.taxDecayPerMinuteBps) {
+    const before = `${launch.startTaxBps} bps decaying ${launch.taxDecayPerMinuteBps}/min (${(launch.startTaxBps / Math.max(1, launch.taxDecayPerMinuteBps)).toFixed(1)} min)`;
+    const after = `${snapped.startTaxBps} bps decaying ${snapped.taxDecayPerMinuteBps}/min (${snapped.startTaxBps / snapped.taxDecayPerMinuteBps} min)`;
+    launch.startTaxBps = snapped.startTaxBps;
+    launch.taxDecayPerMinuteBps = snapped.taxDecayPerMinuteBps;
+    launch.error = `Tax decay adjusted to the pad rule before deploy: ${before} → ${after}. The pads require the start tax to be an exact multiple of the decay with a 10-99 minute window.`;
+    log(`autonomy: ${launch.symbol} tax decay snapped to the pad rule: ${before} → ${after}`);
+  }
 
   launch.status = "deploying";
   await saveState(state);

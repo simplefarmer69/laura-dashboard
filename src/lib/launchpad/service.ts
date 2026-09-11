@@ -168,6 +168,60 @@ export async function allPadStates(): Promise<LanePadState[]> {
   return settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
 }
 
+/**
+ * The pads' tax-decay economics rule, pinned by createLaunch simulation on the
+ * weth, spcx and gme pads (2026-09-11, ~50 parameter combinations): the start
+ * tax must be an exact multiple of the per-minute decay, and the decay window
+ * startTaxBps / taxDecayPerMinuteBps must be 10-99 minutes. Zero tax needs zero
+ * decay (and vice versa). Anything else reverts BadEconomics() — BTCLEG
+ * (2000/250 = 8 min) and HOUSTN (2000/400 = 5 min) burned four deploy attempts
+ * on it before this was understood.
+ */
+export const TAX_DECAY_MIN_MINUTES = 10;
+export const TAX_DECAY_MAX_MINUTES = 99;
+
+export function taxDecayProblem(startTaxBps: number, decayBps: number): string | null {
+  if (startTaxBps === 0 && decayBps === 0) return null;
+  if (startTaxBps === 0 || decayBps === 0)
+    return "Start tax and decay must be both zero or both positive (pad reverts BadEconomics())";
+  if (startTaxBps % decayBps !== 0)
+    return `Start tax ${startTaxBps} bps must be an exact multiple of the decay ${decayBps} bps/min (pad reverts BadEconomics())`;
+  const minutes = startTaxBps / decayBps;
+  if (minutes < TAX_DECAY_MIN_MINUTES || minutes > TAX_DECAY_MAX_MINUTES)
+    return `Tax decay window ${minutes} min is outside the pad's ${TAX_DECAY_MIN_MINUTES}-${TAX_DECAY_MAX_MINUTES} min range (pad reverts BadEconomics())`;
+  return null;
+}
+
+/**
+ * Snaps a (startTax, decay) pair onto the pad rule, keeping the designer's
+ * intended window as closely as possible: the window is clamped to 10-99 min,
+ * then the nearest window length that divides the tax exactly wins. Taxes with
+ * no such divisor are rounded down to a multiple of 10 bps first (every such
+ * tax divides by 10 min). Returns the input unchanged when it already passes.
+ */
+export function normalizeTaxDecay(startTaxBps: number, decayBps: number): { startTaxBps: number; taxDecayPerMinuteBps: number } {
+  if (!taxDecayProblem(startTaxBps, decayBps)) return { startTaxBps, taxDecayPerMinuteBps: decayBps };
+  if (startTaxBps <= 0) return { startTaxBps: 0, taxDecayPerMinuteBps: 0 };
+  const intended = decayBps > 0 ? startTaxBps / decayBps : TAX_DECAY_MIN_MINUTES;
+  const target = Math.min(TAX_DECAY_MAX_MINUTES, Math.max(TAX_DECAY_MIN_MINUTES, Math.round(intended)));
+  const pick = (tax: number): number | null => {
+    for (let delta = 0; delta <= TAX_DECAY_MAX_MINUTES; delta++) {
+      for (const m of [target - delta, target + delta]) {
+        if (m < TAX_DECAY_MIN_MINUTES || m > TAX_DECAY_MAX_MINUTES) continue;
+        if (tax % m === 0) return m;
+      }
+    }
+    return null;
+  };
+  let tax = startTaxBps;
+  let minutes = pick(tax);
+  if (minutes === null) {
+    tax = Math.max(10, Math.floor(tax / 10) * 10);
+    minutes = pick(tax) ?? TAX_DECAY_MIN_MINUTES;
+  }
+  return { startTaxBps: tax, taxDecayPerMinuteBps: tax / minutes };
+}
+
 /** Validates a proposal against the pad's live on-chain bounds. Returns human-readable problems. */
 export function validateAgainstBounds(p: LaunchProposal, pad: PadState): string[] {
   const problems: string[] = [];
@@ -184,6 +238,8 @@ export function validateAgainstBounds(p: LaunchProposal, pad: PadState): string[
     problems.push(`Start tax must be 0-${b.maxStartTaxBps} bps`);
   if (p.taxDecayPerMinuteBps < 0 || p.taxDecayPerMinuteBps > 2000)
     problems.push("Tax decay must be 0-2000 bps/min");
+  const decayProblem = taxDecayProblem(p.startTaxBps, p.taxDecayPerMinuteBps);
+  if (decayProblem) problems.push(decayProblem);
   if (p.bufferSecs < b.minBufferSecs) problems.push(`Buffer must be at least ${b.minBufferSecs}s`);
   /* Pad enforces MIN_POST_TAX_BPS()=100 / MAX_POST_TAX_BPS()=500 at create
      (verified by simulation on both pads 2026-09-10: postTaxBps 0 reverts). */
