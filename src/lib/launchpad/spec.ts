@@ -31,8 +31,56 @@ export const launchSpecShape = {
      clean on every pad). Zod allowing 0 here used to let a spec through that
      could only ever fail at deploy. */
   postTaxBps: z.number().min(100).max(500),
-  sellsEnabled: z.boolean(),
+  sellsEnabled: z
+    .boolean()
+    .describe(
+      "MUST be true: buy-only curves (sellsEnabled false) revert BadEconomics() on every V2 pad in every tested combination (verified by simulation 2026-09-11). If the launcher ever enables buy-only lanes this flag opens up; until then always true.",
+    ),
   bufferSecs: z.number().min(600).max(3600),
+  /* Advanced pad options (operator-directed 2026-09-11), each verified by
+     createLaunch simulation on the live pads. eoaOnly, maxBuyPpm, bondVenue
+     and unsoldMode are accepted; openEnded=false and sellsEnabled=false
+     revert (BadParam()/BadEconomics()) in every tested combination, so those
+     stay locked to the proven values until the pads enable them. */
+  openEnded: z
+    .boolean()
+    .default(true)
+    .describe(
+      "MUST be true: closed-window sales (openEnded false) revert BadParam() on every V2 pad in every tested combination (verified by simulation 2026-09-11). Note the pad is ALREADY the launcher's 'Guaranteed Bond / anti snipe' family — the raise bonds at the bell; graduation is the guaranteed bond.",
+    ),
+  eoaOnly: z
+    .boolean()
+    .default(false)
+    .describe(
+      "true blocks contracts from buying (anti-bot shield; verified accepted on-chain). Proven default false; turn on for fair-start designs the message narrates.",
+    ),
+  maxBuyPpm: z
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000)
+    .default(0)
+    .describe(
+      "Per-wallet max buy as parts-per-million of supply — the anti-snipe whale cap (verified accepted on-chain). 0 = uncapped (proven default); 10000 = 1% of supply per wallet. Combine with the decaying start tax for fair-start designs.",
+    ),
+  bondVenue: z
+    .number()
+    .int()
+    .min(0)
+    .max(1)
+    .default(0)
+    .describe(
+      "Graduation venue for the bonded pool: 0 = StonkUp CL locker (proven default), 1 = Uniswap V3 venue (verified accepted; 'Uniswap V3' in launcher copy means this flag, not a pad generation). Both mint the LP into the Safety Deposit Box; fee-claim rights stay with LAURA either way.",
+    ),
+  unsoldMode: z
+    .number()
+    .int()
+    .min(0)
+    .max(1)
+    .default(0)
+    .describe(
+      "Unsold-supply behavior at bond (the launcher's 'unsold-supply behavior' custom option). 0 = proven default; 1 = alternate handling (verified accepted on-chain; 2+ reverts). Keep 0 unless the design has a stated reason.",
+    ),
 } as const;
 
 /* Palette vocabulary, as the literal tuple zod's enum needs. This is the

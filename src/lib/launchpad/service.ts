@@ -166,6 +166,14 @@ export function validateAgainstBounds(p: LaunchProposal, pad: PadState): string[
   /* Pad enforces MIN_POST_TAX_BPS()=100 / MAX_POST_TAX_BPS()=500 at create
      (verified by simulation on both pads 2026-09-10: postTaxBps 0 reverts). */
   if (p.postTaxBps < 100 || p.postTaxBps > 500) problems.push("Post tax must be 100-500 bps (pad minimum is enforced on-chain)");
+  /* Modes the V2 pads reject as deployed (verified by simulation on all 8
+     pads 2026-09-11, every parameter combination tested): refusing here saves
+     the deploy attempt and names the on-chain error the pad would throw. */
+  if (!p.sellsEnabled) problems.push("Buy-only curves revert BadEconomics() on every V2 pad; sellsEnabled must be true");
+  if (p.openEnded === false) problems.push("Closed-window sales revert BadParam() on every V2 pad; openEnded must be true");
+  if (p.maxBuyPpm !== undefined && (p.maxBuyPpm < 0 || p.maxBuyPpm > 1_000_000)) problems.push("maxBuyPpm must be 0-1000000");
+  if (p.bondVenue !== undefined && ![0, 1].includes(p.bondVenue)) problems.push("bondVenue must be 0 or 1");
+  if (p.unsoldMode !== undefined && ![0, 1].includes(p.unsoldMode)) problems.push("unsoldMode must be 0 or 1 (2+ reverts BadParam())");
   return problems;
 }
 
@@ -202,12 +210,15 @@ export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
     taxDecayPerMinuteBps: p.taxDecayPerMinuteBps,
     sellsEnabled: p.sellsEnabled,
     bufferSecs: p.bufferSecs,
-    unsoldMode: 0,
-    eoaOnly: false,
-    openEnded: true,
+    /* Operator-unlocked options (2026-09-11), defaulting to the proven params
+       for launches queued before they existed. validateAgainstBounds refuses
+       the combinations the pads revert on. */
+    unsoldMode: p.unsoldMode ?? 0,
+    eoaOnly: p.eoaOnly ?? false,
+    openEnded: p.openEnded ?? true,
     postTaxBps: p.postTaxBps,
-    bondVenue: 0,
-    maxBuyPpm: 0,
+    bondVenue: p.bondVenue ?? 0,
+    maxBuyPpm: p.maxBuyPpm ?? 0,
   };
 
   const walletClient = createWalletClient({ account, chain: ROBINHOOD_CHAIN, transport: http() });

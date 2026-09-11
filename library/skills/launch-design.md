@@ -70,6 +70,25 @@ lane and launch them there. The lane supplies the real-stock exposure; your toke
 still supplies an original name, symbol and message (never a real ticker as your
 symbol).
 
+## Healthy floor test (adopted 2026-09-11 — the number behind the skip condition)
+
+Mint raised at the Cafe Bar that "if the floor already has a healthy new token from
+us, skip" had no definition behind it. The operator adopted Mint's own proposed
+definition. A LAURA token on the floor is **healthy** only if ALL THREE hold:
+
+1. **Below graduation** — a graduated token never blocks anything (it is finished
+   speech and permanent revenue);
+2. **At least one non-swarm buy in the trailing 24h** — the floor/grid data in the
+   prompt shows trades and holders; no visible evidence of a fresh outside buy means
+   not healthy;
+3. **Start tax fully decayed to the postTax floor** — compute
+   `startTaxBps / taxDecayPerMinuteBps` minutes since arming.
+
+A token failing ANY test does not block the next launch: the floor has room. A token
+passing all three is doing its job and does not need a sibling crowding it unless the
+new launch says something genuinely different. This test refines the skip decision
+only — it never overrides the real gates (dedupe, caps, nothing-new-to-say).
+
 **Pre-stage when capped.** The deploy cap being exhausted is NOT a skip reason. Check
 LAUNCH CAPACITY for when headroom returns; if the queue is empty, propose the next
 launch now — approved specs queue and auto-deploy the minute the window reopens.
@@ -129,8 +148,31 @@ in mind; protocol revenue is a graded lever.
 | gradMcapUsd | 25–100x start | Honest curve; ≥2x is enforced |
 | startTaxBps | 2000–3000 decaying 200–300/min | Anti-snipe, gone in ~10 min |
 | bufferSecs | 600; 900 for story-heavy tokens | Humans read before trading opens |
-| sellsEnabled | true | Never trap buyers |
+| sellsEnabled | true (mandatory) | Buy-only reverts BadEconomics() on all V2 pads |
 | postTaxBps | 100 (pad minimum) | Sustained fees without strangling volume |
+| eoaOnly | false; true for fair-start designs | Anti-bot: contracts cannot buy |
+| maxBuyPpm | 0; 5000–20000 for fair starts | Per-wallet whale cap (10000 = 1% of supply) |
+| bondVenue | 0; 1 for a Uniswap V3 graduation | LP locks in the Safety Deposit Box either way |
+| unsoldMode | 0 | 1 accepted on-chain; use only with a stated reason |
+| openEnded | true (mandatory) | Closed windows revert BadParam() on all V2 pads |
+
+**Verified 2026-09-11 by createLaunch simulation on all 8 live pads:** eoaOnly,
+maxBuyPpm, bondVenue 1 and unsoldMode 1 are accepted; sellsEnabled false and
+openEnded false revert (BadEconomics()/BadParam()) in every tested combination —
+spec validation refuses both so no deploy slot is ever burned on them. The pad is
+already the launcher's **Guaranteed Bond / anti snipe** family ("snipe tax up to 99%
+falling every minute, raise bonds at the bell"): the decaying tax IS the fair-start
+window and graduation IS the guaranteed bond, with the LP minting into the Safety
+Deposit Box.
+
+## Learning from the pad
+
+The prompt's PAD OUTCOME STUDY samples ~60 recent tokens across ALL creators:
+graduations, stalls, holder medians, and the top bonded winners. Read it before
+designing — what separates bonds from corpses on this pad is holder distribution,
+not launch-day mcap. Steal shapes (scale, tax posture, concept energy) from
+graduated winners; never their names. Cross-check with the ROBINHOOD CHAIN LAUNCH
+RADAR for what narrative is moving chain-wide today.
 
 **postTaxBps is 100–500 and the pad REVERTS below 100** (on-chain
 `MIN_POST_TAX_BPS`, verified by simulation). The tax is also a creative

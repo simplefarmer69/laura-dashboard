@@ -528,6 +528,24 @@ export interface LaunchProposal {
   postTaxBps: number;
   sellsEnabled: boolean;
   bufferSecs: number;
+  /**
+   * Advanced pad options (2026-09-11, operator-directed; each verified by
+   * simulation against the live pads). Optional so launches queued before
+   * these existed keep deploying; the deploy path applies the proven defaults
+   * (openEnded true, eoaOnly false, maxBuyPpm 0, bondVenue 0, unsoldMode 0).
+   * openEnded=false and sellsEnabled=false REVERT on every V2 pad today —
+   * validation refuses them until the launcher enables those modes.
+   */
+  /** Must be true today: closed-window sales revert BadParam() on all V2 pads */
+  openEnded?: boolean;
+  /** true = only externally-owned accounts may buy (anti-bot; verified accepted) */
+  eoaOnly?: boolean;
+  /** Per-wallet max buy in parts-per-million of supply (anti-snipe whale cap; verified accepted); 0 = uncapped */
+  maxBuyPpm?: number;
+  /** Graduation venue: 0 = StonkUp CL locker (proven), 1 = Uniswap V3 venue (verified accepted) */
+  bondVenue?: number;
+  /** Unsold-supply behavior at bond: 0 = proven default, 1 = alternate (verified accepted) */
+  unsoldMode?: number;
   concept: string;
   rationale: string;
   /**

@@ -29,6 +29,7 @@ import {
   launchSchema,
   mintMock,
   mintPrompt,
+  padOutcomeStudy,
   producerMock,
   producerPrompt,
   proposalsSchema,
@@ -746,13 +747,18 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       try {
         let floor = "Launcher floor data unavailable this cycle.";
         try {
-          const grid = await launcherGrid("new", 10);
-          floor = grid
+          /* Wide sample: the newest 10 render as live floor lines; all 60 feed
+             the outcome study so Mint learns from graduations and corpses
+             across every creator, not just the current page. */
+          const grid = await launcherGrid("new", 60);
+          const lines = grid
+            .slice(0, 10)
             .map(
               (t) =>
                 `- ${t.name} ($${t.symbol}): mcap $${Math.round(t.mcapUsd).toLocaleString()}, curve ${t.curvePct.toFixed(1)}%, ${t.holderCount} holders${t.graduated ? ", graduated" : ""}`,
             )
             .join("\n");
+          floor = `${lines}\n\nPAD OUTCOME STUDY\n${padOutcomeStudy(grid)}`;
         } catch {
           /* floor context is optional */
         }
@@ -808,6 +814,11 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             postTaxBps: spec.postTaxBps,
             sellsEnabled: spec.sellsEnabled,
             bufferSecs: spec.bufferSecs,
+            openEnded: spec.openEnded,
+            eoaOnly: spec.eoaOnly,
+            maxBuyPpm: spec.maxBuyPpm,
+            bondVenue: spec.bondVenue,
+            unsoldMode: spec.unsoldMode,
             concept: spec.concept,
             rationale: spec.rationale,
             message: spec.message,
