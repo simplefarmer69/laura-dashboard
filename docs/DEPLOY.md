@@ -97,7 +97,7 @@ What runs under PM2 afterwards:
 | app | what it does |
 |---|---|
 | `laura` | `next start` from `~/laura/current` (`SWARM_DATA_DIR=~/laura/data`, `LAURA_DAEMON=1`) |
-| `laura-updater` | every 5 min: fetch github/main; on a new commit build a **new release dir**, wait for `busy:false` (no cycle or forum round), switch the `current` symlink, reload, verify `/api/health`; **roll back** to the previous release if health fails; keep 3 releases |
+| `laura-updater` | every 5 min: fetch github/main; on a new commit build a **new release dir**, wait for `busy:false` (no cycle, forum round, or chain work such as a deploy/arm/treasury buy), re-confirm quiet twice, switch the `current` symlink, reload, verify `/api/health`; **roll back** to the previous release if health fails; keep 3 releases |
 | `laura-watchdog` | probe `/api/health` every 60 s; `pm2 restart laura` after 3 misses |
 
 Layout: `~/laura/{repo,releases/<sha>,current,data,shared/.env.local}`. Data and
@@ -151,7 +151,7 @@ Manual fallbacks: `bash laura-daemon.sh status | build | update | watchdog`, `np
 `data/` is git-ignored and never leaves the VM by itself. Hand-off procedure, run
 by the Cursor agent when you say go:
 
-1. Wait for a quiet moment on the VM (`/api/health` → `cycleInFlight: false`).
+1. Wait for a quiet moment on the VM (`/api/health` → `busy: false`; that covers cycles, Cafe Bar rounds and chain work).
 2. Stop the VM runtime (`npx pm2 stop laura laura-updater laura-watchdog` on the
    VM) so it cannot keep writing. Exactly one runtime may own `data/state.json`.
 3. Pack `data/` (state.json, notebook.json, archive/, backups/, launch-art/,
