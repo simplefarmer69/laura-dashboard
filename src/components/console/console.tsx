@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { postJson, useSwarmState, type LinkStatus } from "@/components/console/use-swarm-state";
-import { VIEWER_MODE, ViewerBanner, ViewerShield } from "@/components/console/viewer";
+import { VIEWER_MODE, ViewerBanner, ViewerShield, describeHost } from "@/components/console/viewer";
 import { Overview } from "@/components/console/overview";
 import { ReviewQueue } from "@/components/console/queue";
 import { Evolution } from "@/components/console/evolution";
@@ -94,6 +94,15 @@ export function Console() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {state?.runtime.host && !VIEWER_MODE && (
+              <Badge
+                variant="outline"
+                className="hidden font-mono text-[10px] lg:inline-flex"
+                title={state.runtime.host.builtAt ? `built ${state.runtime.host.builtAt}` : undefined}
+              >
+                {describeHost(state.runtime.host)}
+              </Badge>
+            )}
             {state && (
               <Badge variant="outline" className="hidden font-mono text-[10px] md:inline-flex">
                 LLM {state.runtime.llmProvider === "mock" ? "fallback (no key)" : state.runtime.llmModel}
@@ -170,7 +179,9 @@ export function Console() {
             )}
           </div>
         </div>
-        {VIEWER_MODE && <ViewerBanner publishedAt={state?.viewer?.publishedAt ?? null} />}
+        {VIEWER_MODE && (
+          <ViewerBanner publishedAt={state?.viewer?.publishedAt ?? null} host={state?.runtime.host ?? null} />
+        )}
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">

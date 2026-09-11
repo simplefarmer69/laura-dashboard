@@ -1,4 +1,5 @@
 import { loadState } from "@/lib/store";
+import { hostInfo } from "@/lib/ops";
 import { isCycleRunning } from "@/lib/swarm/orchestrator";
 import { schedulerRunning } from "@/lib/swarm/scheduler";
 import { resolveModel } from "@/lib/swarm/llm";
@@ -99,6 +100,9 @@ export async function buildPublicSnapshot(): Promise<Record<string, unknown>> {
       llmModel: model.modelId,
       /* booleans only; the local console's "missing credentials" hints stay local */
       x: { appKeys: xs.appKeys, accessKeys: xs.accessKeys, ready: xs.ready, missing: [] },
+      /* Where LAURA runs (daemon/dev), release sha, uptime, browser engine — the
+         public site reflects the host so visitors can see she is live. */
+      host: await hostInfo(),
     },
     /* Everything the Launchpad tab needs, captured on the VM so the viewer
        never touches the RPC or wallet code. All of it is on-chain public. */

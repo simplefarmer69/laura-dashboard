@@ -16,7 +16,7 @@ agent goes idle. Everything below is about moving her to a host that never pause
 | Local NFT feed on `127.0.0.1:4747` | Different port (`$PORT`) | Same | Fixed: reads `PORT` |
 | Wallet key, API keys in `.env.local` | Railway env vars | `.env.local` on the PC | Same variables, never committed |
 | Telegram/Discord bots, X posting, snapshot publishing | Same | Same | Outbound only; no inbound ports needed |
-| **Web browsing** (headless browser) | Not today | Not today (Phase 3 below) | Neither has it now; LAURA uses HTTP APIs. Only the Cursor agent browses |
+| **Web browsing** (browser worker) | `fetch` engine; Chromium needs the Playwright base image | Yes (`SWARM_BROWSER=1`, Chromium) | Built (§6): read-only, allowlisted, untrusted-content wrapped |
 | Operator scripts via tmux (burst drivers, `.mts` probes) | Railway shell / `railway run` | Terminal on the PC | Conveniences only; `/api/cycle` exists |
 | Cost | ~$5–15/month (1–2 GB RAM) | Electricity | — |
 
@@ -155,27 +155,32 @@ by the Cursor agent when you say go:
 
 The VM's keep-alive timer and watchdog are removed at that point.
 
-## 6. Phase 3 — web browsing for LAURA (design, not yet built)
+## 6. Browser worker (built — `src/lib/swarm/browser.ts`)
 
-LAURA fetches JSON APIs today; she cannot read pages that need JavaScript or that
-block plain fetches (Cloudflare), and X reads are quota-bound. A browsing rail:
+LAURA reads real web pages every cycle, as one step of the orchestrator ("Browser
+worker"), and the digest is appended to the world feed the agents reason over.
 
-- `playwright` (Chromium) as an **optional** dependency, enabled with
-  `SWARM_BROWSER=1`. On the PC this is trivial (~300 MB browser download); in the
-  Railway Docker image it means `mcr.microsoft.com/playwright` as the base image
-  (~1 GB image, ~500 MB RAM per page).
-- `src/lib/web/browse.ts`: `renderedText(url)` and `renderedJson(url)` with a hard
-  timeout, no cookies, no logins, allowlisted domains only (stonkbrokers.*, x.com
-  public pages, dexscreener, defillama, news domains the intel agents already cite).
-- Used as a **fallback** inside the intel fetchers when a fetch returns 403/HTML,
-  and as a new Scout capability ("read this page") behind the same untrusted-content
-  wrapper the chat inputs use — page text is data, never instructions.
-- No form submission, no wallet interaction, no purchases: browsing is read-only by
-  construction.
+- **Engines.** `fetch` (always available: HTML → text) or `chromium` via Playwright
+  when `SWARM_BROWSER=1` and `playwright` is installed (`npm i playwright &&
+  npx playwright install chromium`). Playwright is loaded lazily with
+  `createRequire`, so the dependency stays optional. The active engine is reported
+  as `runtime.host.browser` on `/api/state`, `/api/health`-adjacent ops routes and
+  the public viewer banner.
+- **What she reads.** A default watchlist (Robinhood newsroom, DexScreener's
+  Robinhood Chain page, GME/AMC quote pages) or `SWARM_BROWSE_URLS` (comma-separated),
+  plus links surfaced by the X pulse and top mentions (t.co links are expanded
+  first). At most 6 pages per cycle, 1 800 chars per page, 15 s per page, 30 min
+  cache.
+- **Read-only, by construction.** Allowlisted hosts only (`DEFAULT_ALLOW` +
+  `SWARM_BROWSE_ALLOW`), redirects re-checked against the allowlist, no cookies,
+  logins, forms, wallets or posting. Page text is wrapped with the same
+  untrusted-content delimiters as community chat: it is data, never instructions.
+- **Failure mode.** `browsePages` never throws; a blocked or slow page becomes a
+  one-line note in the digest and the cycle continues.
 
-This is the one place the PC is strictly better than Railway (cheap browser, real
-residential IP), which is another argument for PC = co-pilot + browsing, Railway =
-the swarm.
+The PC daemon is the natural home for the Chromium engine (cheap browser, real
+residential IP); Railway can run the `fetch` engine, or the Playwright base image
+(~1 GB) for Chromium.
 
 ## 7. Cutover checklist
 

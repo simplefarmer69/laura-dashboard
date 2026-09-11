@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LlmProvider, SwarmState } from "@/lib/types";
 import type { MissionStatus } from "@/lib/mission-status";
 import type { NotebookEntry } from "@/lib/swarm/notebook";
+import type { HostInfo } from "@/components/console/viewer";
 
 export interface ConsoleState extends SwarmState {
   mission: MissionStatus;
@@ -19,6 +20,8 @@ export interface ConsoleState extends SwarmState {
     llmProvider: LlmProvider;
     llmModel: string;
     x: { appKeys: boolean; accessKeys: boolean; ready: boolean; missing: string[] };
+    /** Host facts captured where the swarm runs; absent on snapshots older than this field. */
+    host?: HostInfo | null;
   };
   /** Present only on the public viewer deployment: snapshot provenance. */
   viewer?: { publishedAt: number } | null;

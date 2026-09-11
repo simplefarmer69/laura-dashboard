@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { redactSecrets } from "@/lib/store";
+import { browserEngine, type BrowserEngine } from "@/lib/swarm/browser";
 
 /**
  * Operator co-pilot surface for a self-hosted LAURA (PC daemon / Railway).
@@ -85,4 +86,18 @@ export async function releaseInfo(): Promise<{ sha: string | null; builtAt: stri
   } catch {
     return { sha: process.env.LAURA_RELEASE ?? null, builtAt: null };
   }
+}
+
+/** Where and how this LAURA process runs — shown on the console and the public viewer. */
+export async function hostInfo(): Promise<{
+  mode: "daemon" | "server" | "dev" | "viewer";
+  release: string | null;
+  builtAt: string | null;
+  uptimeSec: number;
+  browser: BrowserEngine;
+}> {
+  const viewer = process.env.VIEWER_MODE === "1" || process.env.NEXT_PUBLIC_VIEWER_MODE === "1";
+  const mode = viewer ? "viewer" : process.env.LAURA_DAEMON === "1" ? "daemon" : process.env.NODE_ENV === "production" ? "server" : "dev";
+  const rel = await releaseInfo();
+  return { mode, release: rel.sha ? rel.sha.slice(0, 7) : null, builtAt: rel.builtAt, uptimeSec: Math.round(process.uptime()), browser: browserEngine() };
 }

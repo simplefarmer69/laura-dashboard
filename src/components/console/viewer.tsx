@@ -40,8 +40,40 @@ function ago(ts: number, now: number): string {
 
 const STALE_AFTER_MS = 12 * 60_000;
 
-/** The public header strip: what this is, and how fresh the data is. */
-export function ViewerBanner({ publishedAt }: { publishedAt: number | null }) {
+/** Where the runtime that produced this data is living, as the state route reports it. */
+export interface HostInfo {
+  mode: "daemon" | "server" | "dev" | "viewer";
+  release: string | null;
+  builtAt: string | null;
+  uptimeSec: number;
+  browser: "chromium" | "fetch";
+}
+
+const HOST_MODE_LABEL: Record<HostInfo["mode"], string> = {
+  daemon: "PC daemon",
+  server: "server",
+  dev: "dev server",
+  viewer: "viewer",
+};
+
+function uptime(sec: number): string {
+  if (sec < 3600) return `${Math.max(1, Math.floor(sec / 60))}m`;
+  const h = Math.floor(sec / 3600);
+  if (h < 48) return `${h}h ${Math.floor((sec % 3600) / 60)}m`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
+/** One-line description of the host, shared by the public banner and the operator header. */
+export function describeHost(host: HostInfo): string {
+  const parts = [HOST_MODE_LABEL[host.mode]];
+  if (host.release) parts.push(host.release.slice(0, 7));
+  parts.push(`up ${uptime(host.uptimeSec)}`);
+  parts.push(host.browser === "chromium" ? "browser: chromium" : "browser: fetch");
+  return parts.join(" · ");
+}
+
+/** The public header strip: what this is, where it runs, and how fresh the data is. */
+export function ViewerBanner({ publishedAt, host }: { publishedAt: number | null; host?: HostInfo | null }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 15_000);
@@ -57,6 +89,11 @@ export function ViewerBanner({ publishedAt }: { publishedAt: number | null }) {
         <span className="text-muted-foreground">
           watching LAURA work; admin controls are local-only
         </span>
+        {host && (
+          <span className="hidden font-mono text-muted-foreground/90 sm:inline" title={host.builtAt ? `built ${host.builtAt}` : undefined}>
+            host: {describeHost(host)} · continuous cycles
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-1.5 text-muted-foreground">
           {publishedAt === null ? (
             "waiting for the first snapshot…"

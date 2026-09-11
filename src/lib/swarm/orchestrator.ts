@@ -61,6 +61,7 @@ import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
+import { browseCandidates, browseDigest, browsePages } from "@/lib/swarm/browser";
 import { coachProposalBudget, mintGate, mintQueueLimit, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { builderGate } from "@/lib/builder/caps";
 import {
@@ -76,6 +77,7 @@ import type {
   CycleRun,
   DailyGrade,
   Draft,
+  IntelSnapshot,
   LaunchProposal,
   MetricsSnapshot,
   RunStep,
@@ -230,6 +232,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
        Blockscout) so every agent reasons from today's world. Non-fatal by
        construction — collectIntel settles each source independently. */
     let intelText = "Live internet intel unavailable this cycle.";
+    let intelSnap: IntelSnapshot | null = null;
     try {
       const intel = await timed(() =>
         collectIntel(state.settings, state.intelHistory?.at(-1) ?? null),
@@ -237,6 +240,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       state.intelHistory = [...(state.intelHistory ?? []), intel.value];
       intelText = intelDigest(intel.value, state.intelHistory);
       const snap = intel.value;
+      intelSnap = snap;
       /* Founder catalyst hits are the operator's #1 priority — surface each
          once as a first-class event (deduped by tweet id via refId). */
       for (const hit of snap.x?.catalysts ?? []) {
@@ -298,6 +302,29 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       });
     } catch (err) {
       step({ agentId: "system", label: "World feeds", status: "error", summary: String(err), durationMs: 0 });
+    }
+
+    /* 1c2b. Browser worker: read-only page reads (operator watchlist + links
+       the live X reads carried), allowlisted and wrapped as untrusted. Uses
+       Chromium where the host installed Playwright, plain fetch elsewhere. */
+    try {
+      const candidates = await browseCandidates(intelSnap);
+      if (candidates.length > 0) {
+        const browsed = await timed(() => browsePages(candidates));
+        const digest = browseDigest(browsed.value.results);
+        if (digest) worldText = `${worldText}\n\n${digest}`;
+        step({
+          agentId: "system",
+          label: "Browser worker",
+          status: browsed.value.results.length > 0 ? "ok" : "skipped",
+          summary: `${browsed.value.results.length}/${candidates.length} page(s) read via ${browsed.value.engine}: ${browsed.value.results.map((r) => new URL(r.finalUrl).hostname).join(", ") || "none"}${browsed.value.errors.length ? ` · ${browsed.value.errors.length} failed` : ""}`,
+          durationMs: browsed.ms,
+        });
+      } else {
+        step({ agentId: "system", label: "Browser worker", status: "skipped", summary: "no allowlisted links in this cycle's reads and no watchlist (SWARM_BROWSE_URLS)", durationMs: 0 });
+      }
+    } catch (err) {
+      step({ agentId: "system", label: "Browser worker", status: "error", summary: String(err), durationMs: 0 });
     }
 
     /* 1c3. The Cafe Bar: fold the swarm's own forum into world context so

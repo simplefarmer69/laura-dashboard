@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hostInfo } from "@/lib/ops";
 import { isViewerMode } from "@/lib/viewer/mode";
 import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
@@ -50,6 +51,7 @@ export async function GET() {
       llmProvider: model.provider,
       llmModel: model.modelId,
       x: xStatus(),
+      host: await hostInfo(),
     },
   });
 }

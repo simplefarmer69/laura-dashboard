@@ -76,6 +76,8 @@ is an environment variable you create and hold:
 | `SNAPSHOT_PUBLISH_SECRET` | Pushing snapshots to your public viewer | Shared bearer; same value on both sides |
 | `ROBINHOOD_RPC_URL` | Keyed RPC for on-chain reads | Public RPC used otherwise |
 | `BLOB_READ_WRITE_TOKEN` | Viewer snapshot storage on Vercel | Auto-set by Vercel Blob |
+| `OPERATOR_TOKEN` | Co-pilot routes `/api/ops/*` on the PC daemon | 24+ random chars; routes 404 without it |
+| `SWARM_BROWSER=1` | Chromium engine for the browser worker | Needs `playwright`; falls back to plain fetch |
 
 Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 
@@ -110,6 +112,10 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   15 minute backoff after failure, live re-validation at deploy time.
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.
+- **Browser worker** (`src/lib/swarm/browser.ts`) - reads allowlisted web
+  pages each cycle (Robinhood newsroom, DexScreener, meme-stock quote pages,
+  links from the X pulse) with plain fetch or Chromium via Playwright; read-only,
+  no cookies or logins, and page text is wrapped as untrusted content.
 - **Feeds** (`src/app/api/feeds/`) - public JSON feeds the swarm and anyone
   else can consume: launchpad tape, NFT buys, token pairs, holders, Smart LP,
   Polymarket, ESPN, DefiLlama. Documented in [`FEEDS.md`](./FEEDS.md).
@@ -130,8 +136,12 @@ roadmap), [`BUILDER.md`](./BUILDER.md), [`MINT.md`](./MINT.md),
 ## Autopilot
 
 The console hosts the scheduler in-process: with `npm run dev` or `npm start`
-running, a full cycle fires every N hours (Settings, default 6) and a grade is
-stamped every UTC day. Set `SWARM_AUTOPILOT=0` to turn that off and run the
+running, LAURA works continuously - the next cycle starts after a short rest
+gap (Settings, default 2 minutes) inside a daily LLM-cycle budget, a Cafe Bar
+forum round opens whenever the forum has been quiet for an hour, and a grade
+is stamped every UTC day. For an always-on host see the PC daemon runbook in
+[`docs/DEPLOY.md`](./docs/DEPLOY.md) (PM2, blue/green self-update, watchdog,
+token-gated `/api/ops` co-pilot routes). Set `SWARM_AUTOPILOT=0` to turn that off and run the
 loop separately:
 
 ```bash
@@ -142,7 +152,7 @@ npm run cycle        # one-shot cycle, for cron
 ### Auto-tuning
 
 Once per UTC day the tuner reads the swarm's own operating data and adjusts
-parameters inside hard rails (cycle cadence 2-12h, draft budget 3-8): backlog
+parameters inside hard rails (rest gap 1-30 min, draft budget 3-8): backlog
 pressure shrinks the budget, a clearing queue with high approval grows it,
 falling grades speed the cycle up. Every adjustment is logged to Activity with
 the numbers that justified it. Toggle in Settings.
