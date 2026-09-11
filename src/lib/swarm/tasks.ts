@@ -463,8 +463,10 @@ export const criticSchema = z.object({
       z.object({
         draftId: z.string().max(80),
         verdict: z.enum(["pass", "veto"]),
-        /** For vetoes: the earlier draft it duplicates or the specific defect. */
-        reason: z.string().max(1200),
+        /** For vetoes: the earlier draft it duplicates or the specific defect.
+            Headroom over the prompted length: a 1300-char reason used to fail
+            the whole review and cost a repair call (2026-09-11 err log). */
+        reason: z.string().max(2400),
       }),
     )
     .max(12),
