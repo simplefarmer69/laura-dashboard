@@ -117,8 +117,10 @@ switch_to() {
   local sha="$1" prev; prev="$(current_sha)"
   wait_quiet
   ln -sfn "$RELEASES/$sha" "$CURRENT"
-  log "switched current -> $sha (was $prev); reloading PM2"
-  pm2 startOrReload "$CURRENT/ecosystem.config.cjs" --update-env >>"$LOG" 2>&1 || true
+  log "switched current -> $sha (was $prev); reloading PM2 app laura"
+  # Only the swarm process is reloaded here: this function usually runs inside
+  # the updater app, which must survive to verify health and roll back.
+  pm2 startOrReload "$CURRENT/ecosystem.config.cjs" --only laura --update-env >>"$LOG" 2>&1 || true
   local i; for i in $(seq 1 30); do sleep 4; health_ok && break; done
   if health_ok; then
     log "health OK on $sha"
@@ -127,10 +129,21 @@ switch_to() {
   log "health FAILED on $sha after 120s"
   if [ "$prev" != none ] && [ -d "$RELEASES/$prev" ]; then
     ln -sfn "$RELEASES/$prev" "$CURRENT"
-    pm2 startOrReload "$CURRENT/ecosystem.config.cjs" --update-env >>"$LOG" 2>&1 || true
+    pm2 startOrReload "$CURRENT/ecosystem.config.cjs" --only laura --update-env >>"$LOG" 2>&1 || true
     log "ROLLED BACK to $prev"
   fi
   return 1
+}
+
+# Bring the kit's own PM2 apps onto the new release last. Restarting the
+# updater kills this very process when it runs as laura-updater, so it is the
+# final act of a successful update.
+refresh_kit() {
+  pm2 restart laura-watchdog --update-env >>"$LOG" 2>&1 || true
+  if pm2 describe laura-updater >/dev/null 2>&1; then
+    log "kit refreshed; restarting laura-updater onto $(current_sha)"
+    pm2 restart laura-updater --update-env >>"$LOG" 2>&1 || true
+  fi
 }
 
 prune_releases() {
@@ -172,7 +185,7 @@ cmd_update() {
   if [ "$sha" = "$(current_sha)" ] && [ "$force" != "--force" ]; then return 0; fi
   log "update: $(current_sha) -> $sha"
   ensure_release "$sha" || return 1
-  switch_to "$sha" && prune_releases
+  switch_to "$sha" && prune_releases && refresh_kit
 }
 
 cmd_updater() {
