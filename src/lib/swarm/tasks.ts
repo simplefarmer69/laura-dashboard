@@ -95,11 +95,21 @@ const skillEditSchema = z.object({
 export const STRATEGY_BUDGET_CHARS = 3500;
 export const STRATEGY_SCHEMA_MAX = 6000;
 
+/**
+ * Lesson / notebook entry budget, same shape: the prompt asks for at most
+ * NOTE_TEXT_BUDGET characters, the schema accepts NOTE_TEXT_SCHEMA_MAX so a
+ * long-but-real entry lands instead of failing the whole turn to the mock
+ * (the coach lost a cycle's lessons at 15:36 UTC on 2026-09-11 to a
+ * 1500-char ceiling on one notebook entry).
+ */
+export const NOTE_TEXT_BUDGET = 900;
+export const NOTE_TEXT_SCHEMA_MAX = 3000;
+
 export const proposalsSchema = z.object({
   lessons: z
     .array(
       z.object({
-        text: z.string().min(20).max(1500),
+        text: z.string().min(20).max(NOTE_TEXT_SCHEMA_MAX),
         evidence: z.string().max(1000),
       }),
     )
@@ -109,7 +119,7 @@ export const proposalsSchema = z.object({
     .array(
       z.object({
         topic: z.string().min(3).max(80),
-        text: z.string().min(20).max(1500),
+        text: z.string().min(20).max(NOTE_TEXT_SCHEMA_MAX),
       }),
     )
     .max(2),
@@ -197,7 +207,7 @@ export const chainReadSchema = z.object({
   notebook: z
     .object({
       topic: z.string().min(3).max(120),
-      text: z.string().min(20).max(1500),
+      text: z.string().min(20).max(NOTE_TEXT_SCHEMA_MAX),
     })
     .nullable()
     .optional(),
@@ -212,7 +222,7 @@ export function watcherPrompt(ctx: CycleContext): string {
     `MARKET METRICS (for cross-checking the chain reads)\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}`,
     `ON-CHAIN DIGEST (deterministic reads this cycle — LAURA's own treasury, caps, LP, earnings, pools, floor)\n${ctx.onchain}`,
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.watcher ?? "None."}`,
-    `Produce the chain read: one headline (the most decision-relevant on-chain fact) and 2-5 alerts, each citing a number from the digest. Alert on things other agents can act on THIS cycle: buy windows, LP drift or unclaimed $UP, creator-fee income trends, LAURA-token curve momentum or stalls, pool-depth changes. Flag anomalies (stale snapshot, failed reads, unstaked LP) loudly. notebook: only for durable structural facts, else null.`,
+    `Produce the chain read: one headline (the most decision-relevant on-chain fact) and 2-5 alerts, each citing a number from the digest. Alert on things other agents can act on THIS cycle: buy windows, LP drift or unclaimed $UP, creator-fee income trends, LAURA-token curve momentum or stalls, pool-depth changes. Flag anomalies (stale snapshot, failed reads, unstaked LP) loudly. notebook: only for durable structural facts (each entry at most ${NOTE_TEXT_BUDGET} characters), else null.`,
   ].join("\n\n");
 }
 
@@ -409,7 +419,7 @@ export const researchSchema = z.object({
     .array(
       z.object({
         topic: z.string().min(3).max(120),
-        text: z.string().min(20).max(1500),
+        text: z.string().min(20).max(NOTE_TEXT_SCHEMA_MAX),
       }),
     )
     .max(2),
@@ -431,7 +441,7 @@ export function researcherPrompt(ctx: CycleContext): string {
     `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.researcher ?? "None."}`,
     `LIBRARY (durable build knowledge; the notebook topics listed here are already covered)\n${ctx.library}`,
     `DOCS EXCERPT\n${ctx.docs.slice(0, 3500)}`,
-    `Deep-dive ONE topic the swarm has not covered recently. The topic field is the plain subject itself — no "Deep-dive:" prefix, no date, no template label (labels are added downstream). In whyNow, name the last topics you covered and how this one differs. The memo must ground every claim in the data you were given. Record 1-2 notebook entries of durable fact the library is missing, and give each producer one concrete novel angle in anglesForSwarm.`,
+    `Deep-dive ONE topic the swarm has not covered recently. The topic field is the plain subject itself — no "Deep-dive:" prefix, no date, no template label (labels are added downstream). In whyNow, name the last topics you covered and how this one differs. The memo must ground every claim in the data you were given. Record 1-2 notebook entries of durable fact the library is missing (each at most ${NOTE_TEXT_BUDGET} characters), and give each producer one concrete novel angle in anglesForSwarm.`,
     `READ NEXT (your browser worker): you may list up to 3 full URLs in readNext that the read-only browser should open for you before the next cycle — the page text arrives under BROWSED PAGES in the world feeds. Use it to verify a claim, read a docs page, a competitor's mechanics, a newsroom post, or a quote page. Allowed hosts only: ${allowedHostsForPrompt()}. Never x.com/twitter.com pages. Skip the field if this cycle's inputs already answer your questions.`,
   ].join("\n\n");
 }
@@ -836,7 +846,7 @@ export function coachPrompt(ctx: CycleContext): string {
       return `### ${a.id} (${a.name}, v${a.strategyVersion})\n${statsNote} ${perf}${past ? ` Past versions: ${past}` : ""}\nStrategy (${lengthNote}):\n${a.strategy}\nReviewer decisions:\n${reviewerFeedback(ctx.drafts, a.id)}`;
     })
     .join("\n\n");
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. LENGTH BUDGET: a strategy is an operating brief, not a changelog — the replacement must be at most ${STRATEGY_BUDGET_CHARS} characters (the roster shows each strategy's current length). Never append an "Added in vN" block to an already long strategy; condense what stays, delete what no longer earns its place, and fold the change into the body. A strategy that already carries duplicated paragraphs is your first target: merge them. COVERAGE (operator directive 2026-09-11: every agent evolves, not only the draft producers): the roster shows each agent's version — when an agent is still on v1 after many cycles (watcher, critic, vault, builder, sage, the intel voices) and you hold concrete evidence about its output (skipped strides, vetoes that missed a pattern, Cafe Bar posts that repeat, a launch that pulled no volume), prefer revising THAT agent over a fifth revision of bd or narrative. Mint's evidence is the pad outcome — 24h volume and non-swarm holders of LAURA's own launches versus the MEME-STOCK MARKET currents it could have ridden. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nTODAY\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)} - ${c.detail}`).join("\n")}\n\nOPERATIONAL HEALTH (recent cycles; slow cycles, LLM fallbacks and error steps are problems you own)\n${ctx.opsHealth}\n\nEXISTING SWARM MEMORY\n${lessonsDigest(ctx.lessons)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.coach ?? "None."}\n\nLIBRARY (durable build knowledge; strategies you propose must stay consistent with it)\n${ctx.library}\n\nROSTER\n${roster}\n\nFirst, distil up to three NEW lessons (durable, evidence-backed, not already in memory) about what moves the grade or what reviewers accept. Second, optionally record up to two NOTEBOOK entries: durable reference knowledge (verified mechanics, numbers worth remembering, operator context) as opposed to tactical lessons. Writing an existing notebook topic replaces it — use that to keep facts current. LENGTH BUDGET (hard): each lesson text and each notebook entry text at most ${NOTE_TEXT_BUDGET} characters, evidence at most 600; a lesson is one finding with its proof, not an essay. Third, propose revised strategy text for at most two agents. Return the complete replacement strategy, not a diff. LENGTH BUDGET: a strategy is an operating brief, not a changelog — the replacement must be at most ${STRATEGY_BUDGET_CHARS} characters (the roster shows each strategy's current length). Never append an "Added in vN" block to an already long strategy; condense what stays, delete what no longer earns its place, and fold the change into the body. A strategy that already carries duplicated paragraphs is your first target: merge them. COVERAGE (operator directive 2026-09-11: every agent evolves, not only the draft producers): the roster shows each agent's version — when an agent is still on v1 after many cycles (watcher, critic, vault, builder, sage, the intel voices) and you hold concrete evidence about its output (skipped strides, vetoes that missed a pattern, Cafe Bar posts that repeat, a launch that pulled no volume), prefer revising THAT agent over a fifth revision of bd or narrative. Mint's evidence is the pad outcome — 24h volume and non-swarm holders of LAURA's own launches versus the MEME-STOCK MARKET currents it could have ridden. Never remove factual grounding, risk framing or charter compliance. Fourth, optionally return ONE skillEdit to create or replace a skill file in /library/skills — use it when an operating procedure (not a strategy) has proven wrong, missing or stale: the full replacement body ships to every listed agent's prompts from the next cycle. Reuse an existing skill name to update it; only edit a skill when you have concrete evidence its current text misleads, and keep every verified fact it contains. Otherwise return skillEdit: null.`;
 }
 
 /* ---------------------------------- Sage ----------------------------------- */
@@ -889,7 +899,7 @@ export const sageSchema = z.object({
     .array(
       z.object({
         topic: z.string().min(3).max(120),
-        text: z.string().min(20).max(1500),
+        text: z.string().min(20).max(NOTE_TEXT_SCHEMA_MAX),
       }),
     )
     .max(2),
@@ -958,7 +968,7 @@ export function sagePrompt(ctx: CycleContext, inputs: SageInputs): string {
     `LIBRARY (what every agent already receives; your ledger ${SAGE_LEDGER_FILE} is part of it)\n${ctx.library}`,
     `CURRENT LEDGER TEXT (${SAGE_LEDGER_FILE}, verbatim; libraryEdit bodies for this file must keep its structure and existing entries. The digest carries roughly the doc's first 3,000 chars to every agent, so the insight section leads the doc and newest entries lead the section)\n${inputs.ledger || "The ledger does not exist yet; create it."}`,
     sagePassBlock(inputs),
-    `WRITE CHANNELS, HARD RULES: your only levers are libraryEdit (numbered .md docs in /library; the operator docs 10-operator.md and 20-project.md are denied in code), skillEdit (/library/skills, 18 file cap, full replacement), and notebook entries. You never touch code, caps, guards, executor logic or safety machinery, and you never propose doing so. Whatever you write becomes prompt context for every agent next cycle, so write instructions an agent can act on, with evidence, not observations. STYLE: plain sentences with commas, colons and periods; never an em dash, never a dash-spliced clause; "onchain" not "on-chain" in prose. The title is a real headline stating the finding, never a template label.`,
+    `WRITE CHANNELS, HARD RULES: your only levers are libraryEdit (numbered .md docs in /library; the operator docs 10-operator.md and 20-project.md are denied in code), skillEdit (/library/skills, 18 file cap, full replacement), and notebook entries (each at most ${NOTE_TEXT_BUDGET} characters). You never touch code, caps, guards, executor logic or safety machinery, and you never propose doing so. Whatever you write becomes prompt context for every agent next cycle, so write instructions an agent can act on, with evidence, not observations. STYLE: plain sentences with commas, colons and periods; never an em dash, never a dash-spliced clause; "onchain" not "on-chain" in prose. The title is a real headline stating the finding, never a template label.`,
   ].join("\n\n");
 }
 
