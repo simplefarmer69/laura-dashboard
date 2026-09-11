@@ -383,6 +383,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       world: worldText,
       onchain: onchainText,
       cycleSeq: state.runs.length,
+      llmProvider: resolved.provider,
     };
 
     /* 1d. Watcher: interprets the on-chain digest into a headline + alerts
