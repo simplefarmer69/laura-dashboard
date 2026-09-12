@@ -54,6 +54,40 @@ export const X_TRACKED: { username: string; id: string | null }[] = [
   { username: "OxSimpleFarmer", id: "1394725411397976072" },
 ];
 
+/**
+ * Crypto KOLs and companies the swarm watches (operator directive 2026-09-12:
+ * "allow the swarm access to more strong crypto x accounts too including
+ * companies and kols like ansem"). One recent-search query covers the set —
+ * no per-account timeline calls, so this does not burn the rate budget the
+ * operator + founder timelines already spend. Handles only: recent-search
+ * matches `from:`; ids are resolved from the response includes.
+ */
+export const X_WATCH: { username: string; label: string }[] = [
+  { username: "blknoiz06", label: "Ansem" },
+  { username: "cobie", label: "Cobie" },
+  { username: "CryptoHayes", label: "Arthur Hayes" },
+  { username: "zhusu", label: "Zhu Su" },
+  { username: "Pentosh1", label: "Pentoshi" },
+  { username: "loomdart", label: "Loomdart" },
+  { username: "Inversebrah", label: "Inversebrah" },
+  { username: "HsakaTrades", label: "Hsaka" },
+  { username: "vitalikbuterin", label: "Vitalik" },
+  { username: "sassal0x", label: "sassal.eth" },
+  { username: "Uniswap", label: "Uniswap" },
+  { username: "phantom", label: "Phantom" },
+  { username: "Coinbase", label: "Coinbase" },
+  { username: "binance", label: "Binance" },
+  { username: "solana", label: "Solana" },
+  { username: "TheBlock__", label: "The Block" },
+  { username: "CoinDesk", label: "CoinDesk" },
+  { username: "DefiLlama", label: "DefiLlama" },
+  { username: "a16zcrypto", label: "a16z crypto" },
+  { username: "paradigm", label: "Paradigm" },
+];
+
+const X_WATCH_QUERY =
+  `(${X_WATCH.map((a) => `from:${a.username}`).join(" OR ")}) -is:retweet -is:reply lang:en`;
+
 const X_SEARCH_QUERY = "$STONKBROKER OR StonkBrokers OR stonkbrokers.cash";
 
 /**
@@ -94,6 +128,7 @@ declare global {
         search?: Cache<{ count: number; engagement: number; top: IntelTweet[] }>;
         leaders?: Cache<XIntel["leaders"]>;
         tracked?: Cache<NonNullable<XIntel["tracked"]>>;
+        watch?: Cache<IntelTweet[]>;
         catalysts?: Cache<IntelTweet[]>;
         pulse?: Cache<IntelTweet[]>;
         memeMarket?: Cache<MemeMarketIntel>;
@@ -126,6 +161,7 @@ const RADAR_TTL_MS = 15 * 60_000;
    seven search calls plus the boosts batch at ~10 keyless calls/hour. */
 const MEME_MARKET_TTL_MS = 60 * 60_000;
 const PULSE_TTL_MS = 60 * 60_000;
+const WATCH_TTL_MS = 30 * 60_000;
 /** DefiLlama refreshes roughly hourly; the Smart LP lens read is one eth_call. */
 const TVL_TTL_MS = 10 * 60_000;
 const BROKERTOOLS_TTL_MS = 10 * 60_000;
@@ -168,13 +204,33 @@ function toIntelTweet(t: XApiTweet, author?: string): IntelTweet {
   return {
     id: t.id,
     author: author ?? t.author_id ?? "?",
-    createdAt: t.created_at ?? "",
+    createdAt: t.created_at ?? snowflakeIso(t.id) ?? "",
     text: t.text.replace(/\s+/g, " ").slice(0, 240),
     likes: m.like_count ?? 0,
     retweets: m.retweet_count ?? 0,
     replies: m.reply_count ?? 0,
     impressions: m.impression_count ?? 0,
   };
+}
+
+/** Twitter snowflake epoch (ms). Tweet ids encode their created-at; used when the API omits created_at. */
+const SNOWFLAKE_EPOCH_MS = 1288834974657n;
+
+function snowflakeIso(id: string): string | null {
+  try {
+    const ms = Number((BigInt(id) >> 22n) + SNOWFLAKE_EPOCH_MS);
+    if (!Number.isFinite(ms) || ms < 1_000_000_000_000) return null;
+    return new Date(ms).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function tweetPostedAt(t: { id?: string; createdAt?: string }): Date | null {
+  const raw = t.createdAt && t.createdAt.length > 0 ? t.createdAt : t.id ? snowflakeIso(t.id) : null;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isFinite(d.getTime()) ? d : null;
 }
 
 function engagementOf(t: IntelTweet): number {
@@ -287,6 +343,41 @@ async function fetchXCatalysts(): Promise<IntelTweet[]> {
   const byAuthor = new Map<string, string>(X_LEADERS.map((l) => [l.id, l.username]));
   const value = (json.data ?? []).map((t) => toIntelTweet(t, byAuthor.get(t.author_id ?? "")));
   c.catalysts = { at: Date.now(), value };
+  return value;
+}
+
+/** Latest originals from the KOL + company watchlist (one recent-search call). */
+async function fetchXWatch(): Promise<IntelTweet[]> {
+  const c = caches();
+  if (c.watch && Date.now() - c.watch.at < WATCH_TTL_MS) return c.watch.value;
+  const token = bearer();
+  if (!token) throw new Error("X_BEARER_TOKEN not set");
+  const url =
+    `https://api.x.com/2/tweets/search/recent?query=${encodeURIComponent(X_WATCH_QUERY)}` +
+    `&max_results=50&tweet.fields=public_metrics,created_at,author_id` +
+    `&expansions=author_id&user.fields=username`;
+  const json = await getJson<{
+    data?: XApiTweet[];
+    includes?: { users?: Array<{ id: string; username: string }> };
+  }>(url, { authorization: `Bearer ${token}` });
+  const byId = new Map((json.includes?.users ?? []).map((u) => [u.id, u.username]));
+  const labelByUser = new Map(X_WATCH.map((a) => [a.username.toLowerCase(), a.label]));
+  const tweets = (json.data ?? []).map((t) => {
+    const handle = byId.get(t.author_id ?? "") ?? t.author_id ?? "?";
+    const label = labelByUser.get(handle.toLowerCase());
+    return toIntelTweet(t, label ? `${handle} (${label})` : handle);
+  });
+  /* Newest first, one per author, so a single loud account cannot fill the slot. */
+  const seen = new Set<string>();
+  const value: IntelTweet[] = [];
+  for (const t of [...tweets].sort((a, b) => (tweetPostedAt(b)?.getTime() ?? 0) - (tweetPostedAt(a)?.getTime() ?? 0))) {
+    const key = t.author.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    value.push(t);
+    if (value.length >= 8) break;
+  }
+  c.watch = { at: Date.now(), value };
   return value;
 }
 
@@ -766,11 +857,12 @@ export async function collectIntel(
   settings: Settings,
   prev: IntelSnapshot | null,
 ): Promise<IntelSnapshot> {
-  const [search, leaders, tracked, catalysts, eth, chain, radar, tvl, brokerTools, pulse, memeMarket] =
+  const [search, leaders, tracked, watch, catalysts, eth, chain, radar, tvl, brokerTools, pulse, memeMarket] =
     await Promise.allSettled([
       fetchXMentions(),
       fetchXLeaders(),
       fetchXTracked(),
+      fetchXWatch(),
       fetchXCatalysts(),
       fetchEth(),
       fetchBlockscout(settings),
@@ -815,6 +907,9 @@ export async function collectIntel(
   } else {
     warnings.push(`X tracked timelines: ${String(tracked.reason)}`);
   }
+  const watchOk = watch.status === "fulfilled";
+  if (watchOk) sources.push("x-watch");
+  else warnings.push(`X watch (KOLs/companies): ${String(watch.reason)}`);
   const catalystsOk = catalysts.status === "fulfilled";
   if (catalystsOk) sources.push("x-catalysts");
   else warnings.push(`X catalyst search: ${String(catalysts.reason)}`);
@@ -830,6 +925,7 @@ export async function collectIntel(
       topMentions: searchOk ? search.value.top : (prev?.x?.topMentions ?? []),
       leaders: leadersOk ? leaders.value : (prev?.x?.leaders ?? []),
       tracked: trackedOk ? tracked.value : (prev?.x?.tracked ?? []),
+      watch: watchOk ? watch.value : (prev?.x?.watch ?? []),
       catalysts: catalystsOk ? catalysts.value : (prev?.x?.catalysts ?? []),
       pulse: pulseOk ? pulse.value : (prev?.x?.pulse ?? []),
       note: xNotes.join("; "),
@@ -904,11 +1000,27 @@ export async function collectIntel(
   };
 }
 
-function ago(ts: string): string {
-  const ms = Date.now() - new Date(ts).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "";
+function utcStamp(d: Date): string {
+  return d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+}
+
+/**
+ * Live relative age PLUS a frozen UTC stamp. Cafe Bar thread titles were
+ * baking "an hour ago" into the title at pour time (Vlad's veto tweet,
+ * 2026-09-11 20:26 UTC, still titled "an hour ago" 17h later). Agents then
+ * treated the title as current. The UTC stamp is the durable clock; the
+ * relative clause is recomputed every render.
+ */
+function ago(ts: string, id?: string): string {
+  const posted = tweetPostedAt({ id, createdAt: ts });
+  if (!posted) return "time unknown";
+  const ms = Date.now() - posted.getTime();
+  if (!Number.isFinite(ms)) return utcStamp(posted);
+  const abs = utcStamp(posted);
+  if (ms < 0) return `just now · ${abs}`;
   const h = ms / 3_600_000;
-  return h < 1 ? `${Math.max(1, Math.round(ms / 60_000))}m ago` : h < 48 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`;
+  const rel = h < 1 ? `${Math.max(1, Math.round(ms / 60_000))}m ago` : h < 48 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`;
+  return `${rel} · ${abs}`;
 }
 
 function ageOfMs(ts: number | null): string {
@@ -1029,7 +1141,7 @@ export function memePulseDigest(x: XIntel | null | undefined): string {
   if (posts.length === 0) return "";
   const lines = ["X MEME-STOCK PULSE (top-engaged retail posts on meme stocks / stock tokens, last 24h — ride a live narrative, never quote or impersonate):"];
   for (const t of posts.slice(0, 5)) {
-    lines.push(`- (${engagementOf(t)} eng, ${ago(t.createdAt)}): "${t.text.replace(/\s+/g, " ").slice(0, 150)}"`);
+    lines.push(`- (${engagementOf(t)} eng, ${ago(t.createdAt, t.id)}): "${t.text.replace(/\s+/g, " ").slice(0, 150)}"`);
   }
   return lines.join("\n");
 }
@@ -1044,14 +1156,16 @@ export function memePulseDigest(x: XIntel | null | undefined): string {
  */
 export function intelDigest(current: IntelSnapshot | null, history: IntelSnapshot[]): string {
   if (!current) return "Live internet intel unavailable this cycle (all fetchers failed).";
-  const lines: string[] = [];
+  const lines: string[] = [
+    `WIRE CLOCK: now ${utcStamp(new Date())}. Relative ages below ("3h ago") are computed NOW from each tweet's UTC stamp, not from when the snapshot was fetched. A Cafe Bar title that says "an hour ago" is the age at pour time — it is frozen and is NOT current.`,
+  ];
   const dayAgo = current.ts - 24 * 3600 * 1000;
   const prior = [...history].reverse().find((s) => s.ts <= dayAgo && s.x);
 
   if (current.x?.catalysts?.length) {
     for (const t of current.x.catalysts.slice(0, 2)) {
       lines.push(
-        `PRIORITY CATALYST — @${t.author} (Robinhood founder) on operator accounts / stock tokens (${ago(t.createdAt)}, ${t.likes} likes): "${t.text.slice(0, 180)}" — amplify this NOW; it outranks every other angle this cycle.`,
+        `PRIORITY CATALYST — @${t.author} (Robinhood founder) on operator accounts / stock tokens (${ago(t.createdAt, t.id)}, ${t.likes} likes): "${t.text.slice(0, 180)}" — amplify this NOW; it outranks every other angle this cycle.`,
       );
     }
   }
@@ -1064,21 +1178,27 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
       `X mentions of $STONKBROKER/StonkBrokers last 24h: ${current.x.mentionCount24h} tweets, ${current.x.engagement24h} total engagements (likes+RTs+replies)${trend}. [${current.x.note}]`,
     );
     for (const t of current.x.topMentions.slice(0, 2)) {
-      lines.push(`- Top mention (${engagementOf(t)} eng, ${ago(t.createdAt)}): "${t.text.slice(0, 160)}"`);
+      lines.push(`- Top mention (${engagementOf(t)} eng, ${ago(t.createdAt, t.id)}): "${t.text.slice(0, 160)}"`);
     }
     for (const leader of current.x.leaders) {
       const t = leader.tweets[0];
       if (!t) continue;
       lines.push(
-        `- @${leader.username} latest (${ago(t.createdAt)}, ${t.likes} likes, ${t.impressions.toLocaleString()} impressions): "${t.text.slice(0, 180)}"`,
+        `- @${leader.username} latest (${ago(t.createdAt, t.id)}, ${t.likes} likes, ${t.impressions.toLocaleString()} impressions): "${t.text.slice(0, 180)}"`,
       );
     }
     for (const acct of current.x.tracked ?? []) {
       const t = acct.tweets[0];
       if (!t) continue;
       lines.push(
-        `- Operator account @${acct.username} latest (${ago(t.createdAt)}, ${t.likes} likes): "${t.text.slice(0, 160)}" — align messaging with and amplify operator accounts.`,
+        `- Operator account @${acct.username} latest (${ago(t.createdAt, t.id)}, ${t.likes} likes): "${t.text.slice(0, 160)}" — align messaging with and amplify operator accounts.`,
       );
+    }
+    if (current.x.watch?.length) {
+      lines.push("X WATCH (crypto KOLs + companies — latest original per handle, last 7d):");
+      for (const t of current.x.watch.slice(0, 8)) {
+        lines.push(`- @${t.author} (${ago(t.createdAt, t.id)}, ${t.likes} likes): "${t.text.slice(0, 160)}"`);
+      }
     }
   } else {
     lines.push("X reads unavailable this cycle (rate-limited or blocked) — do not invent tweet content.");

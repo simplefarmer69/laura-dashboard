@@ -69,6 +69,8 @@ export interface XIntel {
   leaders: { username: string; tweets: IntelTweet[] }[];
   /** Latest tweets from operator-owned accounts (ClutchMarkets, personal). Optional: absent on pre-tracking snapshots. */
   tracked?: { username: string; tweets: IntelTweet[] }[];
+  /** Latest originals from the crypto KOL + company watchlist (Ansem, Cobie, Uniswap…). Optional: absent on older snapshots. */
+  watch?: IntelTweet[];
   /** Founder tweets engaging operator accounts or stock-token themes — the operator's #1 catalyst. Optional: absent on pre-tracking snapshots. */
   catalysts?: IntelTweet[];
   /** Top engaged meme-stock / stock-token conversation on X in the last 24h (retail mood, not about us). Optional: absent on older snapshots. */
