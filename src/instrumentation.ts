@@ -16,6 +16,7 @@ export async function register(): Promise<void> {
     console.log("[laura] viewer mode: bots and autopilot stay off — read-only deployment");
     return;
   }
+  if (process.env.LAURA_DAEMON === "1") await makeEnvFileAuthoritative();
   const { startBots } = await import("@/lib/chat/bots");
   startBots();
   await installGracefulShutdown();
@@ -61,4 +62,38 @@ async function installGracefulShutdown(): Promise<void> {
   };
   process.once("SIGTERM", onSignal);
   process.once("SIGINT", onSignal);
+}
+
+/**
+ * Under the PM2 daemon, shared/.env.local is the documented source of truth
+ * for secrets. Next only fills variables the process did NOT inherit, and PM2
+ * pins whatever shell environment was present when the app was first started
+ * — on 2026-09-12 that inherited environment held older X_API_KEY and
+ * ANTHROPIC_API_KEY values, so key rotations written to the file never reached
+ * the running daemon. Here the file wins for every key it defines with a
+ * non-empty value; only key names are logged, never values.
+ */
+async function makeEnvFileAuthoritative(): Promise<void> {
+  const { readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const file = path.join(process.cwd(), ".env.local");
+  let raw: string;
+  try {
+    raw = await readFile(file, "utf8");
+  } catch {
+    return;
+  }
+  const overridden: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m) continue;
+    let value = m[2].trim();
+    if (/^(['"]).*\1$/.test(value)) value = value.slice(1, -1);
+    if (!value) continue;
+    if (process.env[m[1]] !== value) {
+      if (process.env[m[1]] !== undefined) overridden.push(m[1]);
+      process.env[m[1]] = value;
+    }
+  }
+  if (overridden.length) console.log(`[laura] env: .env.local is authoritative under the daemon; replaced inherited ${overridden.join(", ")}`);
 }

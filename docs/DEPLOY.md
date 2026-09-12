@@ -103,6 +103,12 @@ What runs under PM2 afterwards:
 Layout: `~/laura/{repo,releases/<sha>,current,data,shared/.env.local}`. Data and
 secrets never live inside a release, so a bad build can never touch state.
 
+`shared/.env.local` is authoritative under the daemon: at boot
+(`src/instrumentation.ts`) every non-empty key in the file replaces whatever the
+process inherited from PM2's pinned shell environment, so a key rotated in the
+file reaches the running app on the next restart (`touch data/ops/restart.requested`)
+without `pm2 --update-env` gymnastics. Only key names are logged.
+
 **Live status (2026-09-11):** the kit itself is what runs LAURA on the Cursor VM
 now — `LAURA_HOME=/home/ubuntu/laura`, `data` symlinked to the single live
 `/workspace/data`, the three PM2 apps above, `OPERATOR_TOKEN` set. The old
