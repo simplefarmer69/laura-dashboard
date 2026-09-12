@@ -539,6 +539,8 @@ export type SwarmEventKind =
   | "skill.updated"
   /** Sage rewrote or created one library doc through the allowlisted write path. */
   | "library.updated"
+  /** LAURA answered someone who tagged @LAURA_DAIO on X with a question. */
+  | "x.replied"
   | "swarm.health"
   | "error";
 

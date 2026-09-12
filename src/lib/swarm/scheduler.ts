@@ -10,6 +10,7 @@ import { runTreasuryTick } from "@/lib/launchpad/treasury";
 import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { runBuilderTick } from "@/lib/builder/executor";
 import { runXPublishTick } from "@/lib/publish/auto";
+import { runXMentionsTick } from "@/lib/publish/mentions";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import { clearFlag, flagPending, RESTART_FLAG } from "@/lib/ops";
@@ -298,6 +299,14 @@ async function tick(): Promise<void> {
     await runXPublishTick(state);
   } catch (err) {
     log(`x auto-publish tick failed: ${String(err)}`);
+  }
+
+  /* Inbound: people who tag @LAURA_DAIO with a question get one answer,
+     inside the mentions rail's own caps. Polls every 10 minutes. */
+  try {
+    await runXMentionsTick(state);
+  } catch (err) {
+    log(`x mentions tick failed: ${String(err)}`);
   }
 
   /* Daily grade first: with back-to-back cycles the "nothing due" branch

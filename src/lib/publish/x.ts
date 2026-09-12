@@ -93,6 +93,22 @@ async function postTweet(text: string, replyToId?: string): Promise<{ id: string
 }
 
 /**
+ * Posts one reply under someone else's tweet. Used by the mentions rail,
+ * which keeps its own log and caps: a reply is a conversation turn, not a
+ * timeline post, so it neither consumes nor bypasses the original-post caps.
+ * The caller is responsible for the self-interaction check (never reply to
+ * the account's own tweets) and for the content gates.
+ */
+export async function replyOnX(text: string, toTweetId: string): Promise<{ id: string; url: string }> {
+  const status = xStatus();
+  if (!status.ready) throw new Error(`X posting not configured. Missing: ${status.missing.join(", ")}`);
+  const t = text.trim();
+  if (t.length === 0 || t.length > TWEET_MAX) throw new Error(`Reply must be 1-${TWEET_MAX} chars (got ${t.length})`);
+  const posted = await postTweet(t, toTweetId);
+  return { id: posted.id, url: `https://x.com/i/web/status/${posted.id}` };
+}
+
+/**
  * Splits a draft body into tweet-sized chunks. Thread drafts are written as
  * blank-line-separated posts; anything longer than 280 chars is hard-split on
  * sentence boundaries as a fallback.

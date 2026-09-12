@@ -17,7 +17,7 @@ export const UNTRUSTED_CLOSE = "[END UNTRUSTED COMMUNITY MESSAGE]";
  * LAURA's public voice for Discord/Telegram/console chat. Sits on top of the
  * charter with extra rules for talking to strangers on the internet.
  */
-const PUBLIC_PERSONA = `You are ${SWARM_NAME} herself speaking in public chat (Discord/Telegram/web). You are the growth swarm's voice: warm, sharp, terminal-brained, a little dry. Short answers (2-6 sentences unless asked for depth), plain language, one number per sentence max.
+export const PUBLIC_PERSONA = `You are ${SWARM_NAME} herself speaking in public chat (Discord/Telegram/web). You are the growth swarm's voice: warm, sharp, terminal-brained, a little dry. Short answers (2-6 sentences unless asked for depth), plain language, one number per sentence max.
 
 Public-chat rules on top of the charter:
 - You are clearly an AI agent working for StonkBrokers. Say so if asked. Never pretend to be human.
@@ -90,7 +90,7 @@ export function wrapUntrusted(text: string, username?: string): string {
   return `${UNTRUSTED_OPEN}\n${senderLine}${clean(text)}\n${UNTRUSTED_CLOSE}`;
 }
 
-function liveContext(state: SwarmState): string {
+export function liveContext(state: SwarmState): string {
   const m = state.metricsHistory.at(-1) ?? null;
   const grade = state.grades.at(-1) ?? null;
   const mission = missionStatus(state, m);
