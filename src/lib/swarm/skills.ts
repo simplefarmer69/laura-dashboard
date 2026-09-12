@@ -100,6 +100,16 @@ export async function skillsIndex(): Promise<string> {
   return skills.map((s) => `- ${s.name} (${s.agents.join(", ")}): ${s.description}`).join("\n");
 }
 
+/** When the overlay copy of a skill was last written (ms), or null when only the repo seed exists. */
+export async function skillUpdatedAt(name: string): Promise<number | null> {
+  try {
+    const st = await fs.stat(path.join(OVERLAY_SKILLS_DIR, `${slugify(name)}.md`));
+    return st.mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 /* ------------------------- Self-editing (coach) ---------------------------- */
 
 /** Hard cap on skill files so self-editing can grow the library but never flood it.

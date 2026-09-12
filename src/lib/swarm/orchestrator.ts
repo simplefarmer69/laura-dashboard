@@ -69,6 +69,7 @@ import { recentXPosts } from "@/lib/publish/x-guard";
 import { recentXPostsDigest } from "@/lib/publish/x-style";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
+import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
@@ -1231,6 +1232,18 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         summary: `${out.value.value.lessons.length} lesson(s), ${run.proposalsCreated} proposal(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : " awaiting review"}${out.value.usedMock ? " (fallback)" : ""}${overBudgetDropped.length ? ` · dropped over-budget revision for ${overBudgetDropped.join(", ")}` : ""}`,
         durationMs: out.ms,
       });
+    }
+
+    /* 5a. X voice study (strided ~6h, coach): rereads the reference account
+       and LAURA's measured posts and rewrites the x-voice skill that every
+       X-post producer and the critic inject. Null when not due. */
+    if (coach.status !== "paused") {
+      const voice = await runXVoiceStudy({ state, resolved, coach, today: ctx.grade.date, runId: run.id });
+      if (voice) {
+        tally({ usedMock: voice.usedMock, repaired: voice.repaired });
+        step({ agentId: "coach", label: "X voice study", status: voice.status, summary: voice.summary, durationMs: voice.durationMs });
+        await saveState(state);
+      }
     }
 
     /* 5b. Forge: coverage-first agent upgrades. The coach chases this cycle's
