@@ -83,6 +83,9 @@ export const X_WATCH: { username: string; label: string }[] = [
   { username: "DefiLlama", label: "DefiLlama" },
   { username: "a16zcrypto", label: "a16z crypto" },
   { username: "paradigm", label: "Paradigm" },
+  /* Style reference for Quill's X posts (operator directive 2026-09-12): the
+     best-known AI agent voice on crypto X, all single posts, no threads. */
+  { username: "aixbt_agent", label: "aixbt (AI agent)" },
 ];
 
 const X_WATCH_QUERY =

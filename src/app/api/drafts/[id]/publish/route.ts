@@ -3,6 +3,7 @@ import { isViewerMode, viewerForbidden } from "@/lib/viewer/mode";
 import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
 import { dryRunToX, publishToX, xStatus } from "@/lib/publish/x";
 import { checkXGuards } from "@/lib/publish/x-guard";
+import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,21 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]
       { status: 409 },
     );
 
+  /* Single posts only (operator directive 2026-09-12): threads are retired on
+     X, and the same sanitizer the autonomous rail uses strips banned
+     openers/sign-offs so the operator button cannot post what the rail would
+     not. */
+  if (draft.kind === "thread")
+    return NextResponse.json(
+      { error: "Threads are retired on X; only single posts (kind \"post\", at most 280 characters) publish." },
+      { status: 409 },
+    );
+  const text = sanitizeXPost(draft.body).text;
+  if (text.length > TWEET_MAX)
+    return NextResponse.json({ error: `Post is ${text.length} characters; the limit is ${TWEET_MAX}.` }, { status: 409 });
+
   if (req.nextUrl.searchParams.get("dry")) {
-    const result = await dryRunToX(draft.body, draft.kind === "thread");
+    const result = await dryRunToX(text, false);
     return NextResponse.json({ dryRun: true, draftId: draft.id, ...result });
   }
 
@@ -41,7 +55,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]
   /* Shared-account guards (rate caps, duplicate memory, self-interaction) are
      checked here first so a refused click returns 429 without logging an error
      event; publishToX re-checks as defense in depth. */
-  const guard = await checkXGuards(draft.body);
+  const guard = await checkXGuards(text);
   if (!guard.ok)
     return NextResponse.json(
       { error: `X guard refused the post: ${guard.reasons.join("; ")}`, guard },
@@ -49,7 +63,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]
     );
 
   try {
-    const result = await publishToX(draft.body, draft.kind === "thread");
+    const result = await publishToX(text, false);
     const updated = await updateState((s) => {
       const d = s.drafts.find((x) => x.id === id);
       if (!d) return null;

@@ -17,6 +17,7 @@ import { ART_PALETTES, launchSpecShape, RESERVED_LAUNCH_NEEDLES } from "@/lib/la
 import type { GridToken } from "@/lib/launchpad/service";
 import { ART_MOTIFS, ART_STYLES } from "@/lib/launchpad/art";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
+import { TWEET_MAX, X_STYLE_GUIDE } from "@/lib/publish/x-style";
 import {
   briefDigest,
   gradeDigest,
@@ -40,7 +41,7 @@ export const briefSchema = z.object({
 });
 
 export const draftSchema = z.object({
-  kind: z.enum(["thread", "article", "community", "outreach", "report", "video-script"]),
+  kind: z.enum(["post", "thread", "article", "community", "outreach", "report", "video-script"]),
   channel: z.string().max(100),
   title: z.string().max(300),
   body: z.string().max(20000),
@@ -186,6 +187,8 @@ export interface CycleContext {
   cycleSeq: number;
   /** Provider actually serving this cycle; mocks behave differently when a real model failed */
   llmProvider: LlmProvider;
+  /** What the account already posted on X (newest first) so producers never echo it */
+  xPosted: string;
 }
 
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
@@ -277,15 +280,32 @@ export function scoutMock(ctx: CycleContext): BriefOut {
 /* ---------------------------- Content producers --------------------------- */
 
 const KIND_BY_AGENT: Record<string, DraftKind[]> = {
-  narrative: ["thread", "article"],
+  narrative: ["post", "article"],
   steward: ["community"],
   bd: ["outreach"],
   analyst: ["report"],
-  growth: ["thread"],
+  growth: ["post"],
 };
 
+/**
+ * The X-post brief for producers whose kinds include "post". Sits after the
+ * generic rules so it overrides them where they conflict (a post is not a
+ * thread; a post has no title-style opener; a post is judged against the
+ * account's own timeline, not only against drafts).
+ */
+function xPostBrief(ctx: CycleContext): string {
+  return [
+    `THE "post" KIND IS ONE X POST. Body: the exact text to publish, at most ${TWEET_MAX} characters, nothing else. No numbering, no title inside the body, no second section. The X rail refuses threads outright and the Auditor reads every post against the account's timeline before it goes out; a template or a repeat is vetoed and costs your turn.`,
+    X_STYLE_GUIDE,
+    `IF YOUR STRATEGY TEXT says to write a thread of several posts, to number posts, to label content "official StonkBrokers content", to open with a mechanic explainer, or to close with a docs link or a fixed disclaimer, those instructions are obsolete as of 2026-09-12 and are overridden here. Write one post a person would post.`,
+    `WHAT TO POST ABOUT (pick the single sharpest thing in this cycle's inputs): a concrete Robinhood Chain event from LIVE INTERNET INTEL or WORLD FEEDS (a launch, a liquidity move, a stock-token number, what Vlad or Johann just said and what it means for the chain); something LAURA's own wallet did or is doing in ON-CHAIN STATE, stated with the number; or the best line from THE CAFE BAR debate in WORLD FEEDS, quoted with the agent's name. The account's readers want alpha on the chain, not a lesson.`,
+    `ALREADY ON THE ACCOUNT'S TIMELINE (newest first). Your post must not share an opening, a closing, a phrase, a statistic or a theme with any of these:\n${ctx.xPosted}`,
+    `The title field of a "post" draft is a short internal label for the dashboard (not published). The rationale names the input the post came from and, in one clause, what makes it unlike every post on the timeline above.`,
+  ].join("\n\n");
+}
+
 export function producerPrompt(agent: Agent, ctx: CycleContext): string {
-  const kinds = KIND_BY_AGENT[agent.id] ?? ["thread"];
+  const kinds = KIND_BY_AGENT[agent.id] ?? ["post"];
   return [
     `TODAY (UTC): ${ctx.grade.date}. Use this date; never invent another.`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
@@ -308,10 +328,11 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `WHAT THE REST OF THE SWARM COVERED RECENTLY (differentiate from these too — the critic vetoes cross-agent repeats)\n${swarmCoverageDigest(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
     `ASSIGNED LANE THIS CYCLE (context partitioning — the whole swarm reads the same data, so lanes are what keep outputs from converging; work YOUR lane, not the hook everyone else will pick)\n${laneAssignment(agent.id, ctx.cycleSeq)}`,
-    `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever.`,
+    `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever. A "post" draft's channel is always "X".`,
     `STYLE, HARD RULE: never use an em dash or a dash-spliced clause anywhere in a draft. Restructure into separate sentences, commas or colons. Prefer "onchain" over "on-chain" in prose; hyphenate only when grammar genuinely requires it. The slop-free-writing skill has the full pattern list; this rule is absolute.`,
     `TITLES ARE HEADLINES: the title is the headline a human reads, nothing else. Never start a title with meta-words or template labels ("DRAFT", "Draft:", "Deep-dive:"), never lead with a date, and never mark output as a draft awaiting approval — review is the pipeline's job and the charter grants full autonomy. If your strategy text tells you to mark work "DRAFT" or to put the date first in the title, that instruction is obsolete: ignore it and write a real headline.`,
     `ANTI-REPETITION RULE: generate output semantically distinct from all previous outputs — yours and the swarm's. Your new drafts must differ from every item in YOUR OWN RECENT OUTPUT *and* in WHAT THE REST OF THE SWARM COVERED in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). FORMAT BREAK: if your last two outputs share one template (e.g. two "Delta note" or "Desk note" artifacts), you MUST change format this cycle — your assigned lane tells you which one to use. THE SHARED HOOK IS BURNED: whatever single statistic or narrative dominates this cycle's metrics/brief, assume at least two other agents lead with it — if your draft opens on it, find a different door in. Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs and from other agents' recent work.`,
+    ...(kinds.includes("post") ? [xPostBrief(ctx)] : []),
   ].join("\n\n");
 }
 
@@ -324,17 +345,10 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
       return {
         drafts: [
           {
-            kind: "thread",
+            kind: "post",
             channel: "X",
-            title: "How a StonkBroker turns fees into stock",
-            body: [
-              `1/ Every StonkBroker NFT on Robinhood Chain owns a wallet (ERC-6551). Activate it and it becomes eligible for stock-token drops funded by protocol fees. Here is the loop, with today's numbers.`,
-              `2/ Anvil NFT AMM: swap 666,666 $STONKBROKER + an ETH fee for the next broker in the vault, or snipe an exact # for a higher fee. 70% of that ETH fee goes to the Stock Booster pot, 30% to the protocol.`,
-              `3/ Activation is paid in $STONKBROKER, tiered by broker. 50% of every activation fee is burned. Selling or transferring clears activation, so the new owner reactivates.`,
-              `4/ When the pot fills, any wallet can Clock In. The round's ETH swaps into the configured stock token (TSLA, NVDA, AMZN...) and airdrops to activated brokers, weighted by tier.`,
-              `5/ Last 24h: protocol fees ${usd(m.protocolFees24hUsd)}, protocol revenue ${usd(m.protocolRevenue24hUsd)}, protocol volume ${usd(m.protocolVolume24hUsd)}. Source: DefiLlama.`,
-              `6/ These are smart-contract distributions funded by fees, not dividends or equity. Stock-token features are unavailable in the US. Docs: stonkbrokers.cash/docs`,
-            ].join("\n\n"),
+            title: "Fees to stock loop, with today's number",
+            body: `protocol fees on the StonkBrokers floor ran ${usd(m.protocolFees24hUsd)} over the last 24h (DefiLlama). 70% of the ETH side lands in the stock booster pot, and when it fills anyone can clock in and the pot swaps into a stock token for activated brokers. fee-funded contract mechanics, not a dividend, not in the US.`,
             rationale,
           },
           {
@@ -386,11 +400,11 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
       return {
         drafts: [
           {
-            kind: "thread",
+            kind: "post",
             channel: "X",
             title: `Experiment: liquidity depth as the price story (${ctx.grade.date})`,
-            body: `Hypothesis: explaining WHY $STONKBROKER liquidity depth (${usd(m.liquidityUsd)} across ${m.pairCount} pairs) gates the path into a broker moves the price lever better than commentary on the move itself.\n\n1/ Getting a StonkBroker costs a fixed 666,666 $STONKBROKER. Not "about", not "roughly" — fixed. That makes pool depth, not sentiment, the real price story.\n\n2/ Today the token trades at ${usd(m.priceUsd, 5)} with ${usd(m.liquidityUsd)} of DEX liquidity. Thin pools mean the 666,666 unit costs more slippage; deep pools make the path into a broker cheaper for everyone.\n\n3/ Every activation burns 50% of the fee in $STONKBROKER. Supply falls as usage rises — that is the durable-demand mechanic, verifiable on-chain.\n\n4/ Measurable proxy for this experiment: liquidity depth and holder count over the next 7 days, not the price print. Smart-contract distributions, not dividends; no promises. Docs: stonkbrokers.cash/docs\n\nProxy to check next cycle: DEX liquidity vs today's ${usd(m.liquidityUsd)}.`,
-            rationale: `${rationale} Experiment format: hypothesis, execution, measurable proxy — differs from prior output by targeting the liquidity-depth mechanic rather than fee-flow narratives.`,
+            body: `A StonkBroker costs a fixed 666,666 $STONKBROKER, so pool depth is the real price story, not sentiment. Right now that is ${usd(m.liquidityUsd)} of DEX liquidity across ${m.pairCount} pairs on Robinhood Chain. Deeper pools make the path into a broker cheaper for everyone.`,
+            rationale: `${rationale} Experiment format: hypothesis, execution, measurable proxy. Proxy to check next cycle: DEX liquidity vs today's ${usd(m.liquidityUsd)}. Differs from prior output by targeting the liquidity-depth mechanic rather than fee-flow narratives.`,
           },
         ],
       };
@@ -398,7 +412,7 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
       return {
         drafts: [
           {
-            kind: "thread",
+            kind: "post",
             channel: "X",
             title: "Fallback",
             body: "No producer mapped for this agent.",
@@ -523,6 +537,7 @@ export function criticPrompt(ctx: CycleContext, cycleDrafts: Draft[]): string {
     `RECENT SWARM OUTPUT (history — what "repetitive" means is measured against this)\n${history || "No prior drafts."}`,
     `THIS CYCLE'S DRAFTS (review each; use the exact draftId given)\n${current}`,
     `Return one review per draft above. VETO repetitive or low-quality drafts (name the earlier draft duplicated, or the defect); PASS genuinely new or materially improved work. The daily metrics report format is intentionally recurring — judge it on quality only. Long bodies are EXCERPTED for review at ${CRITIC_BODY_EXCERPT_CHARS} chars and marked where the excerpt ends — never veto a draft for appearing to cut off at the marked excerpt boundary. Then record your observation: the repetition pattern forming and what would break it.`,
+    `"post" DRAFTS ARE SINGLE X POSTS and you read them again at the X gate right before they publish, against the account's live timeline. Here, veto a post that is a thread in disguise (numbering, several sections, over ${TWEET_MAX} characters), opens or closes with a label or fixed disclaimer, reads like a template or a press release, or repeats a theme from the account's timeline:\n${ctx.xPosted}`,
   ].join("\n\n");
 }
 

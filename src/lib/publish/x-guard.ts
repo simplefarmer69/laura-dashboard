@@ -79,6 +79,12 @@ async function readLog(): Promise<XPostLogEntry[]> {
   }
 }
 
+/** Newest-first slice of the swarm's own X posts (originals; replies live in the mentions log). */
+export async function recentXPosts(limit = 12): Promise<XPostLogEntry[]> {
+  const log = await readLog();
+  return log.slice(-limit).reverse();
+}
+
 /** Records a successful swarm post so future guard checks see it. */
 export async function recordXPost(entry: { url: string; firstTweetId: string; text: string }): Promise<void> {
   const log = await readLog();

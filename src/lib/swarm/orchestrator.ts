@@ -65,6 +65,8 @@ import { isDuplicateLaunch, reservedLaunchNameHit } from "@/lib/launchpad/spec";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from "@/lib/swarm/library";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
+import { recentXPosts } from "@/lib/publish/x-guard";
+import { recentXPostsDigest } from "@/lib/publish/x-style";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
@@ -391,6 +393,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       onchain: onchainText,
       cycleSeq: state.runs.length,
       llmProvider: resolved.provider,
+      xPosted: recentXPostsDigest(await recentXPosts(10)),
     };
 
     /* 1d. Watcher: interprets the on-chain digest into a headline + alerts

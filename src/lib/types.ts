@@ -326,6 +326,9 @@ export interface Agent {
 }
 
 export type DraftKind =
+  /** A single X post, at most 280 characters. The only kind the X rail publishes. */
+  | "post"
+  /** Legacy multi-post X thread. Still accepted for other channels; the X rail refuses it. */
   | "thread"
   | "article"
   | "community"
