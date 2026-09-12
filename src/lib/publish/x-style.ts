@@ -92,6 +92,12 @@ export function sanitizeXPost(body: string): SanitizedPost {
     stripped.push("em dash");
     text = text.replace(/\s*[—–]\s*/g, ", ");
   }
+  /* A spaced hyphen is an em dash in disguise ("the pot grew - fees did it").
+     Word-internal hyphens (stock-token) and negative numbers are untouched. */
+  if (/\S\s+-\s+\S/.test(text)) {
+    stripped.push("spaced hyphen used as a dash");
+    text = text.replace(/(\S)\s+-\s+(?=[^\d\s])/g, "$1, ");
+  }
   text = text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   return { text, stripped };
 }
