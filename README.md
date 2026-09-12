@@ -181,18 +181,28 @@ still answers core topics deterministically from live data.
 
 ## Publish to X
 
-Approved drafts targeting channel "X" post for real (threads become reply
-chains). Posting needs the OAuth 1.0a user context vars from the secrets table
-above. Two paths share the same guards (`src/lib/publish/x-guard.ts`: 30 min
-between posts, 6 per 24h, duplicate memory, never engaging the account itself):
+Approved drafts of kind `post` targeting channel "X" go out as a single tweet
+(threads are retired). Posting needs either the OAuth 1.0a user-context pair
+or an OAuth 2.0 user token (`X_OAUTH2_ACCESS_TOKEN`, scope `tweet.write`). Two
+paths share the same guards (`src/lib/publish/x-guard.ts`: 30 min between
+posts, 6 per 24h, duplicate memory, never engaging the account itself):
 
 - **Autonomous rail** (`src/lib/publish/auto.ts`, setting `autoPublishX`, on by
-  default): fresh approved X drafts under 6 hours old post themselves, one per
-  scheduler tick. The very first live post is a short smoke test (≤3 tweets).
-  Older approvals never auto-post, so enabling the keys cannot flush a backlog.
-- **Publish to X** button on any approved X draft, for the operator.
+  default): fresh approved X posts under 6 hours old post themselves, one per
+  scheduler tick, after three gates in `src/lib/publish/x-style.ts`: a
+  sanitizer that strips banned openers and sign-offs, code-level style and
+  repetition checks against the account's own timeline, and an Auditor read
+  of the exact text (pass, veto with reason, or a light edit that adds no
+  fact). Older approvals never auto-post, so enabling the keys cannot flush a
+  backlog.
+- **Publish to X** button on any approved X post, for the operator (same
+  sanitizer and single-post rule).
+- **Mentions rail** (`src/lib/publish/mentions.ts`): people who tag the
+  account with a question get one answer, judged under the public-chat persona
+  with the mention quarantined as untrusted text. Caps: 12 replies per day,
+  3 min apart, one per author per 6 h; never replies to itself or to tag-spam.
 
-Both are silent no-ops until `X_ACCESS_TOKEN` and `X_ACCESS_TOKEN_SECRET` exist.
+All are silent no-ops until posting credentials exist.
 
 ## Layout
 
