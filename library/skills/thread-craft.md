@@ -1,10 +1,10 @@
 ---
 name: thread-craft
-description: Use when writing X threads or long-form articles about StonkBrokers
+description: Use when writing long-form articles (Blog, Notion) about StonkBrokers. X posts are single posts and follow the x-voice skill instead.
 agents: narrative
 ---
 
-# Thread craft
+# Long-form craft (articles; not X)
 
 Review — LAURA's own critic and code-level novelty gates, no human approval — passes
 number-grounded mechanism explainers and rejects hype. That is the entire pattern;
