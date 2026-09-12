@@ -15,6 +15,8 @@ const MAX_EVENTS = 1500;
 const MAX_LESSONS = 60;
 const MAX_INTEL = 400;
 const MAX_BRIEFS = 50;
+/** Purser's decision ledger; the eco trade ledger is never trimmed (caps are computed from it). */
+const MAX_TREASURY_OPS = 400;
 
 function freshState(): SwarmState {
   return {
@@ -296,6 +298,20 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (u) => u.id,
       (u) => u.createdAt,
     ),
+    treasuryEcoTrades: mergeById(
+      base.treasuryEcoTrades ?? [],
+      work.treasuryEcoTrades ?? [],
+      current.treasuryEcoTrades ?? [],
+      (t) => t.id,
+      (t) => t.ts,
+    ),
+    treasuryOps: mergeById(
+      base.treasuryOps ?? [],
+      work.treasuryOps ?? [],
+      current.treasuryOps ?? [],
+      (o) => o.id,
+      (o) => o.ts,
+    ),
     forum: mergeForum(base.forum ?? [], work.forum ?? [], current.forum ?? []),
     lastTuneDate: pick3(base.lastTuneDate, work.lastTuneDate, current.lastTuneDate),
   };
@@ -352,6 +368,7 @@ export async function saveState(state: SwarmState): Promise<void> {
     toWrite.researchBriefs = toWrite.researchBriefs.slice(-MAX_BRIEFS);
     toWrite.events = toWrite.events.slice(-MAX_EVENTS);
     toWrite.lessons = toWrite.lessons.slice(-MAX_LESSONS);
+    if (toWrite.treasuryOps) toWrite.treasuryOps = toWrite.treasuryOps.slice(-MAX_TREASURY_OPS);
     await fs.mkdir(DATA_DIR, { recursive: true });
     const json = JSON.stringify(toWrite, null, 2);
     const tmp = `${STATE_FILE}.${randomUUID()}.tmp`;

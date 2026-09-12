@@ -1,7 +1,7 @@
 ---
 name: execution-readback
 description: Use when proposing or reviewing any on-chain execution (treasury buys, Smart LP, deploys) — parameters come from authoritative read-backs, never from your own draft
-agents: vault, mint, critic
+agents: vault, treasurer, mint, critic
 ---
 
 # Execution read-back

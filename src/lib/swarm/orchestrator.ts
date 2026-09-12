@@ -70,6 +70,7 @@ import { recentXPostsDigest } from "@/lib/publish/x-style";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
+import { runTreasurer } from "@/lib/swarm/treasurer";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
@@ -106,6 +107,8 @@ import type {
 const FORUM_ONLY_AGENTS: AgentId[] = ["smartlp", "nftintel", "tokenintel"];
 
 const VAULT_STRIDE_MS = 2 * 60 * 60_000;
+/** Purser runs on Vault's cadence: treasury state moves on 6h buy gaps, not 75-minute cycles. */
+const TREASURER_STRIDE_MS = VAULT_STRIDE_MS;
 const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
 const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
 /** Forge works the upgrade queue about every 90 minutes: two targets per run
@@ -749,6 +752,37 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         vault.lastError = String(err);
         step({ agentId: "vault", label: "Treasury memo", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "vault", title: "Vault failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 3a'. Purser: the treasury agent that decides AND executes (operator
+       grant 2026-09-12). Same stride as Vault so it reads a fresh memo; every
+       action runs through the simulate-first, hard-capped executors and is
+       recorded in state.treasuryOps with its outcome. */
+    const treasurer = agentById(state, "treasurer");
+    if (treasurer.status === "paused") {
+      step({ agentId: "treasurer", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (treasurer.lastRunAt !== null && Date.now() - treasurer.lastRunAt < TREASURER_STRIDE_MS) {
+      step({
+        agentId: "treasurer",
+        label: "Treasury plan",
+        status: "skipped",
+        summary: `Stride: last plan ${((Date.now() - treasurer.lastRunAt) / 60_000).toFixed(0)}m ago (< ${Math.round(TREASURER_STRIDE_MS / 60_000)}m)`,
+        durationMs: 0,
+      });
+    } else {
+      try {
+        treasurer.status = "running";
+        const res = await runTreasurer({ state, resolved, ctx, agent: treasurer, runId: run.id });
+        tally({ usedMock: res.usedMock, repaired: res.repaired });
+        markRan(treasurer);
+        step({ agentId: "treasurer", label: "Treasury plan", status: res.status, summary: res.summary, durationMs: res.durationMs });
+      } catch (err) {
+        treasurer.status = "error";
+        treasurer.lastError = String(err);
+        step({ agentId: "treasurer", label: "Treasury plan", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "treasurer", title: "Purser failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }

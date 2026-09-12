@@ -287,7 +287,8 @@ export type AgentId =
   | "trainer"
   | "smartlp"
   | "nftintel"
-  | "tokenintel";
+  | "tokenintel"
+  | "treasurer";
 
 export type AgentStatus = "idle" | "running" | "error" | "paused";
 
@@ -526,6 +527,12 @@ export type SwarmEventKind =
   | "treasury.lp"
   | "treasury.stake"
   | "treasury.exit"
+  /** Purser unwrapped creator-fee WETH into spendable ETH. */
+  | "treasury.unwrap"
+  /** Purser bought or sold another builder's curve token on the launcher (capped ecosystem participation). */
+  | "treasury.eco"
+  /** Purser's executed action plan for the cycle (what it did and why). */
+  | "treasury.plan"
   /** Builder designed a utility project for one of LAURA's launched tokens. */
   | "utility.proposed"
   | "utility.approved"
@@ -748,6 +755,51 @@ export interface TreasuryLpPosition {
   exitTxHash?: string | null;
 }
 
+/**
+ * One capped trade of another builder's curve token on the Stonk Launcher
+ * (WETH lane): LAURA participating in the ecosystem she promotes, with real
+ * fee-paying volume. Never her own launches (wash trading), never the
+ * mission token (that is the accumulation ledger).
+ */
+export interface TreasuryEcoTrade {
+  id: string;
+  ts: number;
+  side: "buy" | "sell";
+  /** Pad launch id on the WETH lane */
+  launchId: number;
+  token: string;
+  symbol: string;
+  /** Native ETH spent (buy) or received (sell); excludes gas */
+  ethAmount: number;
+  /** Tokens received (buy) or sold (sell) */
+  tokenAmount: number;
+  txHash: string;
+  /** Purser's stated reason, kept so the next plan can judge it */
+  reason: string;
+}
+
+export type TreasuryOpAction =
+  | "hold"
+  | "unwrap-weth"
+  | "buy-stonk"
+  | "lp-enter"
+  | "lp-exit"
+  | "collect-earnings"
+  | "eco-buy"
+  | "eco-sell";
+
+/** One line of Purser's execution ledger: what it decided, what happened. */
+export interface TreasuryOpRecord {
+  id: string;
+  ts: number;
+  runId: string;
+  action: TreasuryOpAction;
+  /** Executed on-chain (or a no-op hold) vs refused by a cap/guard vs failed */
+  outcome: "executed" | "skipped" | "failed";
+  detail: string;
+  txHash?: string | null;
+}
+
 /* ------------------------------ Utility builds ----------------------------- */
 
 /**
@@ -868,6 +920,10 @@ export interface SwarmState {
   treasuryBuys?: TreasuryBuy[];
   /** Smart LP positions on the Stonk Exchange vDEX (caps computed from this). */
   treasuryLp?: TreasuryLpPosition[];
+  /** Purser's launcher trades in other builders' tokens (eco caps computed from this). */
+  treasuryEcoTrades?: TreasuryEcoTrade[];
+  /** Purser's execution ledger: every decision and its outcome, newest last. */
+  treasuryOps?: TreasuryOpRecord[];
   /** Builder utility projects for LAURA's launched tokens (caps computed from this). */
   utilityProjects?: UtilityProject[];
   /** The Cafe Bar — the swarm's open forum. Absent before the venue existed. */

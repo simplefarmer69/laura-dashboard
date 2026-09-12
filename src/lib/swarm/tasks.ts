@@ -132,7 +132,7 @@ export const proposalsSchema = z.object({
            smartlp/nftintel/tokenintel/trainer were missing until 2026-09-11 —
            the intel voices literally could not be upgraded, which is why they
            sat on v1 while bd reached v16. */
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage", "trainer", "smartlp", "nftintel", "tokenintel"]),
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage", "trainer", "smartlp", "nftintel", "tokenintel", "treasurer"]),
         /* Budget is 3500 (prompted); the schema leaves headroom so a slightly
            long rewrite lands instead of failing to the deterministic mock —
            eight cycles of that appended identical boilerplate to bd on
@@ -637,6 +637,76 @@ export function vaultMock(ctx: CycleContext): VaultOut {
   };
 }
 
+/* --------------------------------- Purser --------------------------------- */
+
+/**
+ * Purser decides AND executes (operator grant 2026-09-12). Every action maps
+ * to a simulate-first, hard-capped executor; the schema only carries intent.
+ * Generous text caps: tight caps cost the turn (library learning).
+ */
+export const treasurerSchema = z.object({
+  /** Sleeve-by-sleeve read of the treasury and what changed since the last plan. */
+  assessment: z.string().min(80).max(6000),
+  actions: z
+    .array(
+      z.object({
+        action: z.enum(["hold", "unwrap-weth", "buy-stonk", "lp-enter", "lp-exit", "collect-earnings", "eco-buy", "eco-sell"]),
+        /** ETH for unwrap-weth (omit = all) and eco-buy; ignored elsewhere. */
+        amountEth: z.number().min(0).max(10).nullable(),
+        /** Curve token address for eco-buy / eco-sell (from the candidates or the held positions). */
+        token: z.string().max(64).nullable(),
+        /** For eco-sell: share of the held balance to sell, 0-1. */
+        fraction: z.number().min(0).max(1).nullable(),
+        reason: z.string().min(10).max(900),
+      }),
+    )
+    .min(1)
+    .max(4),
+  rationale: z.string().max(2500),
+});
+
+export type TreasurerOut = z.infer<typeof treasurerSchema>;
+
+export interface TreasurerInputs {
+  /** Deterministic sleeve digest: balances, caps, eligibility, LP, eco positions with live values. */
+  sleeves: string;
+  /** Live curve candidates on the WETH pad Purser may trade. */
+  candidates: string;
+  /** Vault's newest memo (advisory input). */
+  vaultMemo: string;
+  /** Purser's own execution ledger with outcomes. */
+  ledger: string;
+}
+
+export function treasurerPrompt(ctx: CycleContext, input: TreasurerInputs): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `METRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}`,
+    `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
+    `TREASURY SLEEVES (deterministic reads this cycle; these numbers are the truth)\n${input.sleeves}`,
+    `LIVE CURVES ON THE STONK LAUNCHER YOU MAY TRADE (weth lane; LAURA's own launches and $STONKBROKER are already excluded)\n${input.candidates}`,
+    `ON-CHAIN STATE (Watcher's digest with alerts)\n${ctx.onchain}`,
+    `${ctx.chainAlpha}`,
+    `VAULT'S LATEST MEMO (advisory; you decide)\n${input.vaultMemo}`,
+    `YOUR EXECUTION LEDGER (what you decided before and what actually happened; judge it honestly)\n${input.ledger}`,
+    `SWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}`,
+    `YOUR SKILLS (operating procedures; follow them)\n${ctx.skills.treasurer ?? "None."}`,
+    `You manage LAURA's treasury and you EXECUTE: every action you list runs now through a simulate-first executor. Write the assessment, then 1-4 actions in execution order ("hold" alone is a valid plan and often the right one).`,
+    `ACTIONS: unwrap-weth (creator-fee WETH into spendable ETH; amountEth or null for all; lossless, do it whenever WETH sits idle above dust and ETH is wanted for anything below), buy-stonk (one capped $STONKBROKER accumulation buy; only fires if the SLEEVES say eligible), lp-enter (pair the accumulated $STONKBROKER with matched ETH into the full-range Smart LP position and stake it; one position at a time), lp-exit (unstake and pull the Smart LP position back to the wallet; name the numeric reason), collect-earnings (sweep claimable creator fees and bonded-pool LP fees now), eco-buy (buy another builder's live curve token on the launcher with amountEth; real fee-paying participation in the ecosystem, pick curves with organic buys and a creator who is not us), eco-sell (sell a fraction of a held eco token back to its curve; take profit, cut a dead curve, or free a slot).`,
+    `HARD RULES (enforced in code; plans that ignore them are simply refused): $STONKBROKER is never sold by any path. Never trade LAURA's own launches (wash trading, charter). Accumulation caps: ≤0.005 ETH/buy, ≤0.01 ETH/24h, 6h gap, 0.35 ETH treasury floor on every spend. Smart LP cap 0.02 ETH-equiv total. Eco caps: ≤0.002 ETH per buy, ≤0.006 ETH per 24h, at most 3 tokens held, 2h per token. Slippage guards apply to every swap. You never reference a token address that is not in the candidates or the held positions. Prefer actions whose effect is visible in a number next cycle; every action reason must cite a number from the sleeves or the candidates. No em dashes.`,
+  ].join("\n\n");
+}
+
+export function treasurerMock(): TreasurerOut {
+  return {
+    assessment:
+      "Deterministic fallback (no LLM key): no live read of the sleeves is possible, so the treasury holds. The scheduled capped rails (accumulation, Smart LP entry, fee collection) keep running on their own cadence regardless of this plan.",
+    actions: [{ action: "hold", amountEth: null, token: null, fraction: null, reason: "Deterministic fallback (no LLM key): hold until a live model reads the sleeves." }],
+    rationale: "Deterministic fallback (no LLM key): nothing is executed without a live judgment.",
+  };
+}
+
 /* ---------------------------------- Mint ---------------------------------- */
 
 /** Prompted length budget for a launch's concept and rationale (each). */
@@ -953,7 +1023,7 @@ export const trainerSchema = z.object({
   upgrades: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel"]),
+        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel", "treasurer"]),
         proposedStrategy: z.string().min(80).max(STRATEGY_SCHEMA_MAX),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
@@ -974,7 +1044,7 @@ export const trainerSchema = z.object({
 export type TrainerOut = z.infer<typeof trainerSchema>;
 
 export function trainerPrompt(ctx: CycleContext, targets: Agent[]): string {
-  const noDraftRole = new Set(["scout", "watcher", "critic", "vault", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel"]);
+  const noDraftRole = new Set(["scout", "watcher", "critic", "vault", "treasurer", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel"]);
   const dossiers = targets
     .map((a) => {
       const perf =

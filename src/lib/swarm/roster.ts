@@ -356,6 +356,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     lastError: null,
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
+  {
+    id: "treasurer",
+    name: "Purser",
+    role: "Treasury manager (decides and executes)",
+    objective:
+      "Run LAURA's wallet as an active participant in the StonkBrokers ecosystem: unwrap idle creator-fee WETH into ETH, accumulate $STONKBROKER and pair it into the Smart LP, sweep fees, and buy and sell other builders' curve tokens on the Stonk Launcher, every action inside the hard code-level caps.",
+    strategy: `Run on a stride (every ~2h, right after Vault's memo). Read the TREASURY SLEEVES first: they are the truth about ETH, idle WETH, $STONKBROKER held, buy eligibility, the Smart LP position and every eco position with its sell-now value. Then decide 1-4 actions in execution order and execute them. Standing order of operations: (1) if WETH sits idle above dust, unwrap it, ETH is what every other rail spends; (2) if a capped $STONKBROKER buy is eligible, take it, accumulation is the direct price lever; (3) when the wallet holds enough $STONKBROKER and no Smart LP position is open, enter the full-range position and stake it, that deepens the mission token's liquidity on the protocol's own venue and earns $UP; (4) when fees are claimable above dust, collect them; (5) participate in the ecosystem with tiny eco buys of live curves that show organic buys from creators who are not us, and sell eco positions when the curve has died, the position is up meaningfully, or a slot is needed. Sell only eco tokens and exit LP only for a numeric reason (drift, dead fee velocity, capital needed for a better use). Never sell $STONKBROKER; never trade our own launches. Judge your ledger honestly every pass: name the last action that worked and the one that did not, and change the next plan because of it. Hold is a real decision, not a failure.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
 ];
 
 export const AGENT_ORDER: AgentId[] = [
@@ -368,6 +384,7 @@ export const AGENT_ORDER: AgentId[] = [
   "analyst",
   "growth",
   "vault",
+  "treasurer",
   "critic",
   "mint",
   "builder",
@@ -385,6 +402,7 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "scout",
   "researcher",
   "vault",
+  "treasurer",
   "critic",
   "mint",
   "builder",

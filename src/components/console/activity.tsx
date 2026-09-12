@@ -55,6 +55,9 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "treasury.lp":
     case "treasury.stake":
     case "treasury.exit":
+    case "treasury.unwrap":
+    case "treasury.eco":
+    case "treasury.plan":
       return "grader";
     case "draft.approved":
     case "draft.rejected":
@@ -93,6 +96,9 @@ export function kindTone(kind: SwarmEventKind): string {
     case "treasury.lp":
     case "treasury.stake":
     case "treasury.exit":
+    case "treasury.unwrap":
+    case "treasury.eco":
+    case "treasury.plan":
     case "utility.acquired":
       return "bg-[var(--sb-gold)]/20 text-[var(--sb-gold)]";
     case "grade.stamped":

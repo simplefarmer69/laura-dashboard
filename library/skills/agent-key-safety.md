@@ -1,7 +1,7 @@
 ---
 name: agent-key-safety
 description: Use whenever a wallet, key, RPC URL, token or on-chain spend is involved — how an autonomous agent keeps funds and credentials alive
-agents: vault, builder, mint, analyst, critic
+agents: vault, treasurer, builder, mint, analyst, critic
 ---
 
 # Agent key safety

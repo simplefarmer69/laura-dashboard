@@ -21,8 +21,9 @@ knowledge and the same swarm runs any goal-driven operation.
   DefiLlama, chain RPC out of the box) and stamps a score every UTC day. The
   swarm reads its own grades and shifts effort toward the weakest lever.
 - **A roster, not a monolith.** Seven core agents (Scout, Quill, Steward,
-  Broker, Ledger, Mint, Coach) plus a builder and a forum host, each with its
-  own strategy text, skills, and track record. The coach evolves strategies;
+  Broker, Ledger, Mint, Coach) plus a builder, a treasury manager (Purser),
+  research and Smart LP specialists and a forum host, each with its own
+  strategy text, skills, and track record. The coach evolves strategies;
   every superseded version is kept for rollback.
 - **Memory that compounds.** A curated `library/` of markdown knowledge, per
   role `library/skills/`, and a self-writable notebook feed every prompt. Edit
@@ -162,6 +163,31 @@ parameters inside hard rails (rest gap 1-30 min, draft budget 3-8): backlog
 pressure shrinks the budget, a clearing queue with high approval grows it,
 falling grades speed the cycle up. Every adjustment is logged to Activity with
 the numbers that justified it. Toggle in Settings.
+
+## Treasury (Purser)
+
+Vault writes the treasury memo; **Purser** (`src/lib/swarm/treasurer.ts`,
+agent id `treasurer`) is the agent that decides and executes. It runs every
+two hours right after Vault, reads the sleeve digest (wallet ETH and idle
+WETH, $STONKBROKER held and accumulated, Smart LP position and pending
+rewards, open ecosystem positions with their sell-now value) plus a scan of
+live Stonk Launcher curves, and returns up to four actions per plan:
+
+| Action | What runs | Rails |
+| --- | --- | --- |
+| `unwrap-weth` | WETH `withdraw` into spendable ETH | min 0.0005 ETH |
+| `buy-stonk` | capped $STONKBROKER accumulation swap | 0.005 ETH per buy, 0.01 ETH per 24h, 6h gap, 0.35 ETH treasury floor |
+| `lp-enter` / `lp-exit` | Smart LP position on the Stonk Exchange, staked to the gauge | 0.02 ETH-equivalent total, one position at a time |
+| `collect-earnings` | sweep pending LP rewards and creator fees | read-then-claim, no spend |
+| `eco-buy` / `eco-sell` | tiny positions in live launcher curves (`src/lib/launchpad/treasury-ops.ts`) | 0.002 ETH per trade, 0.006 ETH per 24h, 3 open positions, 2h per-token gap, 5% max slippage |
+
+Every action goes through the same simulate-first executors the other rails
+use, honours the shared wallet mutex, and is appended to the `treasuryOps`
+ledger (`treasuryEcoTrades` for ecosystem fills) with `treasury.plan`,
+`treasury.unwrap` and `treasury.eco` events in Activity. Hard rules in code,
+not prompts: $STONKBROKER is never sold by any path, LAURA never trades tokens
+she launched herself, and with no live model reachable Purser records a hold
+instead of acting on fallback text. Toggle with `autoTreasuryOps` in Settings.
 
 ## Talk to LAURA (console, Discord, Telegram)
 
