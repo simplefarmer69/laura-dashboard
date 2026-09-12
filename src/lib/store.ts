@@ -5,6 +5,7 @@ import type { Agent, ForumThread, SwarmEvent, SwarmState } from "@/lib/types";
 import { DEFAULT_AGENTS, DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { archiveState } from "@/lib/swarm/archive";
 import { maybeBackup } from "@/lib/swarm/backup";
+import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
 
 const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -54,10 +55,15 @@ function normalizeState(parsed: Partial<SwarmState>): SwarmState {
       ? { ...def, ...saved, role: def.role, objective: def.objective, stats: { ...def.stats, ...saved.stats } }
       : def;
   });
+  /* Retired sign-off tail ("I am LAURA, an AI; ... not a promise.") is
+     scrubbed from stored launch copy on load; idempotent, lands on the next
+     save through the normal merge. */
+  const launches = (parsed.launches ?? base.launches).map(stripLaunchSignoffs);
   return {
     ...base,
     ...parsed,
     agents,
+    launches,
     settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
   };
 }

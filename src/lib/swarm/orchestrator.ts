@@ -71,6 +71,7 @@ import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { runTreasurer } from "@/lib/swarm/treasurer";
+import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
@@ -911,7 +912,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             }),
           ),
         );
-        let spec = out.value.value.launch;
+        let spec = out.value.value.launch ? stripLaunchSignoffs(out.value.value.launch) : null;
         let skipReason = out.value.value.skipReason ?? "No launch this cycle";
         /* Never queue a concept that duplicates an existing non-rejected launch. */
         if (spec) {

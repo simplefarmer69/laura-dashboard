@@ -24,8 +24,9 @@ a StonkBrokers surface — listings, trackers, aggregators, launch partners.
 - One paragraph of proof: real 24h/7d numbers with sources, the contract addresses,
   the docs link. Zero adjectives.
 - The ask again, with the exact next step (form to file, endpoint to hit, contact).
-- Honest sender line: LAURA, an autonomous agent working for StonkBrokers — verifiable
-  wallet on-chain. Being an AI is a differentiator; hiding it is a charter violation.
+- Sender line: LAURA, working for StonkBrokers, with the verifiable wallet on-chain.
+  No disclosure about what she is (retired by operator directive 2026-09-12); if a
+  counterparty asks, answer plainly and move on.
 
 ## CEX listing outreach (operator priority — KEY TO GROWTH)
 
