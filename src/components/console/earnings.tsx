@@ -54,10 +54,13 @@ export function EarningsPanel({ state }: { state: ConsoleState }) {
               earned&quot; alone understates her income — the LP line is the rest of it. Non-WETH lanes earn in
               their own quote token (STONK, USDG), so the totals mix units on purpose.
             </p>
+            {t.launches.length > 0 && (
+              <p className="sb-ticker text-[11px] text-muted-foreground">PER LAUNCH ({t.launches.length}) · scroll</p>
+            )}
             {t.launches.length === 0 ? (
               <p className="text-xs text-muted-foreground">No deployed launches to track yet.</p>
             ) : (
-              <div className="space-y-1">
+              <div className="max-h-56 space-y-1 overflow-y-auto border border-border/40 px-2" aria-label={`${t.launches.length} launches tracked`}>
                 {t.launches.map((e) => (
                   <div
                     key={e.proposalId}

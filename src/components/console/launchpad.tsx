@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ExternalLink, Rocket, Wallet, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ExternalLink, Rocket, Wallet, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -258,7 +258,7 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2 2xl:grid-cols-3">
         {launches.map((l) => (
           <LaunchCard
             key={l.id}
@@ -341,6 +341,11 @@ function LaunchCard({
   refresh: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  /* Compact by default: the queue holds dozens of launches and the full spec
+     card made the tab scroll for pages (operator request 2026-09-12). Launches
+     that still need attention open expanded. */
+  const needsAttention = l.status === "pending" || l.status === "approved" || l.status === "deploying" || Boolean(l.error);
+  const [open, setOpen] = useState(needsAttention);
 
   async function act(action: "approve" | "reject" | "deploy") {
     setBusy(true);
@@ -357,97 +362,115 @@ function LaunchCard({
     }
   }
 
+  const taxLine = `${(l.startTaxBps / 100).toFixed(0)}%→${(l.postTaxBps / 100).toFixed(1)}%`;
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card size={open ? "default" : "sm"}>
+      <CardHeader className={open ? "pb-2" : ""}>
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-3">
-            <LaunchArt id={l.id} symbol={l.symbol} />
-            <div>
-              <CardTitle className="text-base">
+          <div className="flex min-w-0 items-start gap-3">
+            <LaunchArt id={l.id} symbol={l.symbol} size={open ? 80 : 40} />
+            <div className="min-w-0">
+              <CardTitle className={open ? "text-base" : "truncate text-sm"}>
                 {l.name} <span className="font-mono text-sm text-primary">${l.symbol}</span>
               </CardTitle>
-              <CardDescription>
-                designed by Mint · {ago(l.createdAt)} · {l.lane.toUpperCase()} lane
-                {l.artMotif ? ` · ${l.artMotif}/${l.artPalette ?? "emerald"}` : ""}
+              <CardDescription className="truncate text-[11px]">
+                {ago(l.createdAt)} · {l.lane.toUpperCase()} lane · {usd(l.startMcapUsd)}→{usd(l.gradMcapUsd)} · tax {taxLine}
+                {open && l.artMotif ? ` · ${l.artMotif}/${l.artPalette ?? "emerald"}` : ""}
               </CardDescription>
+              {!open && l.message && <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">“{l.message}”</p>}
             </div>
           </div>
-          {statusBadge(l.status, autoExecute, projectedAt)}
+          <div className="flex shrink-0 items-center gap-1">
+            {statusBadge(l.status, autoExecute, projectedAt)}
+            <button
+              type="button"
+              aria-label={open ? "Collapse launch details" : "Expand launch details"}
+              className="p-1 text-muted-foreground hover:text-foreground"
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </button>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {l.message && (
-          <blockquote className="border-l-2 border-primary/60 bg-primary/5 px-3 py-2">
-            <p className="font-mono text-[10px] tracking-wider text-primary">LAURA SAYS</p>
-            <p className="mt-0.5 italic">“{l.message}”</p>
-          </blockquote>
-        )}
-        <p className="text-muted-foreground">{l.concept}</p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-3">
-          <Spec label="supply" value={l.supplyTokens.toLocaleString()} />
-          <Spec label="start mcap" value={usd(l.startMcapUsd)} />
-          <Spec label="grad mcap" value={usd(l.gradMcapUsd)} />
-          <Spec label="start tax" value={`${(l.startTaxBps / 100).toFixed(1)}%`} />
-          <Spec label="decay" value={`${l.taxDecayPerMinuteBps} bps/min`} />
-          <Spec label="post tax" value={`${(l.postTaxBps / 100).toFixed(1)}%`} />
-          <Spec label="sells" value={l.sellsEnabled ? "enabled" : "off"} />
-          <Spec label="buffer" value={`${l.bufferSecs}s`} />
-        </div>
-        <p className="text-xs text-muted-foreground">{l.rationale}</p>
-        {l.error && <p className="border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">{l.error}</p>}
-        {l.status === "deployed" && !l.armedAt && (
-          <p className="border border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/10 px-2 py-1 text-xs text-[var(--sb-gold)]">
-            Supply not loaded yet; the executor arms it automatically (registered, not live).
-          </p>
-        )}
-        {l.status === "deployed" && l.txHash && (
-          <div className="space-y-1 text-xs">
-            {l.tokenAddress && (
-              <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/address/${l.tokenAddress}`} target="_blank" rel="noreferrer">
-                token {l.tokenAddress.slice(0, 12)}… <ExternalLink className="size-3" />
+      {open && (
+        <CardContent className="space-y-3 text-sm">
+          {l.message && (
+            <blockquote className="border-l-2 border-primary/60 bg-primary/5 px-3 py-2">
+              <p className="font-mono text-[10px] tracking-wider text-primary">LAURA SAYS</p>
+              <p className="mt-0.5 italic">“{l.message}”</p>
+            </blockquote>
+          )}
+          <p className="text-muted-foreground">{l.concept}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-3">
+            <Spec label="supply" value={l.supplyTokens.toLocaleString()} />
+            <Spec label="start mcap" value={usd(l.startMcapUsd)} />
+            <Spec label="grad mcap" value={usd(l.gradMcapUsd)} />
+            <Spec label="start tax" value={`${(l.startTaxBps / 100).toFixed(1)}%`} />
+            <Spec label="decay" value={`${l.taxDecayPerMinuteBps} bps/min`} />
+            <Spec label="post tax" value={`${(l.postTaxBps / 100).toFixed(1)}%`} />
+            <Spec label="sells" value={l.sellsEnabled ? "enabled" : "off"} />
+            <Spec label="buffer" value={`${l.bufferSecs}s`} />
+          </div>
+          <p className="text-xs text-muted-foreground">{l.rationale}</p>
+          {l.error && <p className="border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">{l.error}</p>}
+          {l.status === "deployed" && !l.armedAt && (
+            <p className="border border-[var(--sb-gold)]/40 bg-[var(--sb-gold)]/10 px-2 py-1 text-xs text-[var(--sb-gold)]">
+              Supply not loaded yet; the executor arms it automatically (registered, not live).
+            </p>
+          )}
+          {l.status === "deployed" && l.txHash && (
+            <div className="space-y-1 text-xs">
+              {l.tokenAddress && (
+                <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/address/${l.tokenAddress}`} target="_blank" rel="noreferrer">
+                  token {l.tokenAddress.slice(0, 12)}… <ExternalLink className="size-3" />
+                </a>
+              )}
+              <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/tx/${l.txHash}`} target="_blank" rel="noreferrer">
+                tx {l.txHash.slice(0, 14)}… <ExternalLink className="size-3" />
               </a>
-            )}
-            <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/tx/${l.txHash}`} target="_blank" rel="noreferrer">
-              tx {l.txHash.slice(0, 14)}… <ExternalLink className="size-3" />
-            </a>
-            {l.imageHash && <p className="text-muted-foreground">logo live on launcher · {l.imageHash.slice(0, 14)}…</p>}
-          </div>
-        )}
-        {l.status === "approved" && autoExecute && (
-          <p className="border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-muted-foreground">
-            In the autonomous deploy queue: the executor takes specs in order at the pacing gap (no daily count cap)
-            {projectedAt ? `; this one is projected for ~${utcClock(projectedAt)}` : ""}. No approval step exists; Reject is the operator veto.
-          </p>
-        )}
-        {(l.status === "pending" || l.status === "approved") && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {l.status === "pending" && !autoExecute && (
-              <Button size="sm" disabled={busy} onClick={() => void act("approve")}>
-                <Check className="size-3.5" /> Approve spec
+              {l.imageHash && <p className="text-muted-foreground">logo live on launcher · {l.imageHash.slice(0, 14)}…</p>}
+            </div>
+          )}
+          {l.status === "approved" && autoExecute && (
+            <p className="border border-primary/30 bg-primary/5 px-2 py-1 text-xs text-muted-foreground">
+              In the autonomous deploy queue: the executor takes specs in order at the pacing gap (no daily count cap)
+              {projectedAt ? `; this one is projected for ~${utcClock(projectedAt)}` : ""}. No approval step exists; Reject is the operator veto.
+            </p>
+          )}
+          {(l.status === "pending" || l.status === "approved") && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {l.status === "pending" && !autoExecute && (
+                <Button size="sm" disabled={busy} onClick={() => void act("approve")}>
+                  <Check className="size-3.5" /> Approve spec
+                </Button>
+              )}
+              {l.status === "approved" && !autoExecute && (
+                <Button size="sm" disabled={busy || !walletReady} onClick={() => void act("deploy")} title={walletReady ? "Deploy on-chain" : "Wallet not funded yet"}>
+                  <Rocket className="size-3.5" /> {walletReady ? "Deploy on-chain" : "Deploy (locked: wallet)"}
+                </Button>
+              )}
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void act("reject")}>
+                <X className="size-3.5" /> Reject
               </Button>
-            )}
-            {l.status === "approved" && !autoExecute && (
-              <Button size="sm" disabled={busy || !walletReady} onClick={() => void act("deploy")} title={walletReady ? "Deploy on-chain" : "Wallet not funded yet"}>
-                <Rocket className="size-3.5" /> {walletReady ? "Deploy on-chain" : "Deploy (locked: wallet)"}
-              </Button>
-            )}
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => void act("reject")}>
-              <X className="size-3.5" /> Reject
-            </Button>
-          </div>
-        )}
-      </CardContent>
+            </div>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }
 
 /** Procedural token art — the logo humans see next to the token on the launcher. */
-function LaunchArt({ id, symbol }: { id: string; symbol: string }) {
+function LaunchArt({ id, symbol, size = 80 }: { id: string; symbol: string; size?: number }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   return (
-    <div className="relative size-20 shrink-0 overflow-hidden border border-primary/30 bg-black/50 shadow-[0_0_16px_var(--sb-glow)]">
+    <div
+      className="relative shrink-0 overflow-hidden border border-primary/30 bg-black/50 shadow-[0_0_16px_var(--sb-glow)]"
+      style={{ width: size, height: size }}
+    >
       {!loaded && !failed && <div className="absolute inset-0 animate-pulse bg-muted/40" />}
       {failed ? (
         <div className="flex size-full items-center justify-center font-mono text-xl text-muted-foreground">
@@ -458,8 +481,8 @@ function LaunchArt({ id, symbol }: { id: string; symbol: string }) {
         <img
           src={`/api/launches/${id}/image`}
           alt={`${symbol} token logo`}
-          width={80}
-          height={80}
+          width={size}
+          height={size}
           loading="lazy"
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
