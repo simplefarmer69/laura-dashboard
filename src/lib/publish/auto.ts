@@ -1,7 +1,7 @@
 import { pushEvent, updateState } from "@/lib/store";
 import { isViewerMode } from "@/lib/viewer/mode";
 import { checkXGuards, recentXPosts } from "@/lib/publish/x-guard";
-import { publishToX, xStatus } from "@/lib/publish/x";
+import { isAuthFailure, publishToX, xStatus } from "@/lib/publish/x";
 import {
   acceptAuditEdit,
   sanitizeXPost,
@@ -38,6 +38,8 @@ import type { Draft, SwarmState } from "@/lib/types";
 
 const FRESH_WINDOW_MS = 6 * 3600_000;
 const ERROR_BACKOFF_MS = 15 * 60_000;
+/** A 401 means the token is gone, not that the post is bad: wait for the operator. */
+const AUTH_BACKOFF_MS = 60 * 60_000;
 /** Auditor calls per tick: enough to find one publishable post among fresh drafts. */
 const MAX_AUDITS_PER_TICK = 2;
 
@@ -233,6 +235,24 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
       });
       log(`published ${draft.id} by ${draft.agentId}: ${result.url}${auditNote}`);
     } catch (err) {
+      if (isAuthFailure(err)) {
+        /* Expired or revoked token: the draft is fine, the credential is not.
+           Leave the draft eligible, stop hammering the API, tell the operator
+           once per backoff window. */
+        s.nextAttemptAt = Date.now() + AUTH_BACKOFF_MS;
+        await updateState((st) => {
+          pushEvent(st, {
+            kind: "error",
+            agentId: "system",
+            title: "X posting credentials rejected (401)",
+            detail: `The X user token no longer authenticates; posts and mention replies are paused until X_OAUTH2_ACCESS_TOKEN is refreshed or the OAuth 1.0a access token pair is installed. Approved posts stay queued. Draft waiting: ${draft.title}`,
+            refId: draft.id,
+          });
+          return null;
+        });
+        log(`publish of ${draft.id} refused with 401: token expired or revoked; pausing the rail 60m, draft stays queued`);
+        return;
+      }
       s.nextAttemptAt = Date.now() + ERROR_BACKOFF_MS;
       await updateState((st) => {
         const target = st.drafts.find((x) => x.id === draft.id);

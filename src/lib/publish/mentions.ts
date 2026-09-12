@@ -4,7 +4,7 @@ import { z } from "zod";
 import { pushEvent, redactSecrets, updateState } from "@/lib/store";
 import { isViewerMode } from "@/lib/viewer/mode";
 import { X_ACCOUNT_HANDLE, X_ACCOUNT_PREVIOUS_HANDLE, X_ACCOUNT_USER_ID } from "@/lib/publish/x-guard";
-import { replyOnX, xStatus } from "@/lib/publish/x";
+import { isAuthFailure, replyOnX, xStatus } from "@/lib/publish/x";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
@@ -33,6 +33,7 @@ const LOG_FILE = path.join(DATA_DIR, "x-mentions-log.json");
 
 const POLL_INTERVAL_MS = 10 * 60_000;
 const ERROR_BACKOFF_MS = 20 * 60_000;
+const AUTH_BACKOFF_MS = 60 * 60_000;
 const REPLY_MIN_GAP_MS = 3 * 60_000;
 const MAX_REPLIES_PER_DAY = 12;
 const MAX_REPLIES_PER_TICK = 2;
@@ -343,8 +344,8 @@ export async function runXMentionsTick(state: SwarmState): Promise<void> {
       /* No judgement happened; keep it for a poll where the model is back. */
       break;
     }
-    finalize(m);
     if (!judged.text) {
+      finalize(m);
       skipped += 1;
       log(`skip @${m.author} (${m.id}): ${judged.reason.slice(0, 120)}`);
       continue;
@@ -353,6 +354,7 @@ export async function runXMentionsTick(state: SwarmState): Promise<void> {
 
     try {
       const posted = await replyOnX(text, m.id);
+      finalize(m);
       const entry: MentionReply = {
         at: Date.now(),
         mentionId: m.id,
@@ -377,8 +379,15 @@ export async function runXMentionsTick(state: SwarmState): Promise<void> {
       });
       log(`replied to @${m.author}: ${posted.url}`);
     } catch (err) {
-      r.nextPollAt = Date.now() + ERROR_BACKOFF_MS;
-      log(`reply to @${m.author} failed (${String(err).slice(0, 160)}); backing off 20m`);
+      /* The mention stays unjudged (not finalized, cursor behind it) so the
+         answer goes out once the credential or the API is back. */
+      if (isAuthFailure(err)) {
+        r.nextPollAt = Date.now() + AUTH_BACKOFF_MS;
+        log(`reply to @${m.author} refused with 401: token expired or revoked; pausing mentions 60m`);
+      } else {
+        r.nextPollAt = Date.now() + ERROR_BACKOFF_MS;
+        log(`reply to @${m.author} failed (${String(err).slice(0, 160)}); backing off 20m`);
+      }
       break;
     }
   }

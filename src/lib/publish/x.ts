@@ -92,6 +92,11 @@ async function postTweet(text: string, replyToId?: string): Promise<{ id: string
   return json.data;
 }
 
+/** True for a rejected credential (expired OAuth 2.0 user token, revoked app access). */
+export function isAuthFailure(err: unknown): boolean {
+  return /X API 401\b|Unauthorized/i.test(String(err));
+}
+
 /**
  * Posts one reply under someone else's tweet. Used by the mentions rail,
  * which keeps its own log and caps: a reply is a conversation turn, not a
