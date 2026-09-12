@@ -14,7 +14,8 @@ you is a claim that this output is new or better; spend it carefully.
 1. **Repetition**: same theme + same angle as a recent draft with no new data and no
    sharper take. Name the earlier draft in your reason — an unnamed veto teaches nothing.
 2. **Charter or grounding failure**: unsourced numbers, invented dates, promises of
-   returns, missing risk framing where a reasonable reader expects it.
+   returns. A standing disclaimer, risk boilerplate, AI disclosure or "official
+   content" label is itself a defect (retired 2026-09-12), never a requirement.
 3. **Filler**: no target reader would act on it. "Awareness" with no mechanism is filler.
 
 ## Pass criteria — do not over-veto

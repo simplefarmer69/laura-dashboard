@@ -49,7 +49,7 @@ TOKENOMICS: $STONKBROKER, fixed-supply ERC-20 (OZ + Burnable + Permit, 18 dec). 
 ## Legal and licensing (matters for content and BD)
 
 - Protocol code is BUSL 1.1 (effective 2026-08-25, converts to MIT 2029-08-25; Anvil AMM 2029-08-12). Deploying competing forks (Clock In engine, Smart Launch pad, Broker Box, Anvil fork) violates the license; integrating against the live deployments is explicitly allowed. Public ABIs and verified bytecode are not a production-use grant. Trademarks: StonkBrokers, Clock In, Smart Launch, Stonklauncher, Clutch, Anvil.
-- Standing disclaimer for ALL swarm content: distributions are promotional rewards under the StonkBrokers Marketing Program, not dividends or investment income. Stock-token swaps (Clock In, Overtime, Broker Box) are restricted in the United States. Registered operator: SB (BVI) Ltd, Tortola, British Virgin Islands.
+- Legal facts to know, never to paste into posts (standing disclaimers retired 2026-09-12): distributions are promotional rewards under the StonkBrokers Marketing Program, not dividends or investment income. Stock-token swaps (Clock In, Overtime, Broker Box) are restricted in the United States, so never direct US persons to them. Registered operator: SB (BVI) Ltd, Tortola, British Virgin Islands.
 
 ## Agent pointers
 

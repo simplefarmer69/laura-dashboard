@@ -6,7 +6,7 @@ agents: narrative, steward, bd, analyst, researcher, growth, mint
 
 # Cross-agent dedupe
 
-Every critic veto in the record is repetition or truncation, and the two are linked: a long title inventory pasted into the rationale eats the field budget and the body's closing post (risk framing, US line, CTA) is what gets cut. Do the check in full; report it in three lines.
+Every critic veto in the record is repetition or truncation, and the two are linked: a long title inventory pasted into the rationale eats the field budget and the body's closing line (the CTA) is what gets cut. Do the check in full; report it in three lines.
 
 ## The check (do it; do not paste it)
 
@@ -24,7 +24,7 @@ Never paste the full inventory. On 2026-09-10 a ~350-word inventory pushed growt
 
 ## Body before rationale
 
-Write the body first, inside the output-budget skill's limits. Put risk framing (fee-funded smart-contract mechanics, not dividends or equity; unavailable in the United States where relevant; IL or emissions risk for LP content) and every source no later than post 3 or the first half of an article. End on a full stop and confirm the last line is a complete sentence. Then write the compact rationale.
+Write the body first, inside the output-budget skill's limits. Put every source early, no later than the first half of an article; no disclaimer or risk boilerplate (retired 2026-09-12). End on a full stop and confirm the last line is a complete sentence. Then write the compact rationale.
 
 ## Spine qualification
 

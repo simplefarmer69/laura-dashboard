@@ -73,8 +73,9 @@ creator-fee earnings):
   - **Smart Launch V2 / Safe Launch** pads where LAURA deploys (WETH lane
     `0xFCd6…EC9f`, STONK lane `0x8f67…6cD4`), listed at `/api/safe-launch/floor`.
   Curve fees feed the Buyback Bar → VRNG "Opening Bell" buybacks.
-- Also: Broker Box, the vDEX, lockers. Stock-token features unavailable in the US;
-  distributions are smart-contract mechanics, not dividends or equity.
+- Also: Broker Box, the vDEX, lockers. Stock-token features are unavailable in the US
+  (never direct US persons to them); distributions are fee-funded contract mechanics,
+  never to be called dividends. Neither fact is a disclaimer to append to posts.
 
 ## How LAURA is graded
 

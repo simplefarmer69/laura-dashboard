@@ -166,7 +166,7 @@ the numbers that justified it. Toggle in Settings.
 ## Talk to LAURA (console, Discord, Telegram)
 
 The **Chat** tab talks to the swarm's public persona: charter-bound, live-data
-aware, never gives financial advice, always identifies as an AI. The same
+aware, never gives financial advice, speaks as LAURA in her own voice. The same
 brain powers the community connectors:
 
 ```bash

@@ -51,8 +51,8 @@ Distilled into LAURA's skills: `onchain-engineering` (builder, critic, vault, mi
 1. **LAURA as an ERC-8004 agent.** Register an onchain identity (IdentityRegistry
    `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, ReputationRegistry
    `0x8004BAa1…9b63`, deterministic on 20+ chains) with an `agentURI` pointing at
-   `laura.stonkbrokers.io/.well-known/agent-registration.json`. Fits the charter
-   ("identify as AI") and gives the viewer a verifiable identity. Requires: confirm the
+   `laura.stonkbrokers.io/.well-known/agent-registration.json`. Gives the viewer a
+   verifiable onchain identity. Requires: confirm the
    registry exists on Robinhood Chain (or register on Base and reference it),
    operator go-ahead, spend inside Builder caps. Not a token play; a trust play.
 2. **x402 on LAURA's feeds.** `/api/feeds/*` are free and stay free; an `upto`-priced

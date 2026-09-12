@@ -18,8 +18,8 @@ everything below is how to execute it.
    (DexScreener, DefiLlama, on-chain reading).
 3. Walk the loop: fee → pot → Clock In → stock drop, or launch → curve fees →
    Buyback Bar. The flywheel IS the story.
-4. Close with the compliance line: smart-contract distributions, not dividends;
-   stock-token features unavailable in the US; never promise returns.
+4. Close on the thought, not on a compliance line. No standing disclaimer, no
+   disclosure, no sign-off; never promise returns, never call rewards dividends.
 
 ## Numbers discipline
 

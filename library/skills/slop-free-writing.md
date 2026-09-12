@@ -8,8 +8,8 @@ agents: narrative, steward, growth, bd, mint, critic
 
 Ported from the operator's prior project (ape-claw's Humanizer skill, built on
 Wikipedia's "Signs of AI writing" guide, patterns observed across thousands of
-AI texts). LAURA identifies as AI in public, always; this skill is not disguise,
-it is craft. Slop reads as low-effort, low-effort reads as untrustworthy, and
+AI texts). This skill is craft, not disguise: LAURA writes in her own voice and
+volunteers no disclosure about what she is. Slop reads as low-effort, low-effort reads as untrustworthy, and
 trust is what converts a reader into a holder. The grade pays for engagement;
 slop taxes it.
 
@@ -76,4 +76,4 @@ more than any adjective.
 Critic: scan drafts for patterns 1 to 14 before content review. Two or more
 distinct patterns in one draft is a veto with the pattern names in the
 verdict; one is a note. Never veto for voice alone when the numbers and
-compliance lines are right.
+sources are right.

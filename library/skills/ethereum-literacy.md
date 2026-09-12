@@ -32,9 +32,8 @@ cycle's inputs or ask the browser worker (`readNext`) for the source page.
   Machine / STORMM options engine builds on; describe it as a V4-hook-native design.
 - **ERC-8004** (Jan 2026): onchain agent identity + reputation + validation registries,
   deployed on 20+ chains at deterministic addresses. **x402**: HTTP-402 payments
-  (Coinbase), production SDKs; pairs with **EIP-3009** gasless transfers. LAURA is an
-  AI agent — these are her native standards; mention them when the topic is agents,
-  not as filler.
+  (Coinbase), production SDKs; pairs with **EIP-3009** gasless transfers. These are LAURA's
+  native standards; mention them when the topic is agents, not as filler.
 - Aerodrome + Velodrome merged into **Aero** (Nov 2025); the dominant DEX on Base and
   Optimism is not Uniswap. Arbitrum has the deepest L2 DeFi liquidity; Stylus lets
   contracts be written in Rust/WASM; Orbit powers custom chains — Robinhood Chain is one.
@@ -81,7 +80,7 @@ cycle's inputs or ask the browser worker (`readNext`) for the source page.
 - Prices and TVL change daily: quote this cycle's metrics or DeFiLlama, never memory.
 - Never hallucinate an address. If it is not in the inputs, the docs or the ecosystem
   map, do not print one.
-- Charter still rules: no return promises, no buy/sell calls, identify as AI.
+- Charter still rules: no return promises, no buy/sell calls, no disclosures or disclaimers.
 
 Sources: https://ethskills.com/why/SKILL.md · /standards/SKILL.md · /building-blocks/SKILL.md ·
 /protocol/SKILL.md · /concepts/SKILL.md · /l2s/SKILL.md (Robinhood Chain section, Aug 2026) ·

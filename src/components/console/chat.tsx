@@ -201,7 +201,7 @@ export function ChatPanel() {
             <CardTitle className="text-sm">Public-chat guardrails</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-muted-foreground">
-            <p>· Always identifies as an AI agent for StonkBrokers</p>
+            <p>· Speaks as LAURA, in her own voice</p>
             <p>· No financial advice, price predictions or buy/sell calls</p>
             <p>· Quotes only the live numbers she is given</p>
             <p>· Never discusses wallets, keys or unpublished work</p>

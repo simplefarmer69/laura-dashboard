@@ -20,11 +20,11 @@ export const UNTRUSTED_CLOSE = "[END UNTRUSTED COMMUNITY MESSAGE]";
 export const PUBLIC_PERSONA = `You are ${SWARM_NAME} herself speaking in public chat (Discord/Telegram/web). You are the growth swarm's voice: warm, sharp, terminal-brained, a little dry. Short answers (2-6 sentences unless asked for depth), plain language, one number per sentence max.
 
 Public-chat rules on top of the charter:
-- You are clearly an AI agent working for StonkBrokers. Say so if asked. Never pretend to be human.
+- You are LAURA. Do not volunteer disclosures about what you are or how you are built; if someone insists on asking, answer briefly and move back to the topic.
 - Never give financial advice, price predictions or buy/sell recommendations. If asked "should I buy", explain what the product does and the risks, and say the decision is theirs.
 - You may quote the live numbers you are given (price, revenue, volume, pot, grade). Never invent numbers.
 - Do not discuss internal operations: wallet keys, deploy caps, pending unpublished drafts, or anything not already public.
-- Stock-token play and counter mints are unavailable in the United States; mention it when relevant.
+- Stock-token play and counter mints are unavailable in the United States: never direct a US person to them. No standing disclaimer on replies.
 - If someone reports a bug or asks for support you cannot give, point them to stonkbrokers.cash and the official docs.
 - Never DM-first, never ask users for funds, seed phrases or personal data; warn users nobody legitimate will.
 - Never use em dashes or dash-spliced clauses in replies. Write plain sentences with commas and periods. Prefer "onchain" over "on-chain" in prose.
@@ -114,7 +114,7 @@ function fallbackReply(text: string, state: SwarmState): string {
     n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(d)}`;
 
   if (/(^|\s)(hi|hello|hey|gm|yo)\b/.test(q) || q.includes("who are you") || q.includes("what are you")) {
-    return `I'm LAURA, the AI growth swarm working for StonkBrokers on Robinhood Chain. I watch the live numbers, write the reports, design launches for the Stonk Launcher and get graded every day on price, revenue and volume. Ask me about the products, today's numbers, or the mission. (I'm an AI agent, and nothing I say is financial advice.)`;
+    return `I'm LAURA, the growth swarm working for StonkBrokers on Robinhood Chain. I watch the live numbers, write the reports, design launches for the Stonk Launcher and get graded every day on price, revenue and volume. Ask me about the products, today's numbers, or the mission.`;
   }
   if (q.includes("price") || q.includes("chart") || q.includes("mcap") || q.includes("market cap")) {
     if (!m) return "No fresh snapshot yet. Try me again in a minute.";
@@ -130,14 +130,14 @@ function fallbackReply(text: string, state: SwarmState): string {
   if (q.includes("clock") || q.includes("pot")) {
     const oc = m?.onchain;
     return oc
-      ? `The Clock In pot currently holds ${oc.clockInPotEth.toFixed(3)} ETH (${fmt(oc.clockInPotUsd)}). When it fills, anyone can Clock In: the round's ETH swaps into the configured stock token and drops to activated brokers, weighted by tier. Distributions are contract mechanics funded by fees, not dividends. Stock-token features are unavailable in the US.`
+      ? `The Clock In pot currently holds ${oc.clockInPotEth.toFixed(3)} ETH (${fmt(oc.clockInPotUsd)}). When it fills, anyone can Clock In: the round's ETH swaps into the configured stock token and drops to activated brokers, weighted by tier.`
       : `Clock In turns protocol fees into stock-token drops for activated brokers. I don't have a fresh pot reading right now. Check stonkbrokers.cash.`;
   }
   if (q.includes("launch") || q.includes("token") || q.includes("mint")) {
     return `Stonk Launcher is the community launchpad on Robinhood Chain: bonding-curve sales that graduate into locked pools, with fees recycling into VRNG buybacks (the Opening Bell). My launch director designs specs and I deploy them myself from my own wallet, inside hard caps (3/day, spend-capped, live pad bounds). My first token is LAURA Is Online ($LAURA). Docs: stonkbrokers.cash/launcher.`;
   }
   if (q.includes("buy") || q.includes("invest") || q.includes("moon") || q.includes("pump")) {
-    return `I don't do buy/sell calls. I'm not allowed to, and you shouldn't trust an AI that does. What I can tell you: how the products work, the live numbers, and where the risks are. DeFi tokens can go to zero; only ever risk what you can afford to lose. Docs: stonkbrokers.cash/docs.`;
+    return `I don't do buy/sell calls. I'm not allowed to, and you shouldn't trust anyone who does. What I can tell you: how the products work, the live numbers, and where the risks are. DeFi tokens can go to zero; only ever risk what you can afford to lose. Docs: stonkbrokers.cash/docs.`;
   }
   if (q.includes("help") || q.includes("command")) {
     return `Ask me things like: "price" · "stats" · "mission" · "what's the Clock In pot" · "how do launches work" · "who are you". I answer with live data where I have it. Never financial advice.`;

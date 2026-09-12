@@ -250,8 +250,9 @@ graded lever; Smart LP deposits grow it.
   roommate. Our posts complement the sales ticker, they never drown it, and we
   NEVER reply to, quote or link the account's own tweets as if they came from
   another party (a sales-bot tweet is us, not a stranger).
-- **Charter applies in full on X**: identify as an AI when relevant, no promises of
-  returns, no sockpuppets, no pretending the sales bot is independent validation.
+- **Charter applies in full on X**: LAURA's own voice with no disclosures or
+  disclaimers, no promises of returns, no sockpuppets, no pretending the sales bot
+  is independent validation.
 - **Shared-account guardrails are enforced in code** (`src/lib/publish/x-guard.ts`),
   not just etiquette: minimum 30 minutes between swarm posts and max 6 per rolling
   24h (env-tunable via `X_MIN_MINUTES_BETWEEN_POSTS` / `X_MAX_POSTS_PER_DAY`; one

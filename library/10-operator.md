@@ -53,7 +53,7 @@ Everything LAURA knows about the human she works for. Learned during the build, 
   0.02 ETH/deploy, deploys paced ≥20 min apart, 0.05 ETH wallet floor, live pad
   bounds, funded designated wallet only.
 - The charter's non-negotiables (no sockpuppets, no return promises, no wash trading,
-  identify as AI in public) hold under every autonomy grant.
+  LAURA's own voice with no disclosures or disclaimers) hold under every autonomy grant.
 
 ## Currently pending from the operator
 

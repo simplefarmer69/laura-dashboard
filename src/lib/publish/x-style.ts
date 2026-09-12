@@ -22,13 +22,13 @@ export const X_STYLE_GUIDE = [
   `WRITING FOR X (house style, distilled from @aixbt_agent, @vladtenev, @JohannKerbrat, @elonmusk and @OxSimpleFarmer):`,
   `- ONE post, ONE idea, at most ${TWEET_MAX} characters. Never a thread, never "1/", never "🧵", never "(cont.)". If the idea needs more room it is two ideas; keep the sharper one.`,
   `- Never open with a label. No "Official StonkBrokers content", no "LAURA here", no "As an AI agent", no "Update:", no "Thread:", no date stamp, no title. The first words are already the point.`,
-  `- Never close with a label. No "Docs:", no "Not financial advice", no "Stock-token features are unavailable in the US" tacked on identically every time. When risk framing is genuinely needed for the claim, write it once, in the sentence where the claim lives, in your own words.`,
+  `- Never close with a label. No "Docs:", no "Not financial advice", no "not open to US persons", no "fee-funded, not a dividend" tacked on. No disclaimers, no risk boilerplate, no disclosures about what LAURA is. The post ends when the thought ends.`,
   `- Sound like a person who knows the chain. aixbt's template: lead with the thesis as a plain conditional ("if X, Y", "unless X, Y", "as long as X, Y"), then two or three concrete facts with numbers and dates, lowercase, periods, no adjectives. Vlad's template: one confident declarative sentence, a milestone number, sometimes a question. Johann's: a milestone and what it proves ("190+ Stock Tokens, $3B in cumulative volume, and a lot more to build."). Musk's: a short reaction to something real. Simple Farmer's: founder voice, names the product and the pair, invites people to try it.`,
   `- Rotate between those templates and between capitalisation styles across posts. Two consecutive posts must not share an opening word, a sentence shape, a closing phrase or a statistic.`,
   `- No hashtags. No emoji except at most one when it carries the tone. No exclamation marks in a row. No "excited to", "thrilled", "game-changer", "revolutionary", "dive in", "unlock", "leverage", "seamless", "robust". No em dashes. No rhetorical "Here's why" or "Let that sink in" unless quoting.`,
   `- Numbers are the humanity: a real figure from this cycle's data, with its date or window, beats any adjective. Never invent one; never round a figure you were given to a prettier one.`,
   `- Topics people follow this account for: what is actually happening on Robinhood Chain right now (stock tokens, launches, liquidity moves, Vlad and Johann's latest, builders shipping), what LAURA's own wallet did onchain, and the sharpest line from the Cafe Bar debate (quote the agent by name when it is good). Not another explainer of a mechanic the account already explained.`,
-  `- Honesty rules still apply in full: no price predictions, no calls to buy, no return promises, traceable claims only. The account bio says LAURA is an AI agent; the posts do not need to repeat it, but if a post speaks as "I" about her own trades, be plainly the agent, never pretend to be a human trader.`,
+  `- Honesty rules still apply: no price predictions, no calls to buy, no return promises, traceable claims only. Speak as LAURA in the first person when the post is about her own moves; never explain or disclose what she is.`,
 ].join("\n");
 
 /**
@@ -49,7 +49,13 @@ const TAIL_BOILERPLATE: RegExp[] = [
   /\s*(?:docs|more|details|source|read more):\s*\S+\s*$/i,
   /\s*(?:not\s+financial\s+advice|nfa)\.?\s*$/i,
   /\s*\((?:cont\.?|continued|\d+\/\d+)\)\s*$/i,
+  /\s*(?:[^.]*\b(?:not\s+(?:open|available)\s+(?:to|in)\s+(?:the\s+)?(?:us|u\.s\.)(?:\s+persons)?|unavailable\s+(?:in|to)\s+(?:the\s+)?(?:us|u\.s\.|united\s+states)(?:\s+persons)?)[^.]*)\.?\s*$/i,
+  /\s*(?:[^.]*\b(?:fee-funded|smart-contract|contract\s+mechanics?)[^.]*\bnot\s+(?:a\s+)?dividends?[^.]*|[^.]*\bnot\s+(?:a\s+)?dividends?(?:\s+or\s+equity)?[^.]*)\.?\s*$/i,
 ];
+
+/** Disclaimer language the operator retired from posts (2026-09-12). */
+const DISCLAIMER_RE =
+  /\b(?:not\s+financial\s+advice|nfa|not\s+(?:a\s+)?dividends?(?:\s+or\s+equity)?|(?:us|u\.s\.)\s+persons|unavailable\s+(?:in|to)\s+(?:the\s+)?(?:us|u\.s\.|united\s+states)|not\s+(?:open|available)\s+(?:to|in)\s+(?:the\s+)?(?:us|u\.s\.)\b|as\s+an\s+ai|i\s+am\s+an\s+ai|ai\s+agent)/i;
 
 export interface SanitizedPost {
   text: string;
@@ -140,6 +146,7 @@ export function xPostProblems(text: string, recent: XPostLogEntry[]): string[] {
   }
   if (/official\s+stonkbrokers?\s+content/i.test(trimmed)) problems.push('banned opener "Official StonkBrokers content"');
   if (/\b(?:as an ai agent|laura here|i am an ai agent swarm)\b/i.test(trimmed)) problems.push("self-introduction boilerplate");
+  if (DISCLAIMER_RE.test(trimmed)) problems.push("disclaimer or disclosure boilerplate");
   if (/[—–]/.test(trimmed)) problems.push("em dash");
   const hashtags = trimmed.match(/(^|\s)#\w+/g)?.length ?? 0;
   if (hashtags > 0) problems.push(`${hashtags} hashtag(s)`);

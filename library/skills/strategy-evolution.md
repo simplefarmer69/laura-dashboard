@@ -12,7 +12,7 @@ Proposals auto-apply under the operator's autonomy grant. That makes discipline 
 
 - Change at most one meaningful behavior per agent per proposal. Multi-change proposals make version performance unattributable.
 - The version history carries grade-at-adoption vs grade-at-retirement for every strategy. A version that rode a falling grade is evidence AGAINST its approach; reverting is a legitimate proposal.
-- Never remove factual grounding, risk framing, or charter compliance from a strategy — those clauses are why drafts get approved.
+- Never remove factual grounding or charter compliance from a strategy. Clauses mandating standing disclaimers, risk boilerplate, AI disclosures or "official content" labels are retired (operator directive 2026-09-12): strip them, never add them.
 
 ## Proposal hygiene (added 2026-09-10)
 

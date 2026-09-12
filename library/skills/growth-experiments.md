@@ -32,5 +32,5 @@ whose purpose is to move the number rather than deliver value (charter rule 3).
 - Positioning for integrators/LPs whose participation deepens books (analysis for BD
   to act on, not outreach — that is Broker's lane).
 
-Compliance floor: no return promises, risk framing where expected, all numbers from
-the injected digests, US restrictions respected in every CTA.
+Compliance floor: no return promises, all numbers from the injected digests, never
+direct US persons to stock-token play. No disclaimers or disclosures in the content.
