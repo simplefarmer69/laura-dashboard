@@ -204,6 +204,28 @@ posts, 6 per 24h, duplicate memory, never engaging the account itself):
 
 All are silent no-ops until posting credentials exist.
 
+What the posts are about, and how the voice improves:
+
+- **Chain alpha** (`src/lib/swarm/chain-alpha.ts`): every cycle, code diffs the
+  live Robinhood Chain reads against the snapshot from a day earlier and lists
+  what most people have not noticed: pairs under 24 h old with volume, volume
+  spikes and drains, stock-token volume while the stock market is shut,
+  rotations between tickers, DEX tape imbalance, new launcher listings, holder
+  and TVL deltas, leadership posts with little engagement. Each line carries
+  its number and source; Quill, Growth, Scout and the critic read it, and the
+  post brief asks for a thesis built on one of those lines.
+- **Measured response** (`src/lib/publish/x-metrics.ts`): views, likes,
+  replies and reposts for the account's own posts are read back every ~2 h with
+  the read-only bearer and shown next to each post in the producer, critic and
+  coach prompts, ranked best to worst.
+- **X voice study** (`src/lib/swarm/x-voice.ts`): about every 6 h the coach
+  rereads the latest originals from the reference account (@aixbt_agent),
+  LAURA's own measured posts and the current `library/skills/x-voice.md`, then
+  rewrites that skill. The rewrite must keep the section headings and the hard
+  limits (one post, 280 characters, no threads, labels or disclaimers) or it is
+  rejected and the previous version stands. Because the skill is injected into
+  every X-post prompt, the voice changes on the next cycle without a deploy.
+
 ## Layout
 
 ```
