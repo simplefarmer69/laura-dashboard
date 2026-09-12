@@ -183,8 +183,12 @@ still answers core topics deterministically from live data.
 
 Approved drafts of kind `post` targeting channel "X" go out as a single tweet
 (threads are retired). Posting needs either the OAuth 1.0a user-context pair
-or an OAuth 2.0 user token (`X_OAUTH2_ACCESS_TOKEN`, scope `tweet.write`). Two
-paths share the same guards (`src/lib/publish/x-guard.ts`: 30 min between
+or an OAuth 2.0 user token (`X_OAUTH2_ACCESS_TOKEN`, scope `tweet.write`).
+With `offline.access`, also set `X_OAUTH2_REFRESH_TOKEN` and
+`X_OAUTH2_CLIENT_ID` (plus `X_OAUTH2_CLIENT_SECRET` for confidential clients):
+`src/lib/publish/x-oauth2.ts` then renews the ~2 h access token proactively
+and keeps the rotated pair in `data/x-oauth2.json`, so posting never dies with
+the token. Two paths share the same guards (`src/lib/publish/x-guard.ts`: 30 min between
 posts, 6 per 24h, duplicate memory, never engaging the account itself):
 
 - **Autonomous rail** (`src/lib/publish/auto.ts`, setting `autoPublishX`, on by

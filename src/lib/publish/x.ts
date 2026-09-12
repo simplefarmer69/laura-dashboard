@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 import { checkXGuards, recordXPost, type XGuardVerdict } from "@/lib/publish/x-guard";
+import { currentOauth2Token, forceOauth2Refresh } from "@/lib/publish/x-oauth2";
 
 /**
  * X (Twitter) publishing rail. Two user-context auth paths, no SDK needed:
@@ -64,27 +65,37 @@ function oauthHeader(method: "POST", url: string): string {
     .join(", ")}`;
 }
 
-/** OAuth 1.0a when the full key set exists, else the OAuth 2.0 user token. */
-function authHeader(method: "POST", url: string): string {
+/** OAuth 1.0a when the full key set exists, else the (auto-refreshed) OAuth 2.0 user token. */
+async function authHeader(method: "POST", url: string): Promise<string> {
   const s = xStatus();
   if (s.appKeys && s.accessKeys) return oauthHeader(method, url);
-  return `Bearer ${process.env.X_OAUTH2_ACCESS_TOKEN ?? ""}`;
+  const token = await currentOauth2Token();
+  return `Bearer ${token || (process.env.X_OAUTH2_ACCESS_TOKEN ?? "")}`;
 }
 
-async function postTweet(text: string, replyToId?: string): Promise<{ id: string }> {
-  const url = "https://api.x.com/2/tweets";
-  const res = await fetch(url, {
+async function sendTweet(auth: string, text: string, replyToId?: string): Promise<Response> {
+  return fetch("https://api.x.com/2/tweets", {
     method: "POST",
-    headers: {
-      authorization: authHeader("POST", url),
-      "content-type": "application/json",
-    },
+    headers: { authorization: auth, "content-type": "application/json" },
     body: JSON.stringify({
       text,
       ...(replyToId ? { reply: { in_reply_to_tweet_id: replyToId } } : {}),
     }),
     signal: AbortSignal.timeout(20_000),
   });
+}
+
+async function postTweet(text: string, replyToId?: string): Promise<{ id: string }> {
+  const url = "https://api.x.com/2/tweets";
+  let res = await sendTweet(await authHeader("POST", url), text, replyToId);
+  /* An expired OAuth 2.0 access token 401s once; a forced refresh mints a new
+     one from the stored refresh token and the post retries immediately. Only
+     the OAuth 2.0 path can be revived this way — 1.0a keys never expire. */
+  const s = xStatus();
+  if (res.status === 401 && !(s.appKeys && s.accessKeys)) {
+    const fresh = await forceOauth2Refresh();
+    if (fresh) res = await sendTweet(`Bearer ${fresh}`, text, replyToId);
+  }
   const json = (await res.json()) as { data?: { id: string }; title?: string; detail?: string; errors?: unknown };
   if (!res.ok || !json.data) {
     throw new Error(`X API ${res.status}: ${json.detail ?? json.title ?? JSON.stringify(json.errors ?? json)}`);
