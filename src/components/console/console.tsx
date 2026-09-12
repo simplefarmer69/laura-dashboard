@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Activity,
   Bot,
+  BookOpen,
   GitBranch,
   Inbox,
   LineChart as LineChartIcon,
@@ -31,6 +32,7 @@ import { Growth } from "@/components/console/growth";
 import { Launchpad } from "@/components/console/launchpad";
 import { ChatPanel } from "@/components/console/chat";
 import { CafeBar } from "@/components/console/forum";
+import { DocsPanel } from "@/components/console/docs";
 import { pct, usd } from "@/components/console/format";
 import type { CycleRun } from "@/lib/types";
 
@@ -241,6 +243,9 @@ export function Console() {
               <TabsTrigger className={TAB_CLASS} value="runs">
                 <Play /> Runs
               </TabsTrigger>
+              <TabsTrigger className={TAB_CLASS} value="docs">
+                <BookOpen /> Docs
+              </TabsTrigger>
               <TabsTrigger className={TAB_CLASS} value="settings">
                 <Settings2 /> Settings
               </TabsTrigger>
@@ -285,6 +290,9 @@ export function Console() {
             <TabsContent value="runs">
               <RunsPanel state={state} />
             </TabsContent>
+            <TabsContent value="docs">
+              <DocsPanel />
+            </TabsContent>
             <TabsContent value="settings">
               <ViewerShield>
                 <SettingsPanel state={state} refresh={refresh} />
@@ -294,7 +302,16 @@ export function Console() {
         )}
       </main>
       <footer className="border-t border-border/60 px-4 py-3 text-center sb-ticker text-[10px] text-muted-foreground/80">
-        LAURA operates under the swarm charter · drafts are reviewed before publishing · rewards are contract distributions, not dividends
+        LAURA operates under the swarm charter · drafts are reviewed before publishing · rewards are contract distributions, not dividends ·{" "}
+        <a
+          href="https://github.com/simplefarmer69/laura-dashboard"
+          target="_blank"
+          rel="noreferrer"
+          className="text-primary/80 underline underline-offset-2 hover:text-primary"
+        >
+          open source on GitHub
+        </a>{" "}
+        · MIT license
       </footer>
     </div>
   );
