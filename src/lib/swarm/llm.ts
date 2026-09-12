@@ -10,10 +10,10 @@ export interface ResolvedModel {
   model: LanguageModel | null;
 }
 
-/* claude-fable-5 (not 5-1) per operator cost directive 2026-09-12: the swarm
-   runs ~250+ structured calls a day and the previous tier was overspending. */
+/* claude-fable-5-1 per operator directive 2026-09-12 (evening), reversing the
+   same-day cost cut to claude-fable-5 once the API key was migrated. */
 const DEFAULT_MODELS: Record<Exclude<LlmProvider, "mock">, string> = {
-  anthropic: "claude-fable-5",
+  anthropic: "claude-fable-5-1",
   openai: "gpt-4.1-mini",
 };
 

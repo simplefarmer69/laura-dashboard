@@ -82,6 +82,11 @@ function isRateReason(reason: string): boolean {
   return /^(rate cap|daily cap)/.test(reason);
 }
 
+/** Producer mocks in tasks.ts all stamp the rationale with this prefix. */
+function isFallbackDraft(d: Draft): boolean {
+  return /^Deterministic fallback/i.test(d.rationale.trim());
+}
+
 /** Marks a draft as skipped by the rail; it stays approved for the operator. */
 async function skip(draftId: string, note: string): Promise<void> {
   await updateState((st) => {
@@ -158,6 +163,15 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
       continue;
     }
 
+    /* A draft the deterministic fallback wrote (no live model, e.g. the
+       provider's monthly cap hit 2026-09-12 20:17 UTC) is template text with
+       live numbers plugged in. The account stays silent rather than post it. */
+    if (isFallbackDraft(draft)) {
+      await skip(draft.id, "not posted: written by the deterministic fallback with no live model; the account stays silent rather than post template text");
+      log(`${draft.id} skipped: fallback-authored draft`);
+      continue;
+    }
+
     const clean = sanitizeXPost(draft.body);
     const problems = xPostProblems(clean.text, recent);
     if (problems.length > 0) {
@@ -192,6 +206,14 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
         }),
         mock: xAuditMock,
       });
+      /* The auditor fell back to code checks: the model is unreachable right
+         now. The draft is fine and stays eligible; the rail retries after the
+         error backoff instead of posting anything unread by a live model. */
+      if (audit.usedMock) {
+        s.nextAttemptAt = Date.now() + ERROR_BACKOFF_MS;
+        log(`${draft.id} held: auditor offline (no live model); retrying in ${ERROR_BACKOFF_MS / 60_000} min rather than posting unaudited`);
+        return;
+      }
       if (audit.value.verdict === "veto") {
         await veto(draft, audit.value.reason);
         log(`${draft.id} vetoed by the auditor: ${audit.value.reason.slice(0, 160)}`);
