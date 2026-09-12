@@ -132,7 +132,7 @@ export function hostAllowed(url: string): boolean {
 const nodeRequire = createRequire(import.meta.url);
 const PLAYWRIGHT_MODULE = "playwright";
 
-interface PlaywrightLike {
+export interface PlaywrightLike {
   chromium: {
     launch(opts: { headless: boolean; executablePath?: string }): Promise<{
       newContext(opts: { userAgent: string; javaScriptEnabled: boolean }): Promise<{
@@ -151,13 +151,18 @@ interface PlaywrightLike {
   };
 }
 
-function loadPlaywright(): PlaywrightLike | null {
+export function loadPlaywright(): PlaywrightLike | null {
   if (process.env.SWARM_BROWSER !== "1") return null;
   try {
     return nodeRequire(PLAYWRIGHT_MODULE) as PlaywrightLike;
   } catch {
     return null;
   }
+}
+
+/** Chromium executable override shared by every Playwright consumer (browser worker, webart). */
+export function chromiumExecutablePath(): string | undefined {
+  return process.env.SWARM_BROWSER_EXECUTABLE?.trim() || undefined;
 }
 
 /** Which engine this host would use right now (for status surfaces). */

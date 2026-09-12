@@ -32,9 +32,12 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/launches/[i
       palette: launch.artPalette,
       style: launch.artStyle,
     };
+    /* Viewer regenerates procedurally (no data dir, no browser); the daemon
+       host resolves stored art, sourcing a web image first when the spec
+       carries an imageQuery. */
     const bytes = isViewerMode()
       ? await generateTokenArt(spec)
-      : await ensureLaunchArt(launch.id, spec);
+      : await ensureLaunchArt(launch.id, { ...spec, imageQuery: launch.imageQuery });
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         "Content-Type": "image/webp",

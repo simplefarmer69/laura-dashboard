@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { ART_PALETTES as PALETTE_NAMES } from "@/lib/launchpad/spec";
+import { fetchWebTokenImage } from "@/lib/launchpad/webart";
 
 /**
  * Procedural token art: LAURA designs each launch's logo herself.
@@ -189,6 +190,8 @@ export interface TokenArtSpec {
   palette?: string | null;
   /** Composition (one of ART_STYLES); seeded from the spec when absent. */
   style?: string | null;
+  /** Web image search phrase; when set, a real image is sourced via the browser worker (procedural art is the fallback). */
+  imageQuery?: string | null;
 }
 
 const MONO = "Cascadia Mono, DejaVu Sans Mono, monospace";
@@ -417,10 +420,27 @@ export async function readLaunchArt(launchId: string): Promise<Buffer | null> {
   return null;
 }
 
-/** Reads stored art, generating (and persisting) it on demand. */
+/**
+ * Reads stored art, generating (and persisting) it on demand. When the spec
+ * carries an imageQuery, a real web image is sourced first (Chromium image
+ * search on the daemon host, Openverse elsewhere — operator directive
+ * 2026-09-12); the procedural renderer stays the fallback so a launch always
+ * gets a logo even fully offline.
+ */
 export async function ensureLaunchArt(launchId: string, spec: TokenArtSpec): Promise<Buffer> {
   const existing = await readLaunchArt(launchId);
   if (existing) return existing;
+  if (spec.imageQuery) {
+    try {
+      const web = await fetchWebTokenImage(spec.imageQuery, `${spec.symbol}:${launchId}`);
+      if (web) {
+        await saveLaunchArt(launchId, web.bytes);
+        return web.bytes;
+      }
+    } catch {
+      /* fall through to procedural art */
+    }
+  }
   const bytes = await generateTokenArt(spec);
   await saveLaunchArt(launchId, bytes);
   return bytes;

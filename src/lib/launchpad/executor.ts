@@ -220,6 +220,7 @@ async function brandLaunch(
       motif: launch.artMotif,
       palette: launch.artPalette,
       style: launch.artStyle,
+      imageQuery: launch.imageQuery,
     });
     const imageHash = await uploadTokenImage(art);
     await attachTokenLogo(account, tokenAddress, imageHash);

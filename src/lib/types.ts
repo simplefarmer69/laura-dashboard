@@ -622,6 +622,8 @@ export interface LaunchProposal {
   artPalette?: string | null;
   /** Logo composition (orbital, poster, badge, glitch, minimal); seeded when absent */
   artStyle?: string | null;
+  /** Image search phrase; when set the logo is a real web image sourced via the Chromium worker (procedural art is the fallback) */
+  imageQuery?: string | null;
   status: LaunchStatus;
   reviewedAt: number | null;
   reviewerNote: string | null;

@@ -19,6 +19,8 @@ const createSchema = z.object({
   artMotif: z.string().min(2).max(80),
   artPalette: z.enum(ART_PALETTES),
   artStyle: z.enum(ART_STYLES).optional(),
+  /** Web image search phrase for the logo; procedural art is the fallback. */
+  imageQuery: z.string().min(3).max(100).optional(),
   priority: z.number().min(0).max(100).optional(),
   approve: z.boolean().default(false),
 });
@@ -66,6 +68,7 @@ export async function POST(req: NextRequest) {
       artMotif: p.artMotif,
       artPalette: p.artPalette,
       artStyle: p.artStyle ?? null,
+      imageQuery: p.imageQuery ?? null,
       priority: p.priority ?? 0,
       status: p.approve ? "approved" : "pending",
       reviewedAt: p.approve ? Date.now() : null,
@@ -106,6 +109,7 @@ export async function POST(req: NextRequest) {
       motif: launch.artMotif,
       palette: launch.artPalette,
       style: launch.artStyle,
+      imageQuery: launch.imageQuery,
     });
   } catch {
     /* art regenerates on demand */

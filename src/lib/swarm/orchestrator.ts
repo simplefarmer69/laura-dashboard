@@ -920,6 +920,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             artMotif: spec.artMotif,
             artPalette: spec.artPalette,
             artStyle: spec.artStyle,
+            imageQuery: spec.imageQuery,
             status: autonomous ? "approved" : "pending",
             reviewedAt: autonomous ? Date.now() : null,
             reviewerNote: autonomous ? "Auto-approved: operator granted full launch autonomy" : null,
@@ -955,6 +956,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
               symbol: launch.symbol,
               motif: launch.artMotif,
               palette: launch.artPalette,
+              style: launch.artStyle,
+              imageQuery: launch.imageQuery,
             });
           } catch {
             /* art regenerates on demand at deploy time */
