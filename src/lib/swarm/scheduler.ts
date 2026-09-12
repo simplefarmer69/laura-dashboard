@@ -11,6 +11,7 @@ import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { runBuilderTick } from "@/lib/builder/executor";
 import { runXPublishTick } from "@/lib/publish/auto";
 import { runXMentionsTick } from "@/lib/publish/mentions";
+import { refreshXPostMetrics } from "@/lib/publish/x-metrics";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
 import { clearFlag, flagPending, RESTART_FLAG } from "@/lib/ops";
@@ -308,6 +309,10 @@ async function tick(): Promise<void> {
   } catch (err) {
     log(`x mentions tick failed: ${String(err)}`);
   }
+
+  /* Read-back: engagement counters for the account's own recent posts
+     (bearer, one request every ~2h). Feeds the voice study. Never throws. */
+  await refreshXPostMetrics();
 
   /* Daily grade first: with back-to-back cycles the "nothing due" branch
      below may never be reached, so the stamp must not depend on it. One

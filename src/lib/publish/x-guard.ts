@@ -61,12 +61,25 @@ export function xPostPolicy(): XPostPolicy {
   };
 }
 
+/** Public engagement counters read back from the X API (bearer, read-only). */
+export interface XPostMetrics {
+  likes: number;
+  retweets: number;
+  replies: number;
+  quotes: number;
+  impressions: number;
+  /** When these counters were read. */
+  at: number;
+}
+
 export interface XPostLogEntry {
   at: number;
   url: string;
   firstTweetId: string;
   /** First 600 chars of the posted body, kept for duplicate comparison. */
   text: string;
+  /** Latest engagement read; absent until the first refresh after posting. */
+  metrics?: XPostMetrics;
 }
 
 async function readLog(): Promise<XPostLogEntry[]> {
@@ -91,6 +104,25 @@ export async function recordXPost(entry: { url: string; firstTweetId: string; te
   log.push({ at: Date.now(), url: entry.url, firstTweetId: entry.firstTweetId, text: entry.text.slice(0, 600) });
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(LOG_FILE, JSON.stringify(log.slice(-LOG_MAX_ENTRIES), null, 2), "utf8");
+}
+
+/**
+ * Writes fresh engagement counters onto logged posts (keyed by tweet id).
+ * Returns how many entries changed. Entries the map does not mention keep
+ * their previous read.
+ */
+export async function updateXPostMetrics(byId: Map<string, XPostMetrics>): Promise<number> {
+  if (byId.size === 0) return 0;
+  const log = await readLog();
+  let updated = 0;
+  for (const e of log) {
+    const m = byId.get(e.firstTweetId);
+    if (!m) continue;
+    e.metrics = m;
+    updated += 1;
+  }
+  if (updated > 0) await fs.writeFile(LOG_FILE, JSON.stringify(log.slice(-LOG_MAX_ENTRIES), null, 2), "utf8");
+  return updated;
 }
 
 export interface XGuardVerdict {

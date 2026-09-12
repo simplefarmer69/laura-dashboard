@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { similarity } from "@/lib/swarm/novelty";
+import { metricsLine, xPerformanceDigest } from "@/lib/publish/x-metrics";
 import type { XPostLogEntry } from "@/lib/publish/x-guard";
 
 /**
@@ -262,14 +263,20 @@ export function acceptAuditEdit(original: string, edited: string | null): string
   return e;
 }
 
-/** Digest of the account's recent posts for the producer prompt. */
+/**
+ * Digest of the account's recent posts for the producer, critic and coach
+ * prompts, each with its measured response when a read exists, plus the
+ * best/worst ranking so the shape the audience rewarded is visible.
+ */
 export function recentXPostsDigest(recent: XPostLogEntry[]): string {
   if (recent.length === 0) return "Nothing posted yet from this rail.";
-  return recent
+  const posts = recent
     .slice(0, 10)
     .map((e) => {
       const when = new Date(e.at).toISOString().slice(0, 16).replace("T", " ");
-      return `- ${when} UTC: ${sanitizeXPost(e.text).text.replace(/\s+/g, " ").slice(0, 280)}`;
+      const m = metricsLine(e);
+      return `- ${when} UTC: ${sanitizeXPost(e.text).text.replace(/\s+/g, " ").slice(0, 280)}${m ? ` [${m}]` : ""}`;
     })
     .join("\n");
+  return `${posts}\nMEASURED RESPONSE\n${xPerformanceDigest(recent)}`;
 }
