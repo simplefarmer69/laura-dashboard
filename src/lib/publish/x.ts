@@ -2,13 +2,17 @@ import { createHmac, randomBytes } from "node:crypto";
 import { checkXGuards, recordXPost, type XGuardVerdict } from "@/lib/publish/x-guard";
 
 /**
- * X (Twitter) publishing rail. Posting uses OAuth 1.0a user context, signed
- * locally with node:crypto — no SDK needed. Two callers: the operator's
- * "Publish to X" button and the autonomous rail in publish/auto.ts; both
- * pass the shared-account guards in x-guard.ts before anything is sent.
+ * X (Twitter) publishing rail. Two user-context auth paths, no SDK needed:
+ *  - OAuth 1.0a (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET),
+ *    signed locally with node:crypto; preferred when the full set is present.
+ *  - OAuth 2.0 user token (X_OAUTH2_ACCESS_TOKEN with the tweet.write scope),
+ *    sent as a plain Bearer header — the path the operator provisioned
+ *    2026-09-12.
+ * X_BEARER_TOKEN alone is app-only and read-only; it can never post.
  *
- * Required env for posting: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN,
- * X_ACCESS_TOKEN_SECRET. X_BEARER_TOKEN alone is read-only.
+ * Two callers: the operator's "Publish to X" button and the autonomous rail
+ * in publish/auto.ts; both pass the shared-account guards in x-guard.ts
+ * before anything is sent.
  */
 
 const TWEET_MAX = 280;
@@ -16,6 +20,8 @@ const TWEET_MAX = 280;
 export interface XStatus {
   appKeys: boolean;
   accessKeys: boolean;
+  /** OAuth 2.0 user token (tweet.write) present — posts as a Bearer header. */
+  oauth2: boolean;
   ready: boolean;
   missing: string[];
 }
@@ -27,7 +33,8 @@ export function xStatus(): XStatus {
   }
   const appKeys = Boolean(process.env.X_API_KEY && process.env.X_API_SECRET);
   const accessKeys = Boolean(process.env.X_ACCESS_TOKEN && process.env.X_ACCESS_TOKEN_SECRET);
-  return { appKeys, accessKeys, ready: appKeys && accessKeys, missing };
+  const oauth2 = Boolean(process.env.X_OAUTH2_ACCESS_TOKEN);
+  return { appKeys, accessKeys, oauth2, ready: (appKeys && accessKeys) || oauth2, missing };
 }
 
 function pct(s: string): string {
@@ -57,12 +64,19 @@ function oauthHeader(method: "POST", url: string): string {
     .join(", ")}`;
 }
 
+/** OAuth 1.0a when the full key set exists, else the OAuth 2.0 user token. */
+function authHeader(method: "POST", url: string): string {
+  const s = xStatus();
+  if (s.appKeys && s.accessKeys) return oauthHeader(method, url);
+  return `Bearer ${process.env.X_OAUTH2_ACCESS_TOKEN ?? ""}`;
+}
+
 async function postTweet(text: string, replyToId?: string): Promise<{ id: string }> {
   const url = "https://api.x.com/2/tweets";
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      authorization: oauthHeader("POST", url),
+      authorization: authHeader("POST", url),
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -142,7 +156,7 @@ export async function publishToX(body: string, isThread: boolean): Promise<Publi
   const status = xStatus();
   if (!status.ready) {
     throw new Error(
-      `X posting not configured. Missing: ${status.missing.join(", ")}. The bearer token alone is read-only — add the Access Token and Secret (Read & Write) from the X developer portal.`,
+      `X posting not configured. Missing: ${status.missing.join(", ")} (or set X_OAUTH2_ACCESS_TOKEN with the tweet.write scope). The bearer token alone is read-only.`,
     );
   }
   const guard = await checkXGuards(body);

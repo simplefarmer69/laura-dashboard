@@ -5,7 +5,7 @@ import { similarity } from "@/lib/swarm/novelty";
 /**
  * Shared-account guardrails for the X posting rail.
  *
- * The swarm posts as @AiAgentkAia, the SAME account the operator's Railway NFT
+ * The swarm posts as @LAURA_DAIO (formerly @AiAgentkAia), the SAME account the operator's Railway NFT
  * sales bot tweets from automatically. These guards exist so the swarm
  * complements that feed instead of drowning it, and so a burst of approved
  * drafts can never turn into a burst of tweets:
@@ -24,8 +24,11 @@ import { similarity } from "@/lib/swarm/novelty";
  * share of the account, not the account's total.
  */
 
-/** The shared account the swarm posts as (verified live by the operator). */
-export const X_ACCOUNT_HANDLE = "AiAgentkAia";
+/** The account the swarm posts as. Renamed from @AiAgentkAia to @LAURA_DAIO
+    (same user id — verified via /2/users/me with the operator's OAuth 2.0
+    token on 2026-09-12). */
+export const X_ACCOUNT_HANDLE = "LAURA_DAIO";
+export const X_ACCOUNT_PREVIOUS_HANDLE = "AiAgentkAia";
 export const X_ACCOUNT_USER_ID = "1864328060327350278";
 
 const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
@@ -99,7 +102,7 @@ export interface XGuardVerdict {
 /** Links or mentions that would make the account interact with itself
     (including the sales bot's tweets, which come from the same handle). */
 const SELF_INTERACTION_RE = new RegExp(
-  `(?:x|twitter)\\.com/${X_ACCOUNT_HANDLE}/status|@${X_ACCOUNT_HANDLE}\\b`,
+  `(?:x|twitter)\\.com/(?:${X_ACCOUNT_HANDLE}|${X_ACCOUNT_PREVIOUS_HANDLE})/status|@(?:${X_ACCOUNT_HANDLE}|${X_ACCOUNT_PREVIOUS_HANDLE})\\b`,
   "i",
 );
 
