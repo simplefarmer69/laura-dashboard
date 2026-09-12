@@ -68,6 +68,7 @@ import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recentXPosts } from "@/lib/publish/x-guard";
 import { recentXPostsDigest } from "@/lib/publish/x-style";
 import { recordNotes } from "@/lib/swarm/notebook";
+import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
@@ -394,6 +395,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       cycleSeq: state.runs.length,
       llmProvider: resolved.provider,
       xPosted: recentXPostsDigest(await recentXPosts(10)),
+      chainAlpha: chainAlphaDigest(intelSnap, state.intelHistory ?? []),
     };
 
     /* 1d. Watcher: interprets the on-chain digest into a headline + alerts

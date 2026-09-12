@@ -1026,21 +1026,21 @@ function ago(ts: string, id?: string): string {
   return `${rel} · ${abs}`;
 }
 
-function ageOfMs(ts: number | null): string {
+export function ageOfMs(ts: number | null): string {
   if (!ts) return "age n/a";
   const h = (Date.now() - ts) / 3_600_000;
   if (h < 1) return `${Math.max(1, Math.round(h * 60))}m old`;
   return h < 48 ? `${Math.round(h)}h old` : `${Math.round(h / 24)}d old`;
 }
 
-function compactUsd(n: number | null): string {
+export function compactUsd(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "n/a";
   if (n >= 999_500) return `$${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}k`;
   return `$${n.toFixed(0)}`;
 }
 
-function radarPct(pct: number | null): string {
+export function radarPct(pct: number | null): string {
   if (pct === null) return "n/a";
   return `${pct >= 0 ? "+" : ""}${Math.abs(pct) >= 100 ? pct.toFixed(0) : pct.toFixed(1)}%`;
 }
