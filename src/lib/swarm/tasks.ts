@@ -2,6 +2,7 @@ import { z } from "zod";
 import { allowedHostsForPrompt } from "@/lib/swarm/browser";
 import type {
   Agent,
+  AgentId,
   DailyGrade,
   Draft,
   DraftKind,
@@ -295,12 +296,36 @@ const KIND_BY_AGENT: Record<string, DraftKind[]> = {
  * thread; a post has no title-style opener; a post is judged against the
  * account's own timeline, not only against drafts).
  */
-function xPostBrief(ctx: CycleContext): string {
+/**
+ * Splits the CHAIN ALPHA lines between the two X producers so they cannot
+ * both build on the top line (the critic vetoed one of two GME posts for that
+ * in run_e88054c4, 2026-09-12). Odd and even lines swap owners each cycle so
+ * neither agent always gets the sharpest line.
+ */
+function chainAlphaLane(ctx: CycleContext, agentId: AgentId): string {
+  const lines = ctx.chainAlpha.split("\n").filter((l) => l.startsWith("- "));
+  if (lines.length < 2) return ctx.chainAlpha;
+  const parity = (agentId === "growth" ? 1 : 0) ^ (ctx.cycleSeq % 2);
+  const mine = lines.filter((_, i) => i % 2 === parity);
+  const theirs = lines.filter((_, i) => i % 2 !== parity);
+  const [header, ...rest] = ctx.chainAlpha.split("\n");
+  const footer = rest.filter((l) => !l.startsWith("- ")).join("\n");
+  return [
+    header,
+    `YOUR LINES (build on one of these; the other X producer has the rest this cycle, so a post on one of theirs is a duplicate and gets vetoed):`,
+    ...mine,
+    `THE OTHER PRODUCER'S LINES (context only):`,
+    ...theirs,
+    footer,
+  ].join("\n");
+}
+
+function xPostBrief(ctx: CycleContext, agentId: AgentId): string {
   return [
     `THE "post" KIND IS ONE X POST. Body: the exact text to publish, at most ${TWEET_MAX} characters, nothing else. No numbering, no title inside the body, no second section. The X rail refuses threads outright and the Auditor reads every post against the account's timeline before it goes out; a template or a repeat is vetoed and costs your turn.`,
     X_STYLE_GUIDE,
     `IF YOUR STRATEGY TEXT says to write a thread of several posts, to number posts, to label content "official StonkBrokers content", to open with a mechanic explainer, or to close with a docs link or a fixed disclaimer, those instructions are obsolete as of 2026-09-12 and are overridden here. Write one post a person would post.`,
-    ctx.chainAlpha,
+    chainAlphaLane(ctx, agentId),
     `WHAT TO POST ABOUT (pick the single sharpest thing in this cycle's inputs, in this order of preference): a line from CHAIN ALPHA above, turned into a thesis with its numbers and the condition that would confirm or break it; a concrete Robinhood Chain event from LIVE INTERNET INTEL or WORLD FEEDS (a launch, a liquidity move, a stock-token number, what Vlad or Johann just said and what it means for the chain); something LAURA's own wallet did or is doing in ON-CHAIN STATE, stated with the number; or the best line from THE CAFE BAR debate in WORLD FEEDS, quoted with the agent's name. The account's readers want alpha on the chain they have not noticed, not a lesson. If CHAIN ALPHA says nothing is anomalous, do not invent an anomaly.`,
     `ALREADY ON THE ACCOUNT'S TIMELINE (newest first). Your post must not share an opening, a closing, a phrase, a statistic or a theme with any of these:\n${ctx.xPosted}`,
     `The title field of a "post" draft is a short internal label for the dashboard (not published). The rationale names the input the post came from and, in one clause, what makes it unlike every post on the timeline above.`,
@@ -335,7 +360,7 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `STYLE, HARD RULE: never use an em dash or a dash-spliced clause anywhere in a draft. Restructure into separate sentences, commas or colons. Prefer "onchain" over "on-chain" in prose; hyphenate only when grammar genuinely requires it. The slop-free-writing skill has the full pattern list; this rule is absolute.`,
     `TITLES ARE HEADLINES: the title is the headline a human reads, nothing else. Never start a title with meta-words or template labels ("DRAFT", "Draft:", "Deep-dive:"), never lead with a date, and never mark output as a draft awaiting approval — review is the pipeline's job and the charter grants full autonomy. If your strategy text tells you to mark work "DRAFT" or to put the date first in the title, that instruction is obsolete: ignore it and write a real headline.`,
     `ANTI-REPETITION RULE: generate output semantically distinct from all previous outputs — yours and the swarm's. Your new drafts must differ from every item in YOUR OWN RECENT OUTPUT *and* in WHAT THE REST OF THE SWARM COVERED in theme, angle or surface — pick a different product surface, audience, format or hook, or explicitly supersede an earlier piece with materially new data (and say so in the rationale). FORMAT BREAK: if your last two outputs share one template (e.g. two "Delta note" or "Desk note" artifacts), you MUST change format this cycle — your assigned lane tells you which one to use. THE SHARED HOOK IS BURNED: whatever single statistic or narrative dominates this cycle's metrics/brief, assume at least two other agents lead with it — if your draft opens on it, find a different door in. Near-duplicates are rejected in code before review and waste your turn. In the rationale, name in one clause how this differs from your last outputs and from other agents' recent work.`,
-    ...(kinds.includes("post") ? [xPostBrief(ctx)] : []),
+    ...(kinds.includes("post") ? [xPostBrief(ctx, agent.id)] : []),
   ].join("\n\n");
 }
 
