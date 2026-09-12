@@ -22,10 +22,12 @@ import type { SwarmState } from "@/lib/types";
  *
  * Caps (code-level, not strategy-editable): one poll per POLL_INTERVAL_MS,
  * at most MAX_REPLIES_PER_TICK replies per poll, REPLY_MIN_GAP_MS between
- * replies, MAX_REPLIES_PER_DAY rolling, one reply per author per
- * PER_AUTHOR_COOLDOWN_MS. Never replies to the account itself, to retweets,
- * to tag-spam (many handles, no question) or to anything that is not a
- * question. Fails closed: no LLM means no reply, not a canned one.
+ * replies, one reply per author per PER_AUTHOR_COOLDOWN_MS. There is NO
+ * daily reply cap (operator directive 2026-09-12: anyone who tags her with a
+ * real question gets an answer); the gap and per-author cooldown exist only
+ * so one account cannot loop her. Never replies to the account itself, to
+ * retweets, to tag-spam (many handles, no question) or to anything that is
+ * not a question. Fails closed: no LLM means no reply, not a canned one.
  */
 
 const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
@@ -35,11 +37,10 @@ const POLL_INTERVAL_MS = 10 * 60_000;
 const ERROR_BACKOFF_MS = 20 * 60_000;
 const AUTH_BACKOFF_MS = 60 * 60_000;
 const REPLY_MIN_GAP_MS = 3 * 60_000;
-const MAX_REPLIES_PER_DAY = 12;
-const MAX_REPLIES_PER_TICK = 2;
+const MAX_REPLIES_PER_TICK = 4;
 /** Model judgements per poll; the rest of a burst waits for the next poll. */
-const MAX_EVALS_PER_TICK = 6;
-const PER_AUTHOR_COOLDOWN_MS = 6 * 3600_000;
+const MAX_EVALS_PER_TICK = 10;
+const PER_AUTHOR_COOLDOWN_MS = 30 * 60_000;
 /** Mentions older than this at first sight are stale conversation; leave them. */
 const MAX_MENTION_AGE_MS = 36 * 3600_000;
 /** Target length asked of the model; the hard cap is TWEET_MAX. */
@@ -328,12 +329,8 @@ export async function runXMentionsTick(state: SwarmState): Promise<void> {
     }
     const nowTs = Date.now();
     const lastReply = l.replies.at(-1)?.at ?? 0;
-    /* Gap or daily cap: leave this and everything newer unjudged for the next poll. */
+    /* Gap: leave this and everything newer unjudged for the next poll. */
     if (nowTs - lastReply < REPLY_MIN_GAP_MS) break;
-    if (l.replies.filter((x) => nowTs - x.at < 24 * 3600_000).length >= MAX_REPLIES_PER_DAY) {
-      log("daily reply cap reached; leaving the rest for tomorrow");
-      break;
-    }
     if (l.replies.some((x) => x.authorId === m.authorId && nowTs - x.at < PER_AUTHOR_COOLDOWN_MS)) {
       skipped += 1;
       finalize(m);

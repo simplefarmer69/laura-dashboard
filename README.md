@@ -203,8 +203,10 @@ posts, 6 per 24h, duplicate memory, never engaging the account itself):
   sanitizer and single-post rule).
 - **Mentions rail** (`src/lib/publish/mentions.ts`): people who tag the
   account with a question get one answer, judged under the public-chat persona
-  with the mention quarantined as untrusted text. Caps: 12 replies per day,
-  3 min apart, one per author per 6 h; never replies to itself or to tag-spam.
+  with the mention quarantined as untrusted text. No daily cap on replies
+  (anyone who tags her with a real question gets an answer); 3 min apart, one
+  per author per 30 min so nobody can loop her; never replies to itself or to
+  tag-spam. Original posts are capped separately at 10 per rolling 24 h.
 
 All are silent no-ops until posting credentials exist.
 

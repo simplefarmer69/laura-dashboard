@@ -57,7 +57,9 @@ function envInt(name: string, fallback: number): number {
 export function xPostPolicy(): XPostPolicy {
   return {
     minMinutesBetweenPosts: envInt("X_MIN_MINUTES_BETWEEN_POSTS", 30),
-    maxPostsPerDay: envInt("X_MAX_POSTS_PER_DAY", 6),
+    /* 10/day per operator directive 2026-09-12 (was 6). Replies to people who
+       tag the account are a separate, uncapped rail (mentions.ts). */
+    maxPostsPerDay: envInt("X_MAX_POSTS_PER_DAY", 10),
   };
 }
 

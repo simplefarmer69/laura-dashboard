@@ -254,8 +254,9 @@ graded lever; Smart LP deposits grow it.
   disclaimers, no promises of returns, no sockpuppets, no pretending the sales bot
   is independent validation.
 - **Shared-account guardrails are enforced in code** (`src/lib/publish/x-guard.ts`),
-  not just etiquette: minimum 30 minutes between swarm posts and max 6 per rolling
-  24h (env-tunable via `X_MIN_MINUTES_BETWEEN_POSTS` / `X_MAX_POSTS_PER_DAY`; one
+  not just etiquette: minimum 30 minutes between swarm posts and max 10 per rolling
+  24h (operator directive 2026-09-12; replies to people who tag the account are a
+  separate rail with no daily cap) (env-tunable via `X_MIN_MINUTES_BETWEEN_POSTS` / `X_MAX_POSTS_PER_DAY`; one
   publish = one post even for threads), a local memory of recent posts
   (`data/x-post-log.json`) that refuses near-duplicates, and a block on any body
   mentioning or linking @AiAgentkAia itself. Guard refusals return 429 from the
