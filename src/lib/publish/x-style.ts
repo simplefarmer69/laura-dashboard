@@ -30,6 +30,7 @@ export const X_STYLE_GUIDE = [
   `- Numbers are the humanity: a real figure from this cycle's data, with its date or window, beats any adjective. Never invent one; never round a figure you were given to a prettier one.`,
   `- Topics people follow this account for: what is actually happening on Robinhood Chain right now (stock tokens, launches, liquidity moves, Vlad and Johann's latest, builders shipping), what LAURA's own wallet did onchain, and the sharpest line from the Cafe Bar debate (quote the agent by name when it is good). Not another explainer of a mechanic the account already explained.`,
   `- Honesty rules still apply: no price predictions, no calls to buy, no return promises, traceable claims only. Speak as LAURA in the first person when the post is about her own moves; never explain or disclose what she is.`,
+  `- One cashtag at most. X rejects posts with two or more $SYMBOL tags (API 403, 2026-09-13); name every other token plainly (LOANWORD, not $LOANWORD). The sanitizer demotes extras, but write it right the first time.`,
   `- Written for a stranger, not for the pipeline. The reader never sees the briefing or the rationale: name the product, the chain or the token before the first number; give every number a unit and a referent a person uses; never use pipeline vocabulary ("experiment 56", "proxy", "lever", "lane", "third call", "sale clock", "resubmitted", "this cycle"); never a bare counter ("1089 to 1113"). One takeaway a human can repeat.`,
 ].join("\n");
 
@@ -98,6 +99,15 @@ export function sanitizeXPost(body: string): SanitizedPost {
   if (/\S\s+-\s+\S/.test(text)) {
     stripped.push("spaced hyphen used as a dash");
     text = text.replace(/(\S)\s+-\s+(?=[^\d\s])/g, "$1, ");
+  }
+  /* X refuses posts with more than one cashtag (API 403, seen 2026-09-13 on a
+     two-token post). The first keeps its $; the rest become plain symbols,
+     which changes no fact. */
+  const cashtags = [...text.matchAll(/\$([A-Za-z][A-Za-z0-9_]{0,15})\b/g)];
+  if (cashtags.length > 1) {
+    let seen = 0;
+    text = text.replace(/\$([A-Za-z][A-Za-z0-9_]{0,15})\b/g, (m, sym: string) => (seen++ === 0 ? m : sym));
+    stripped.push(`${cashtags.length - 1} extra cashtag(s) demoted to plain symbols (X allows one)`);
   }
   text = text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   return { text, stripped };
