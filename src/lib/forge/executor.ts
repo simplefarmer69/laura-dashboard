@@ -286,7 +286,7 @@ async function failProject(projectId: string, msg: string, title: string): Promi
  * 18:57 UTC for not saying what The Lab is; without this the project would
  * have stayed unannounced forever.
  */
-export async function runForgeAnnounceTick(state: SwarmState): Promise<void> {
+export async function runForgeAnnounceTick(state: SwarmState): Promise<boolean> {
   const now = Date.now();
   const projects = state.forgeProjects ?? [];
   const refused = projects.find((p) => {
@@ -295,13 +295,15 @@ export async function runForgeAnnounceTick(state: SwarmState): Promise<void> {
     const d = state.drafts.find((x) => x.id === p.announceDraftId);
     return Boolean(d && d.status === "rejected" && now - (d.reviewedAt ?? d.createdAt) >= REANNOUNCE_GAP_MS);
   });
-  if (!refused) return;
+  if (!refused) return false;
   const prior = state.drafts.find((x) => x.id === refused.announceDraftId);
   try {
     const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason: prior?.reviewerNote ?? "refused at the X gate" });
     log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${(refused.announceAttempts ?? 1) + 1}/${MAX_ANNOUNCE_ATTEMPTS})`);
+    return true;
   } catch (err) {
     log(`redraft for ${refused.title} failed: ${String(err).slice(0, 200)}`);
+    return false;
   }
 }
 

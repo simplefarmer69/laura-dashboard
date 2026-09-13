@@ -420,7 +420,7 @@ async function tick(): Promise<void> {
  * picking the same draft.
  */
 async function outboundPass(): Promise<void> {
-  const state = await loadState();
+  let state = await loadState();
   const step = async (label: string, fn: () => Promise<unknown>) => {
     try {
       await fn();
@@ -428,8 +428,12 @@ async function outboundPass(): Promise<void> {
       log(`${label} tick failed: ${String(err)}`);
     }
   };
-  /* Anvil's redraft after a gate refusal: no wallet, one per pass. */
-  await step("forge announce", () => runForgeAnnounceTick(state));
+  /* Anvil's redraft after a gate refusal: no wallet, one per pass. The
+     publisher below must see the new draft this pass (a flagship ranks
+     first), so the snapshot is reloaded when one was written. */
+  await step("forge announce", async () => {
+    if (await runForgeAnnounceTick(state)) state = await loadState();
+  });
   /* Publishing is marked as in-flight work so a release switch does not land
      between the tweet and its ledger write (a lost record means a repost). */
   await step("x auto-publish", () => withChainWork("x-publish", () => runXPublishTick(state)));
