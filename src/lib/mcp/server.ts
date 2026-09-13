@@ -143,6 +143,16 @@ function summarizeMetrics(m: MetricsSnapshot | undefined | null) {
     protocolRevenue24hUsd: m.protocolRevenue24hUsd,
     protocolVolume24hUsd: m.protocolVolume24hUsd,
     ecosystemVolume24hUsd: m.ecosystemVolume24hUsd ?? null,
+    ecosystemVolumeBreakdown:
+      m.ecosystemVolumeVersion === 2
+        ? {
+            stonkbrokerUsd: m.tokenDexVolume24hUsd,
+            specialProjectsUsd: m.specialProjectsVolume24hUsd ?? 0,
+            launcherTokensUsd: m.launcherTokensVolume24hUsd ?? 0,
+            launcherTokenCount: m.launcherTokenCount ?? 0,
+            smartLpShareUsd: m.smartLpAttributedVolume24hUsd ?? 0,
+          }
+        : null,
     tvlUsd: m.tvlUsd,
   };
 }

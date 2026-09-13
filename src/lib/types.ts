@@ -21,14 +21,21 @@ export interface MetricsSnapshot {
   protocolVolume7dUsd: number;
   tvlUsd: number;
   /**
-   * Ecosystem tape (DexScreener + Smart LP registry): Special Projects + LAURA
-   * token pairs counted in full, plus every other Smart LP pool's 24h volume
-   * scaled by the vaults' share of that pool's liquidity. $STONKBROKER pairs are
-   * excluded (they live in tokenDexVolume24hUsd). Absent on snapshots taken
-   * before the metric existed.
+   * Ecosystem tape (DexScreener + launcher grid + Smart LP registry). Version 2
+   * (2026-09-13) is all-in: $STONKBROKER DEX volume + Special Projects pairs +
+   * every Stonk Launcher token (curve and DEX) + every other Smart LP pool's
+   * 24h volume scaled by the vaults' share of that pool's liquidity. Version 1
+   * snapshots (ecosystemVolumeVersion absent) excluded $STONKBROKER and only
+   * knew the Special Projects; tapeVolume() adds the token leg back for them.
+   * Absent on snapshots taken before the metric existed.
    */
   ecosystemVolume24hUsd?: number;
+  ecosystemVolumeVersion?: 2;
+  /** Special Projects + launcher tokens (every ecosystem token pair except $STONKBROKER). */
   ecosystemTokensVolume24hUsd?: number;
+  specialProjectsVolume24hUsd?: number;
+  launcherTokensVolume24hUsd?: number;
+  launcherTokenCount?: number;
   smartLpAttributedVolume24hUsd?: number;
   smartLpPoolsGrossVolume24hUsd?: number;
   ecosystemPairCount?: number;

@@ -101,6 +101,28 @@ interface LlamaSummary {
   totalDataChart?: [number, number][];
 }
 
+const DAY_S = 86_400;
+
+/**
+ * DeFiLlama's total24h is the CURRENT UTC DAY so far, not a rolling day: it
+ * reads ~$0 right after midnight and only fills in by evening, which is why
+ * the console showed "$0 protocol volume" some mornings. Estimate a rolling
+ * 24h instead: today's partial bucket plus yesterday's bucket scaled by the
+ * part of today that has not elapsed. Falls back to total24h when the chart
+ * is missing.
+ */
+export function rolling24h(summary: LlamaSummary, nowMs = Date.now()): number {
+  const chart = summary.totalDataChart ?? [];
+  if (chart.length === 0) return summary.total24h ?? 0;
+  const nowS = Math.floor(nowMs / 1000);
+  const todayStart = nowS - (nowS % DAY_S);
+  const fractionElapsed = Math.min(1, Math.max(0, (nowS - todayStart) / DAY_S));
+  const byDay = new Map(chart.map(([ts, v]) => [ts, v ?? 0]));
+  const today = byDay.get(todayStart) ?? summary.total24h ?? 0;
+  const yesterday = byDay.get(todayStart - DAY_S) ?? 0;
+  return today + yesterday * (1 - fractionElapsed);
+}
+
 interface LlamaProtocol {
   currentChainTvls?: Record<string, number>;
 }
@@ -127,9 +149,9 @@ export async function fetchProtocolMetrics(settings: Settings): Promise<Protocol
     .filter(([k]) => !k.includes("-") && k !== "staking" && k !== "borrowed" && k !== "pool2")
     .reduce((s, [, v]) => s + v, 0);
   return {
-    fees24h: fees.total24h ?? 0,
-    revenue24h: revenue.total24h ?? 0,
-    volume24h: volume.total24h ?? 0,
+    fees24h: rolling24h(fees),
+    revenue24h: rolling24h(revenue),
+    volume24h: rolling24h(volume),
     fees7d: fees.total7d ?? 0,
     revenue7d: revenue.total7d ?? 0,
     volume7d: volume.total7d ?? 0,
@@ -196,7 +218,7 @@ export async function collectMetrics(
   let eco: EcosystemVolume | null = null;
   const [onchainRes, ecoRes] = await Promise.allSettled([
     fetchOnchain(settings, ethUsd),
-    fetchEcosystemVolume(settings.chainSlug, settings.tokenAddress, ethUsd),
+    fetchEcosystemVolume(settings.chainSlug, settings.tokenAddress, ethUsd, m?.volume24hUsd ?? prev?.tokenDexVolume24hUsd ?? 0),
   ]);
   if (onchainRes.status === "fulfilled") {
     onchain = onchainRes.value;
@@ -227,7 +249,11 @@ export async function collectMetrics(
     protocolVolume7dUsd: p?.volume7d ?? prev?.protocolVolume7dUsd ?? 0,
     tvlUsd: p?.tvl ?? prev?.tvlUsd ?? 0,
     ecosystemVolume24hUsd: eco?.totalUsd ?? prev?.ecosystemVolume24hUsd,
+    ecosystemVolumeVersion: eco ? 2 : prev?.ecosystemVolumeVersion,
     ecosystemTokensVolume24hUsd: eco?.ecosystemTokensUsd ?? prev?.ecosystemTokensVolume24hUsd,
+    specialProjectsVolume24hUsd: eco?.specialProjectsUsd ?? prev?.specialProjectsVolume24hUsd,
+    launcherTokensVolume24hUsd: eco?.launcherTokensUsd ?? prev?.launcherTokensVolume24hUsd,
+    launcherTokenCount: eco?.launcherTokenCount ?? prev?.launcherTokenCount,
     smartLpAttributedVolume24hUsd: eco?.smartLpAttributedUsd ?? prev?.smartLpAttributedVolume24hUsd,
     smartLpPoolsGrossVolume24hUsd: eco?.smartLpPoolsGrossUsd ?? prev?.smartLpPoolsGrossVolume24hUsd,
     ecosystemPairCount: eco?.pairCount ?? prev?.ecosystemPairCount,

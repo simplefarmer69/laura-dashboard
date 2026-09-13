@@ -143,7 +143,7 @@ export function Overview({
         <Metric
           label="Protocol volume 24h"
           value={usd(metrics.protocolVolume24hUsd)}
-          sub={`7d avg ${usd(metrics.protocolVolume7dUsd / 7)} · token DEX vol ${usd(metrics.tokenDexVolume24hUsd)}`}
+          sub={`DeFiLlama protocol surfaces, rolling 24h · 7d avg ${usd(metrics.protocolVolume7dUsd / 7)} · $STONKBROKER DEX vol ${usd(metrics.tokenDexVolume24hUsd)}`}
           tone={metrics.protocolVolume24hUsd >= metrics.protocolVolume7dUsd / 7 ? "up" : "down"}
         />
         <Metric
@@ -151,8 +151,10 @@ export function Overview({
           value={usd(metrics.ecosystemVolume24hUsd ?? 0)}
           sub={
             metrics.ecosystemVolume24hUsd == null
-              ? "Special Projects + LAURA pairs and Smart LP pools (pending first read)"
-              : `Special Projects + LAURA ${usd(metrics.ecosystemTokensVolume24hUsd ?? 0)} · Smart LP share ${usd(metrics.smartLpAttributedVolume24hUsd ?? 0)} of ${usd(metrics.smartLpPoolsGrossVolume24hUsd ?? 0)} across ${metrics.smartLpPoolCount ?? 0} pools`
+              ? "$STONKBROKER + Special Projects + every launcher token + Smart LP share (pending first read)"
+              : metrics.ecosystemVolumeVersion === 2
+                ? `$STONKBROKER ${usd(metrics.tokenDexVolume24hUsd)} · Special Projects ${usd(metrics.specialProjectsVolume24hUsd ?? 0)} · ${metrics.launcherTokenCount ?? 0} launcher tokens ${usd(metrics.launcherTokensVolume24hUsd ?? 0)} · Smart LP share ${usd(metrics.smartLpAttributedVolume24hUsd ?? 0)} of ${usd(metrics.smartLpPoolsGrossVolume24hUsd ?? 0)} across ${metrics.smartLpPoolCount ?? 0} pools`
+                : `excl. $STONKBROKER · Special Projects + LAURA ${usd(metrics.ecosystemTokensVolume24hUsd ?? 0)} · Smart LP share ${usd(metrics.smartLpAttributedVolume24hUsd ?? 0)}`
           }
           tone="neutral"
         />

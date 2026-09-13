@@ -107,13 +107,16 @@ export function scoreRevenue(m: MetricsSnapshot): GradeComponent {
 }
 
 /**
- * The "tape" the grade watches: $STONKBROKER DEX volume plus the ecosystem
- * volume (Special Projects + LAURA pairs in full, other Smart LP pools by the
- * vaults' share of pool liquidity). Both feed StonkBrokers fees, so a snapshot
- * that predates the ecosystem metric only counts the token leg.
+ * The "tape" the grade watches: every fee-bearing ecosystem tape in one
+ * number. Version 2 ecosystem snapshots already include $STONKBROKER, the
+ * Special Projects, every launcher token and the Smart LP share; version 1
+ * snapshots excluded the token leg, so it is added back; snapshots that
+ * predate the metric only know the token leg.
  */
 export function tapeVolume(m: MetricsSnapshot): number {
-  return m.tokenDexVolume24hUsd + (m.ecosystemVolume24hUsd ?? 0);
+  if (m.ecosystemVolume24hUsd == null) return m.tokenDexVolume24hUsd;
+  if (m.ecosystemVolumeVersion === 2) return m.ecosystemVolume24hUsd;
+  return m.tokenDexVolume24hUsd + m.ecosystemVolume24hUsd;
 }
 
 export function scoreVolume(m: MetricsSnapshot, history: MetricsSnapshot[]): GradeComponent {
@@ -135,7 +138,9 @@ export function scoreVolume(m: MetricsSnapshot, history: MetricsSnapshot[]): Gra
   );
   const tape = tapeVolume(m);
   const tapeLabel = hasEco
-    ? `token DEX ${fmtUsd(m.tokenDexVolume24hUsd)} + ecosystem ${fmtUsd(m.ecosystemVolume24hUsd ?? 0)} = ${fmtUsd(tape)}`
+    ? m.ecosystemVolumeVersion === 2
+      ? `ecosystem tape ${fmtUsd(tape)} = $STONKBROKER ${fmtUsd(m.tokenDexVolume24hUsd)} + Special Projects ${fmtUsd(m.specialProjectsVolume24hUsd ?? 0)} + launcher tokens ${fmtUsd(m.launcherTokensVolume24hUsd ?? 0)} + Smart LP share ${fmtUsd(m.smartLpAttributedVolume24hUsd ?? 0)}`
+      : `token DEX ${fmtUsd(m.tokenDexVolume24hUsd)} + ecosystem ${fmtUsd(m.ecosystemVolume24hUsd ?? 0)} = ${fmtUsd(tape)}`
     : `token DEX volume ${fmtUsd(m.tokenDexVolume24hUsd)}`;
   let detail = `protocol surfaces ${fmtUsd(m.protocolVolume24hUsd)} vs 7d avg ${fmtUsd(avg7)} (${protoRatio.toFixed(2)}x)`;
   // The fee-bearing tape is the bigger signal: protocol-surface volume is a
