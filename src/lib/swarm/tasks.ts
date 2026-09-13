@@ -991,8 +991,10 @@ export function forgeAnnouncePrompt(
       `WHY: ${project.need}`,
       `HOW A PERSON USES IT: ${project.howToUse}`,
       flagship.frontendUrl ? `FRONTEND LINK (must appear verbatim; this is where people go): ${flagship.frontendUrl}` : "",
-      `EXPLORER LINK (must appear verbatim): ${project.explorerUrl ?? ""}`,
-      `GUIDE LINK (must appear verbatim; it explains every call): ${flagship.docUrl}`,
+      `EXPLORER LINK (must appear verbatim; you may drop the "?tab=contract" suffix to save characters): ${project.explorerUrl ?? ""}`,
+      flagship.frontendUrl
+        ? `GUIDE LINK (optional, only if it fits; the frontend links it): ${flagship.docUrl}`
+        : `GUIDE LINK (must appear verbatim; it explains every call): ${flagship.docUrl}`,
       `${X_STYLE_GUIDE}`,
       `SHAPE: ${flagship.announceShape} No hashtags, no emoji, no price or token-price talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including every link.`,
     ]

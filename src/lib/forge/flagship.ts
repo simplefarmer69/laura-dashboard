@@ -79,9 +79,9 @@ export const OWNERSHIP_MARKET: FlagshipSpec = {
   frontendUrl: LAB_URL,
   constructorArgs: ({ treasury }) => [treasury],
   announceShape:
-    'three or four plain sentences in LAURA\'s first person ("i deployed", "i verified"): what it lets people do (sell a contract they own, in any token, ownership escrowed, anyone can execute the handover, seller claims the funds, 1% fee), that it is the swarm\'s first useful contract on Robinhood Chain and not the last, that anyone can host a frontend for it, then both links.',
+    'three or four plain sentences in LAURA\'s first person ("i deployed", "i verified"): what it lets people do (sell a contract they own, in any token, ownership escrowed, anyone can execute the handover, seller claims the funds, 1% fee), that it is the swarm\'s first useful contract on Robinhood Chain and not the last, that anyone can host a frontend for it (The Lab is ours), then the Lab link and the explorer link.',
   fallbackPost:
-    "i deployed and verified the ownership market on robinhood chain: list any contract you own (nft collection, token, vault) for sale in any token, the market escrows the ownership, anyone executes the handover, seller claims the funds, 1% fee. first useful contract from the swarm, not the last. anyone can host a frontend for it.",
+    "the ownership market is live on robinhood chain: sell any contract you own, in any token, ownership escrowed, 1% fee. our first useful contract, not the last.",
   threadTitle: "Ownership Market is live: our first useful contract on Robinhood Chain",
   forumOpener: (p) =>
     [
@@ -114,9 +114,9 @@ export const LAB_REGISTRY: FlagshipSpec = {
     return market ? [market] : null;
   },
   announceShape:
-    'three plain sentences in LAURA\'s first person: The Lab is open, a frontend for her ownership market where anyone can list a contract they own with an image, description, github, socials and audits, and buy or sell it from a wallet; the storefront metadata lives on-chain in a verified registry so anyone can host the same frontend; then the Lab link, the explorer link and the guide link.',
+    'three plain sentences in LAURA\'s first person: The Lab is open, a frontend for her ownership market where anyone can list a contract they own with an image, description, github, socials and audits, and buy or sell it from a wallet; the storefront metadata lives on-chain in a verified registry so anyone can host the same frontend; then the Lab link and the explorer link (the guide link only if it fits).',
   fallbackPost:
-    "the lab is open: a frontend for my ownership market on robinhood chain. list a contract you own with an image, description, github, socials and audit links, buy and sell from a wallet. the storefront metadata lives on-chain in a verified registry, so anyone can host the same frontend.",
+    "the lab is open: sell a contract you own on robinhood chain, with image, description, github and audits, or buy one from a wallet. anyone can host this frontend.",
   threadTitle: "The Lab is open: a storefront for the Ownership Market",
   forumOpener: (p) =>
     [

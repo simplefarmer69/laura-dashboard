@@ -3,7 +3,7 @@ import { getAccount } from "@/lib/launchpad/service";
 import { ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { flagshipSpec, openFlagshipThread, seedFlagships } from "@/lib/forge/flagship";
 import { FORGE_CAPS, type ForgeCaps, forgeDeployEligibility } from "@/lib/forge/caps";
-import { checkVerified, explorerContractUrl, submitVerification } from "@/lib/forge/verify";
+import { checkVerified, explorerAddressUrl, explorerContractUrl, submitVerification } from "@/lib/forge/verify";
 import { newId, pushEvent, updateState } from "@/lib/store";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
@@ -161,7 +161,11 @@ export function forgeAnnounceFallback(project: ForgeProject): string {
   const url = project.explorerUrl ?? (project.contractAddress ? explorerContractUrl(project.contractAddress) : "");
   const spec = flagshipSpec(project);
   if (spec) {
-    const links = [spec.frontendUrl, url, spec.docUrl].filter((x): x is string => Boolean(x)).join(" ");
+    /* With a hosted frontend the post carries the frontend link and the short
+       explorer link (the guide is one click away on the frontend); otherwise
+       the explorer link and the guide. Raw characters count on X's ledger here. */
+    const explorerShort = project.contractAddress ? explorerAddressUrl(project.contractAddress) : url;
+    const links = (spec.frontendUrl ? [spec.frontendUrl, explorerShort] : [url, spec.docUrl]).join(" ");
     const text = `${spec.fallbackPost} ${links}`;
     if (text.length <= TWEET_MAX) return text;
     const short = `${project.title.toLowerCase()} is live and verified on robinhood chain. ${spec.frontendUrl ?? url}`;
@@ -184,8 +188,12 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
     });
     if (!out.usedMock) {
       const candidate = sanitizeXPost(out.value.post).text;
-      const url = project.explorerUrl ?? "";
-      if (candidate.length > 0 && candidate.length <= TWEET_MAX && (url === "" || candidate.includes(url))) body = candidate;
+      const spec = flagshipSpec(project);
+      /* The explorer link must be there (short or full form); a flagship with a frontend must link it too. */
+      const explorerOk =
+        !project.contractAddress || candidate.toLowerCase().includes(`/address/${project.contractAddress}`.toLowerCase());
+      const frontendOk = !spec?.frontendUrl || candidate.includes(spec.frontendUrl);
+      if (candidate.length > 0 && candidate.length <= TWEET_MAX && explorerOk && frontendOk) body = candidate;
     }
   } catch (err) {
     log(`announcement model call failed (${String(err).slice(0, 120)}); using the deterministic line`);

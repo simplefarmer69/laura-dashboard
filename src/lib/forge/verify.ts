@@ -30,6 +30,11 @@ export function explorerContractUrl(address: string): string {
   return `${EXPLORER}/address/${address}?tab=contract`;
 }
 
+/** Shorter form for character-budgeted posts (the explorer opens the same page). */
+export function explorerAddressUrl(address: string): string {
+  return `${EXPLORER}/address/${address}`;
+}
+
 export function explorerTxUrl(hash: string): string {
   return `${EXPLORER}/tx/${hash}`;
 }
