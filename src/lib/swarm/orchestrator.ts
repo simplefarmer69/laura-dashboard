@@ -510,6 +510,27 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     };
     state.researchBriefs.push(ctx.brief);
     state.researchBriefs = state.researchBriefs.slice(-50);
+    /* Official pipeline: projects the team teased or announced on its own
+       accounts become notebook entries every agent carries (the library
+       digest ships the notebook), replaced in place as the story updates. */
+    const pipeline = brief.value.usedMock ? [] : (brief.value.value.pipeline ?? []);
+    if (pipeline.length > 0) {
+      for (const rec of await recordNotes(
+        run.id,
+        pipeline.map((p) => ({
+          topic: `Official pipeline: ${p.project}`,
+          text: `${p.status.toUpperCase()} · ${p.source} · Support: ${p.howToSupport}`,
+        })),
+      )) {
+        pushEvent(state, {
+          kind: "pipeline.noted",
+          agentId: "scout",
+          title: `Official pipeline ${rec.replaced ? "updated" : "noted"}: ${rec.entry.topic.replace(/^Official pipeline: /, "")}`,
+          detail: rec.entry.text,
+          refId: rec.entry.id,
+        });
+      }
+    }
     markRan(scout);
     pushEvent(state, {
       kind: "brief.created",
@@ -522,7 +543,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       agentId: "scout",
       label: "Research brief",
       status: "ok",
-      summary: `${brief.value.value.headline}${brief.value.usedMock ? " (fallback)" : ""}`,
+      summary: `${brief.value.value.headline}${pipeline.length ? ` · pipeline: ${pipeline.map((p) => p.project).join(", ")}` : ""}${brief.value.usedMock ? " (fallback)" : ""}`,
       durationMs: brief.ms,
     });
     await saveState(state);

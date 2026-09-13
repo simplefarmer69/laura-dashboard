@@ -321,12 +321,15 @@ async function fetchXTracked(): Promise<NonNullable<XIntel["tracked"]>> {
     const id = ids[acct.username];
     if (!id) continue; // unresolved handle — surfaced as a warning by collectIntel
     const url =
-      `https://api.x.com/2/users/${id}/tweets?max_results=5&exclude=replies,retweets` +
+      `https://api.x.com/2/users/${id}/tweets?max_results=10&exclude=replies,retweets` +
       `&tweet.fields=created_at,public_metrics`;
     const json = await getJson<{ data?: XApiTweet[] }>(url, { authorization: `Bearer ${token}` });
+    /* Operator directive 2026-09-13: official comms are read for upcoming
+       projects and partners, not just tone, so more posts and more of each
+       post survive than for the leaders and the watch list. */
     tracked.push({
       username: acct.username,
-      tweets: (json.data ?? []).slice(0, 3).map((t) => toIntelTweet(t, acct.username)),
+      tweets: (json.data ?? []).slice(0, 6).map((t) => ({ ...toIntelTweet(t, acct.username), text: t.text.replace(/\s+/g, " ").slice(0, 400) })),
     });
   }
   c.tracked = { at: Date.now(), value: tracked };
@@ -1190,12 +1193,15 @@ export function intelDigest(current: IntelSnapshot | null, history: IntelSnapsho
         `- @${leader.username} latest (${ago(t.createdAt, t.id)}, ${t.likes} likes, ${t.impressions.toLocaleString()} impressions): "${t.text.slice(0, 180)}"`,
       );
     }
-    for (const acct of current.x.tracked ?? []) {
-      const t = acct.tweets[0];
-      if (!t) continue;
+    if (current.x.tracked?.some((a) => a.tweets.length > 0)) {
       lines.push(
-        `- Operator account @${acct.username} latest (${ago(t.createdAt, t.id)}, ${t.likes} likes): "${t.text.slice(0, 160)}" — align messaging with and amplify operator accounts.`,
+        "OFFICIAL COMMS (StonkBrokers / Clutch Markets and the founder; operator directive 2026-09-13: read these for upcoming special projects, partner launches and product drops. Anything announced or teased here is a project the swarm SUPPORTS: its token will come through the Stonk Launcher and its volume through the Stonk Exchange, so align messaging, amplify, and hand Scout a pipeline entry):",
       );
+      for (const acct of current.x.tracked ?? []) {
+        for (const t of acct.tweets.slice(0, 5)) {
+          lines.push(`- @${acct.username} (${ago(t.createdAt, t.id)}, ${t.likes} likes): "${t.text.slice(0, 400)}"`);
+        }
+      }
     }
     if (current.x.watch?.length) {
       lines.push("X WATCH (crypto KOLs + companies — latest original per handle, last 7d):");

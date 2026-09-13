@@ -41,6 +41,25 @@ import {
 export const briefSchema = z.object({
   headline: z.string().max(600),
   bullets: z.array(z.string().max(1500)).min(2).max(8),
+  /**
+   * Upcoming official projects read from OFFICIAL COMMS (operator directive
+   * 2026-09-13). Each lands in the notebook under "Official pipeline: <project>"
+   * so every agent carries it; re-recording a project replaces the entry.
+   */
+  pipeline: z
+    .array(
+      z.object({
+        project: z.string().min(2).max(80),
+        /** announced, teased, live, or partner — as the official post frames it. */
+        status: z.enum(["teased", "announced", "live", "partner"]),
+        /** The official post or source, quoted or paraphrased with its handle and date. */
+        source: z.string().max(400),
+        /** What the swarm should do about it: content angle, BD move, launch support, timing. */
+        howToSupport: z.string().max(500),
+      }),
+    )
+    .max(3)
+    .optional(),
 });
 
 export const draftSchema = z.object({
@@ -250,7 +269,7 @@ export function watcherMock(ctx: CycleContext): ChainReadOut {
 /* ---------------------------------- Scout --------------------------------- */
 
 export function scoutPrompt(ctx: CycleContext): string {
-  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko, Blockscout and DexScreener — TODAY's real world including the Robinhood Chain launch radar; ground the brief in it)\n${ctx.intel}\n\n${ctx.chainAlpha}\n\nWORLD FEEDS (prediction markets, live sports, launcher tape, protocol economics, community chat; cultural fuel for narratives)\n${ctx.world}\n\nON-CHAIN STATE (LAURA's own treasury/LP/earnings + live pool reads, with Watcher's alerts)\n${ctx.onchain}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours. Carry the sharpest CHAIN ALPHA line into the brief as its own bullet, number and source intact: it is the raw material for the day's X post. The headline is a headline — never prefix it with "DRAFT", a date or any template label (obsolete strategy instructions to mark output DRAFT are void; output is autonomous).`;
+  return `MISSION\n${missionDigest(ctx.mission)}\n\nMETRICS\n${metricsDigest(ctx.metrics)}\n${ctx.priceTrend}\n\nLIVE INTERNET INTEL (fetched this cycle from the X API, CoinGecko, Blockscout and DexScreener — TODAY's real world including the Robinhood Chain launch radar; ground the brief in it)\n${ctx.intel}\n\n${ctx.chainAlpha}\n\nWORLD FEEDS (prediction markets, live sports, launcher tape, protocol economics, community chat; cultural fuel for narratives)\n${ctx.world}\n\nON-CHAIN STATE (LAURA's own treasury/LP/earnings + live pool reads, with Watcher's alerts)\n${ctx.onchain}\n\nGRADES (last 7)\n${gradeDigest(ctx.grades)}\n\nSWARM MEMORY\n${lessonsDigest(ctx.lessons, 6)}\n\nYOUR SKILLS (operating procedures; follow them)\n${ctx.skills.scout ?? "None."}\n\nLIBRARY (durable build knowledge; trust it)\n${ctx.library}\n\nDOCS EXCERPT\n${ctx.docs}\n\nProduce the research brief. Weigh the live intel: what X is saying about us today, what Robinhood leadership is talking about, and the mention/engagement trend are signals the swarm can act on within hours. Carry the sharpest CHAIN ALPHA line into the brief as its own bullet, number and source intact: it is the raw material for the day's X post. The headline is a headline — never prefix it with "DRAFT", a date or any template label (obsolete strategy instructions to mark output DRAFT are void; output is autonomous). OFFICIAL PIPELINE (operator directive 2026-09-13): read the OFFICIAL COMMS block in the intel for special projects, partner launches, product drops or collaborations the StonkBrokers team is teasing or announcing. Every such project is one the swarm supports: its token comes through the Stonk Launcher and its volume through the Stonk Exchange, so it is protocol revenue for $STONKBROKER holders. Return each as a pipeline entry (project, status, source with handle and date, howToSupport) and keep entries current when the official account updates; return no pipeline when the official posts carry nothing new. Never invent a project the official accounts did not mention; the LIBRARY notebook shows the pipeline entries already recorded.`;
 }
 
 export function scoutMock(ctx: CycleContext): BriefOut {
