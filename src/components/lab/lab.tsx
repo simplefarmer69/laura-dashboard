@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ArrowLeft, ExternalLink, FlaskConical, LogOut, RefreshCw, Wallet } from "lucide-react";
 import type { Address } from "viem";
 import { Badge } from "@/components/ui/badge";
@@ -125,7 +126,7 @@ export function Lab() {
           </Link>
           <div className="flex items-center gap-2">
             <FlaskConical className="size-5 text-primary" />
-            <h1 className="sb-title text-lg font-bold tracking-tight">The Lab</h1>
+            <h1 className="sb-title whitespace-nowrap text-lg font-bold tracking-tight">The Lab</h1>
             <Badge variant="outline" className="hidden text-[10px] sm:inline-flex">
               ownership market · Robinhood Chain
             </Badge>
@@ -333,6 +334,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "gr
 
 function WalletButton({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
   const [pick, setPick] = useState(false);
+  useEffect(() => {
+    if (wallet.error) toast.error("Wallet", { description: wallet.error });
+  }, [wallet.error]);
   if (wallet.account) {
     return (
       <div className="flex items-center gap-1.5">
@@ -366,11 +370,8 @@ function WalletButton({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
     );
   }
   return (
-    <div className="flex flex-col items-end">
-      <Button size="sm" disabled={wallet.connecting} onClick={() => (wallet.options.length > 1 ? setPick(true) : void wallet.connect())}>
-        <Wallet className="size-3.5" /> {wallet.connecting ? "Connecting…" : "Connect wallet"}
-      </Button>
-      {wallet.error && <span className="max-w-64 text-right text-[10px] text-[var(--sb-neg)]">{wallet.error}</span>}
-    </div>
+    <Button size="sm" disabled={wallet.connecting} onClick={() => (wallet.options.length > 1 ? setPick(true) : void wallet.connect())}>
+      <Wallet className="size-3.5" /> <span className="whitespace-nowrap">{wallet.connecting ? "Connecting…" : "Connect wallet"}</span>
+    </Button>
   );
 }

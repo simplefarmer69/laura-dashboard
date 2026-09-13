@@ -6,11 +6,18 @@ import { parseAbi, type Address } from "viem";
  * pure data, so anyone can lift this file to host their own frontend.
  */
 
+/**
+ * Hosting your own copy: NEXT_PUBLIC_LAB_RPC_URL, NEXT_PUBLIC_LAB_MARKET and
+ * NEXT_PUBLIC_LAB_REGISTRY override the RPC and the contract addresses at
+ * build time (they are also what the local anvil harness uses).
+ */
+const RPC_URL = process.env.NEXT_PUBLIC_LAB_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+
 export const LAB_CHAIN = {
-  id: 4663,
+  id: Number(process.env.NEXT_PUBLIC_LAB_CHAIN_ID || 4663),
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.mainnet.chain.robinhood.com"] } },
+  rpcUrls: { default: { http: [RPC_URL] } },
   blockExplorers: { default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" } },
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" as Address } },
 } as const;
@@ -18,9 +25,9 @@ export const LAB_CHAIN = {
 export const EXPLORER_URL = LAB_CHAIN.blockExplorers.default.url;
 
 /** OwnershipMarket, deployed and verified 2026-09-13 (flagship key "ownership-market"). */
-export const MARKET_ADDRESS: Address = "0x184aceB1FFE04701d6fdF75f7AdC638651578923";
+export const MARKET_ADDRESS: Address = (process.env.NEXT_PUBLIC_LAB_MARKET as Address | undefined) || "0x184aceB1FFE04701d6fdF75f7AdC638651578923";
 /** LabRegistry (flagship key "lab-registry"); null until the swarm deploys it, then discovered from /api/forge. */
-export const REGISTRY_ADDRESS_FALLBACK: Address | null = null;
+export const REGISTRY_ADDRESS_FALLBACK: Address | null = (process.env.NEXT_PUBLIC_LAB_REGISTRY as Address | undefined) || null;
 
 export const ZERO_ADDRESS: Address = "0x0000000000000000000000000000000000000000";
 
@@ -48,6 +55,24 @@ export const MARKET_ABI = parseAbi([
   "event Listed(uint256 indexed id, address indexed target, address indexed seller, address payToken, uint256 price, string description)",
   "event Sold(uint256 indexed id, address indexed buyer, address payToken, uint256 paid)",
   "event Delivered(uint256 indexed id, address indexed target, address indexed newOwner, uint256 fee)",
+  "error Reentrancy()",
+  "error ZeroAddress()",
+  "error ZeroPrice()",
+  "error DescriptionTooLong()",
+  "error NotAContract()",
+  "error AlreadyListed()",
+  "error NotTargetOwner()",
+  "error NotSeller()",
+  "error NotBuyer()",
+  "error WrongStatus()",
+  "error NotEscrowed()",
+  "error ListingChanged()",
+  "error WrongValue()",
+  "error TransferFailed()",
+  "error DeliveryFailed()",
+  "error RefundTooEarly()",
+  "error NothingToClaim()",
+  "error NotStale()",
 ]);
 
 export const REGISTRY_ABI = parseAbi([
@@ -57,6 +82,10 @@ export const REGISTRY_ABI = parseAbi([
   "function getMetadataBatch(uint256 fromId, uint256 toId) view returns ((string metadata, address setBy, uint64 updatedAt)[])",
   "function setMetadata(uint256 id, string metadata)",
   "function clearMetadata(uint256 id)",
+  "error ZeroAddress()",
+  "error NoListing()",
+  "error NotSeller()",
+  "error MetadataTooLong()",
 ]);
 
 /** The two calls the market makes on a target, plus the Ownable2Step pair. */
