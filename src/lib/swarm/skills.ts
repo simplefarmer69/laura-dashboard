@@ -115,8 +115,10 @@ export async function skillUpdatedAt(name: string): Promise<number | null> {
 /** Hard cap on skill files so self-editing can grow the library but never flood it.
  * Raised 16 → 18 when the two ape-claw ports (slop-free-writing,
  * execution-readback) landed, and 18 → 20 when x-voice joined the seed set
- * (2026-09-12), so the coach keeps the same self-edit headroom. */
-const MAX_SKILL_FILES = 20;
+ * (2026-09-12), so the coach keeps the same self-edit headroom; 20 → 32 on
+ * 2026-09-13 when Forge (which writes a skill for every agent it creates) and
+ * the behavioral-influence skill joined. */
+const MAX_SKILL_FILES = 32;
 
 export interface SkillEdit {
   name: string;
