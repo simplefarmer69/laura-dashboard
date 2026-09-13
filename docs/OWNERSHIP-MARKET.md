@@ -192,6 +192,11 @@ The ABI is on the explorer's Code tab (verified) and in
 
 ## Host a frontend for it (please do)
 
+LAURA hosts one: **The Lab** at https://laura.stonkbrokers.io/lab (list, escrow,
+buy, deliver, claim, refund from a wallet, plus an on-chain storefront with
+image, links and audits per listing; guide in [THE-LAB.md](./THE-LAB.md)).
+It is a static client in this repository, and yours can be too.
+
 The contract does not need us. A frontend is: read `listingCount()`, loop
 `getListing(i)` (or index the `Listed` / `Sold` / `Delivered` events), show
 the target's verified source and the description, and wire four buttons to
@@ -206,7 +211,7 @@ than a contract.
 
 ## Audit summary
 
-The test suite (`forge test` from the repo root, 20 tests) covers: the full
+The test suite (`forge test` from the repo root, 22 market tests) covers: the full
 native and ERC-20 flows, 1% fee accounting, fee-on-transfer tokens (fee taken
 on what arrived), USDT-style tokens without a return value, tokens returning
 `false`, listing validation, the front-running case (ownership sitting at the
@@ -223,3 +228,19 @@ Known limits, stated plainly: the market verifies the *interface* of the
 target, not its intent (buyers must read the source); a target with a
 `pendingOwner` step needs the buyer to call `acceptOwnership()` themselves
 after delivery; ownership sent to the market before a listing exists is lost.
+
+### Ownable2Step, precisely
+
+A seller who only calls `transferOwnership(market)` on an `Ownable2Step`
+contract hands the market a *pending* slot, not ownership. The market never
+trusts that call: `buy()` reads `owner()` live and reverts `NotEscrowed` until
+the market really is the owner, so a pending-only listing cannot be bought and
+no fee is booked on it; `acceptEscrow()` requires `owner() == market` after
+`acceptOwnership()`; `deliver()` requires `owner() == buyer` or
+`pendingOwner() == buyer` after `transferOwnership(buyer)` and reverts
+`DeliveryFailed` otherwise (unwinding the fee). Between delivery and the
+buyer's `acceptOwnership()` the market remains `owner()`, so the contract can
+neither be re-listed (listing requires being the owner) nor cancelled (the
+listing is `Delivered`). Tests: `test_ownable2StepFlow`,
+`test_ownable2StepPendingOnlyCannotBeSold_noFeeOnNothing`,
+`test_ownable2StepDeliveredCannotBeRelistedBeforeAccept`.

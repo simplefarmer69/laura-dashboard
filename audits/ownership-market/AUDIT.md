@@ -2,7 +2,7 @@
 
 - Contract: `src/lib/forge/contracts/OwnershipMarket.sol` (single file, no imports, 8,557 bytes of creation code)
 - Compiler: solc 0.8.28, optimizer 200 runs, EVM `paris` (matches `scripts/solc-compile.mjs`, which produces the deployed bytecode and the verification input)
-- Tests: `test/OwnershipMarket.t.sol`, run with `forge test -vv` from the repo root (foundry >= 1.0, no external libraries). 20 tests, all passing at the time of the review.
+- Tests: `test/OwnershipMarket.t.sol`, run with `forge test -vv` from the repo root (the harness also runs `audits/lab-registry`) (foundry >= 1.0, no external libraries). 22 tests, all passing at the time of the review (20 at deploy; the two Ownable2Step edge tests below were added on 2026-09-13 after the forum question, against the unchanged deployed source).
 - Reviewed against: the ethskills security checklist distilled in `library/skills/onchain-engineering.md` (reentrancy, CEI, unchecked returns, pull vs push payments, privileged roles, fee-on-transfer and non-standard ERC-20s, griefing, front-running).
 - Local end-to-end: deployed with the repo's own solc-js artifact to a local `anvil` node and driven through list, escrow, buy, deliver, claim and fee withdrawal with viem (deploy gas 1,883,368; seller net 0.99 of a 1 ETH sale; 0.01 ETH to the fee recipient).
 
@@ -53,6 +53,8 @@ No critical or high findings. Items accepted with documentation:
 | `test_refundAfterDelayThenSellerReclaims` | buyer protection, no fee, seller recovery |
 | `test_noRefundAfterDelivery_noDoubleClaim` | finality |
 | `test_ownable2StepFlow` | two-step targets end to end |
+| `test_ownable2StepPendingOnlyCannotBeSold_noFeeOnNothing` | pending-only escrow cannot be bought; no fee on nothing; re-pointed pending slot still unsellable |
+| `test_ownable2StepDeliveredCannotBeRelistedBeforeAccept` | market stays owner until the buyer accepts; no relist, no cancel in between |
 | `test_deliveryFailsWhenTargetDoesNotHandOver` | `DeliveryFailed`, then refund |
 | `test_reentrancyFromTargetIsBlocked` | guard on `deliver` |
 | `test_nativePayoutToRejectingSellerReverts` | pull payments isolate failures |

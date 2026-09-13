@@ -51,5 +51,7 @@ next-env.d.ts
 /data
 
 # foundry build output (audits/)
+audits/out/
 audits/**/out/
+audits/cache/
 audits/**/cache/

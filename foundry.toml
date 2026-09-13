@@ -2,10 +2,10 @@
 # Run: forge test -vv   (foundry >= 1.0; no external libraries required)
 [profile.default]
 src = "src/lib/forge/contracts"
-test = "audits/ownership-market/test"
-script = "audits/ownership-market/test"
-out = "audits/ownership-market/out"
-cache_path = "audits/ownership-market/cache"
+test = "audits"
+script = "audits"
+out = "audits/out"
+cache_path = "audits/cache"
 libs = []
 solc_version = "0.8.28"
 optimizer = true

@@ -475,6 +475,65 @@ contract OwnershipMarketTest is Base {
         market.claimProceeds(id);
     }
 
+    /* Tape's question (forum, 2026-09-13): an Ownable2Step seller who only
+       calls transferOwnership(market) hands the market a PENDING slot, not
+       ownership. Nothing may be sold on that: buy() reads owner() live and
+       reverts NotEscrowed, so no funds move and no fee is booked. And after a
+       real delivery to a 2Step buyer the market stays owner() until the buyer
+       accepts, but nobody (seller included) can relist or move it meanwhile. */
+    function test_ownable2StepPendingOnlyCannotBeSold_noFeeOnNothing() public {
+        Ownable2Step t = new Ownable2Step(seller);
+        vm.startPrank(seller);
+        uint256 id = market.createListing(address(t), address(0), 1 ether, "2step pending");
+        t.transferOwnership(address(market));
+        vm.stopPrank();
+        eq(t.owner(), seller, "seller still owns");
+        eq(t.pendingOwner(), address(market), "market only pending");
+        vm.prank(buyer);
+        vm.expectRevert(OwnershipMarket.NotEscrowed.selector);
+        market.buy{value: 1 ether}(id, address(0), 1 ether);
+        eq(buyer.balance, 100 ether, "buyer paid nothing");
+        eq(market.accruedFees(address(0)), 0, "no fee on nothing");
+
+        /* Seller changes their mind and points the pending slot elsewhere: acceptEscrow fails, still nothing to buy. */
+        vm.prank(seller);
+        t.transferOwnership(rando);
+        vm.prank(rando);
+        vm.expectRevert();
+        market.acceptEscrow(id);
+        vm.prank(buyer);
+        vm.expectRevert(OwnershipMarket.NotEscrowed.selector);
+        market.buy{value: 1 ether}(id, address(0), 1 ether);
+    }
+
+    function test_ownable2StepDeliveredCannotBeRelistedBeforeAccept() public {
+        Ownable2Step t = new Ownable2Step(seller);
+        vm.startPrank(seller);
+        uint256 id = market.createListing(address(t), address(0), 1 ether, "2step");
+        t.transferOwnership(address(market));
+        vm.stopPrank();
+        market.acceptEscrow(id);
+        vm.prank(buyer);
+        market.buy{value: 1 ether}(id, address(0), 1 ether);
+        market.deliver(id);
+        eq(t.owner(), address(market), "market holds until accept");
+        eq(t.pendingOwner(), buyer, "buyer is pending");
+        /* Nobody is owner() except the market, so nobody can list it again; the market never lists. */
+        vm.prank(seller);
+        vm.expectRevert(OwnershipMarket.NotTargetOwner.selector);
+        market.createListing(address(t), address(0), 1 ether, "relist");
+        vm.prank(rando);
+        vm.expectRevert(OwnershipMarket.NotTargetOwner.selector);
+        market.createListing(address(t), address(0), 1 ether, "steal");
+        /* Cancel is closed too: the listing is Delivered, not Listed. */
+        vm.prank(seller);
+        vm.expectRevert(OwnershipMarket.WrongStatus.selector);
+        market.cancel(id);
+        vm.prank(buyer);
+        t.acceptOwnership();
+        eq(t.owner(), buyer, "buyer owns after accept");
+    }
+
     function test_deliveryFailsWhenTargetDoesNotHandOver() public {
         LyingOwnable t = new LyingOwnable(seller);
         vm.startPrank(seller);
