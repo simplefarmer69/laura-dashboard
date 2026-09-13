@@ -147,6 +147,16 @@ export function Overview({
           tone={metrics.protocolVolume24hUsd >= metrics.protocolVolume7dUsd / 7 ? "up" : "down"}
         />
         <Metric
+          label="Ecosystem volume 24h"
+          value={usd(metrics.ecosystemVolume24hUsd ?? 0)}
+          sub={
+            metrics.ecosystemVolume24hUsd == null
+              ? "Special Projects + LAURA pairs and Smart LP pools (pending first read)"
+              : `Special Projects + LAURA ${usd(metrics.ecosystemTokensVolume24hUsd ?? 0)} · Smart LP share ${usd(metrics.smartLpAttributedVolume24hUsd ?? 0)} of ${usd(metrics.smartLpPoolsGrossVolume24hUsd ?? 0)} across ${metrics.smartLpPoolCount ?? 0} pools`
+          }
+          tone="neutral"
+        />
+        <Metric
           label="Liquidity & TVL"
           value={usd(metrics.liquidityUsd)}
           sub={`${metrics.pairCount} DEX pairs · TVL ${usd(metrics.tvlUsd)}`}

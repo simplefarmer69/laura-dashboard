@@ -20,6 +20,19 @@ export interface MetricsSnapshot {
   protocolRevenue7dUsd: number;
   protocolVolume7dUsd: number;
   tvlUsd: number;
+  /**
+   * Ecosystem tape (DexScreener + Smart LP registry): Special Projects + LAURA
+   * token pairs counted in full, plus every other Smart LP pool's 24h volume
+   * scaled by the vaults' share of that pool's liquidity. $STONKBROKER pairs are
+   * excluded (they live in tokenDexVolume24hUsd). Absent on snapshots taken
+   * before the metric existed.
+   */
+  ecosystemVolume24hUsd?: number;
+  ecosystemTokensVolume24hUsd?: number;
+  smartLpAttributedVolume24hUsd?: number;
+  smartLpPoolsGrossVolume24hUsd?: number;
+  ecosystemPairCount?: number;
+  smartLpPoolCount?: number;
   /** Direct reads from Robinhood Chain RPC; absent when the RPC was unreachable */
   onchain?: OnchainReads;
   source: MetricSource;

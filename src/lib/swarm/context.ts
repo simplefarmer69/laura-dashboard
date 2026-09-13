@@ -21,6 +21,9 @@ export function metricsDigest(m: MetricsSnapshot): string {
     `Protocol fees 24h: ${usd(m.protocolFees24hUsd)} (7d total ${usd(m.protocolFees7dUsd)})`,
     `Protocol revenue 24h: ${usd(m.protocolRevenue24hUsd)} vs 7d avg ${usd(rev7)} (${rev7 > 0 ? (m.protocolRevenue24hUsd / rev7).toFixed(2) : "n/a"}x)`,
     `Protocol volume 24h: ${usd(m.protocolVolume24hUsd)} vs 7d avg ${usd(vol7)} (${vol7 > 0 ? (m.protocolVolume24hUsd / vol7).toFixed(2) : "n/a"}x)`,
+    m.ecosystemVolume24hUsd != null
+      ? `Ecosystem volume 24h (feeds StonkBrokers fees): ${usd(m.ecosystemVolume24hUsd)} = Special Projects + LAURA pairs ${usd(m.ecosystemTokensVolume24hUsd ?? 0)} + Smart LP vault share ${usd(m.smartLpAttributedVolume24hUsd ?? 0)} of ${usd(m.smartLpPoolsGrossVolume24hUsd ?? 0)} gross across ${m.smartLpPoolCount ?? 0} pools`
+      : "Ecosystem volume 24h: pending first read",
     `TVL (Robinhood Chain): ${usd(m.tvlUsd)}`,
   ].join("\n");
 }

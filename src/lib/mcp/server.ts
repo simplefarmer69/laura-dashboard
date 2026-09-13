@@ -141,6 +141,7 @@ function summarizeMetrics(m: MetricsSnapshot | undefined | null) {
     protocolFees24hUsd: m.protocolFees24hUsd,
     protocolRevenue24hUsd: m.protocolRevenue24hUsd,
     protocolVolume24hUsd: m.protocolVolume24hUsd,
+    ecosystemVolume24hUsd: m.ecosystemVolume24hUsd ?? null,
     tvlUsd: m.tvlUsd,
   };
 }
