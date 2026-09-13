@@ -20,11 +20,17 @@ knowledge and the same swarm runs any goal-driven operation.
 - **A goal, graded daily.** The grader pulls live numbers (DexScreener,
   DefiLlama, chain RPC out of the box) and stamps a score every UTC day. The
   swarm reads its own grades and shifts effort toward the weakest lever.
-- **A roster, not a monolith.** Seven core agents (Scout, Quill, Steward,
-  Broker, Ledger, Mint, Coach) plus a builder, a treasury manager (Purser),
-  research and Smart LP specialists and a forum host, each with its own
-  strategy text, skills, and track record. The coach evolves strategies;
-  every superseded version is kept for rollback.
+- **A roster, not a monolith.** Twenty-three static agents (Scout, Quill,
+  Steward, Broker, Ledger, Catalyst, Mint, Ticker, Coach, an Auditor and a
+  readability editor called Redline, a behavioral analyst called Nudge, an
+  agentic-trader ambassador called Relay, a treasury manager called Purser,
+  a builder, research and Smart LP specialists, a forum host) plus the
+  dynamic agents that **Hive**, the swarm architect, creates, improves and
+  retires on a 6 h stride inside code caps (at most 6 dynamic agents, one
+  change per run, retirement only after 6 reviewed drafts; dynamic agents
+  never trade, launch or touch the wallet). Each agent has its own strategy
+  text, skills, and track record; the coach evolves strategies and every
+  superseded version is kept for rollback.
 - **Memory that compounds.** A curated `library/` of markdown knowledge, per
   role `library/skills/`, and a self-writable notebook feed every prompt. Edit
   the markdown to reshape how the swarm operates; it reloads within a minute.
@@ -108,18 +114,42 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 - **Forum** - agents debate in moderated rounds (a barkeep host closes and
   herds topics) before producing; output budgets keep rounds cheap.
 - **Launchpad rail** (`src/lib/launchpad/`) - Smart Launch V2 ABI, pad reads,
-  spec design, procedural launch art, and a gated deploy executor with hard
-  rails: no daily count cap, deploys paced at least 20 min apart, max 0.02 ETH
+  spec design by Mint (theme launches) and Ticker (market-tape launches on a
+  3 h stride, owner of buy-only curves: `sellsEnabled: false` is a request the
+  executor probes against the pad at deploy and falls back from publicly when
+  the pad refuses it), procedural launch art, and a gated deploy executor
+  with hard rails: no daily count cap, deploys paced at least 20 min apart, max 0.02 ETH
   per deploy, the wallet never deploys below a 0.05 ETH floor, one deploy per
   tick, 15 minute backoff after failure, live re-validation at deploy time. Approved specs sit in an autonomous queue; the console shows each
   one's projected deploy time instead of an approval prompt.
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.
-- **Browser worker** (`src/lib/swarm/browser.ts`) - reads allowlisted web
-  pages each cycle (pages agents asked for, the official site's pages on
-  rotation, Robinhood newsroom, meme-stock quote pages, links from the X pulse)
-  with plain fetch or Chromium via Playwright; read-only, no cookies or logins,
-  and page text is wrapped as untrusted content.
+- **Browser worker** (`src/lib/swarm/browser.ts`) - reads the open web each
+  cycle (pages any producer queued for its next turn, keyless web searches,
+  the official site's pages on rotation, Robinhood newsroom, meme-stock quote
+  pages, links from the X pulse) with plain fetch or Chromium via Playwright.
+  A denylist replaces the old allowlist: private ranges are refused after DNS
+  resolution, login-only hosts and x.com pages are never opened, binary
+  downloads are dropped; read-only, no cookies or logins, and page text is
+  wrapped as untrusted content.
+- **Agent layer** (`src/lib/mcp/`, `src/app/api/mcp`, `src/app/api/agents/manifest`,
+  `public/for-agents.md`) - a read-only MCP server (Streamable HTTP,
+  stateless JSON-RPC) that gives any other agent the launcher tape, token
+  marks, pairs, holders, Smart LP, brokertools counters, fee breakdown, the
+  exact Robinhood Chain contracts and rules, LAURA's library and her public
+  state; plus a JSON manifest and an onboarding page. Nothing in it signs,
+  spends or posts. Docs: [`docs/MCP.md`](./docs/MCP.md).
+- **Official pipeline** - the intel digest carries the team's own X posts in
+  full; Scout turns teased or announced projects into notebook entries every
+  agent carries, and `library/47-official-pipeline.md` sets the rule that
+  official projects are supported by default because their tokens come
+  through the launcher.
+- **Robinhood people** (`src/lib/publish/x-people.ts`) - discovers Robinhood
+  staff from their own public X bios (seed accounts, who they talk to, recent
+  authors, the personal seeds' following lists), follows current staff and
+  official accounts from LAURA's account inside code caps (one per 90 s, 25
+  per UTC day; following is the only write), and carries the current staff
+  with their bios into every cycle's intel context.
 - **Site surface** (`src/lib/swarm/site.ts`) - the website's own `llms-full.txt`,
   `ecosystem.json` and sitemaps feed every cycle, so LAURA speaks about the
   products the way the site does today.
@@ -220,11 +250,15 @@ posts, 6 per 24h, duplicate memory, never engaging the account itself):
 - **Autonomous rail** (`src/lib/publish/auto.ts`, setting `autoPublishX`, on by
   default): fresh approved X posts under 6 hours old post themselves, one per
   scheduler tick, after three gates in `src/lib/publish/x-style.ts`: a
-  sanitizer that strips banned openers and sign-offs, code-level style and
-  repetition checks against the account's own timeline, and an Auditor read
-  of the exact text (pass, veto with reason, or a light edit that adds no
-  fact). Older approvals never auto-post, so enabling the keys cannot flush a
-  backlog.
+  sanitizer that strips banned openers and sign-offs, code-level style,
+  repetition and readability checks (pipeline jargon and bare counters are
+  refused in code), a **Redline** read for any post the editor has not yet
+  passed in-cycle (a stranger must understand it cold; hold, pass or a
+  rewrite that keeps the original so producers learn from the diff), and an
+  Auditor read of the exact text (pass, veto with reason, or a light edit
+  that adds no fact). Producers see their own denied and rewritten posts in
+  every prompt. Older approvals never auto-post, so enabling the keys cannot
+  flush a backlog.
 - **Publish to X** button on any approved X post, for the operator (same
   sanitizer and single-post rule).
 - **Mentions rail** (`src/lib/publish/mentions.ts`): people who tag the
@@ -261,7 +295,9 @@ What the posts are about, and how the voice improves:
 ## Layout
 
 ```
-src/lib/swarm/       charter, roster, orchestrator, tuner, forum, archive, browser worker
+src/lib/swarm/       charter, roster, orchestrator, tuner, forum, archive, browser worker, architect (Hive)
+src/lib/mcp/         read-only MCP server for other agents (tools, resources, prompts)
+src/lib/publish/     X rails: auto-publish, mentions, Redline editor, Robinhood people, guards
 src/lib/grader/      metric adapters + scoring rubric (swap for your goal)
 src/lib/launchpad/   launch specs, art, caps, gated deploy executor
 src/lib/builder/     on-chain utility templates + builder caps
