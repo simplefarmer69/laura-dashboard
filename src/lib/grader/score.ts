@@ -106,23 +106,52 @@ export function scoreRevenue(m: MetricsSnapshot): GradeComponent {
   return { key: "revenue", label: "Protocol revenue", weight: WEIGHTS.revenue, score, detail };
 }
 
+/**
+ * The "tape" the grade watches: $STONKBROKER DEX volume plus the ecosystem
+ * volume (Special Projects + LAURA pairs in full, other Smart LP pools by the
+ * vaults' share of pool liquidity). Both feed StonkBrokers fees, so a snapshot
+ * that predates the ecosystem metric only counts the token leg.
+ */
+export function tapeVolume(m: MetricsSnapshot): number {
+  return m.tokenDexVolume24hUsd + (m.ecosystemVolume24hUsd ?? 0);
+}
+
 export function scoreVolume(m: MetricsSnapshot, history: MetricsSnapshot[]): GradeComponent {
   const avg7 = m.protocolVolume7dUsd / 7;
   const protoRatio = avg7 > 0 ? m.protocolVolume24hUsd / avg7 : 1;
   const protoScore = ratioScore(protoRatio, 100);
 
   const weekAgo = m.ts - 7 * DAY_MS;
-  const window = history.filter((s) => s.ts >= weekAgo && s.ts < m.ts && s.tokenDexVolume24hUsd > 0);
-  let score = protoScore;
-  let detail = `protocol volume ${fmtUsd(m.protocolVolume24hUsd)} vs 7d avg ${fmtUsd(avg7)} (${protoRatio.toFixed(2)}x)`;
+  // Trailing window compares like with like: once the ecosystem metric exists
+  // on the current snapshot, only history that also carries it is averaged so
+  // the first days after rollout cannot read as a fake volume spike.
+  const hasEco = m.ecosystemVolume24hUsd != null;
+  const window = history.filter(
+    (s) =>
+      s.ts >= weekAgo &&
+      s.ts < m.ts &&
+      s.tokenDexVolume24hUsd > 0 &&
+      (!hasEco || s.ecosystemVolume24hUsd != null),
+  );
+  const tape = tapeVolume(m);
+  const tapeLabel = hasEco
+    ? `token DEX ${fmtUsd(m.tokenDexVolume24hUsd)} + ecosystem ${fmtUsd(m.ecosystemVolume24hUsd ?? 0)} = ${fmtUsd(tape)}`
+    : `token DEX volume ${fmtUsd(m.tokenDexVolume24hUsd)}`;
+  let detail = `protocol surfaces ${fmtUsd(m.protocolVolume24hUsd)} vs 7d avg ${fmtUsd(avg7)} (${protoRatio.toFixed(2)}x)`;
+  // The fee-bearing tape is the bigger signal: protocol-surface volume is a
+  // small slice of what actually pays StonkBrokers once Smart LP is counted.
+  // Without a trailing window the tape leg reads neutral (50) instead of
+  // letting the DefiLlama slice alone pin the whole component at zero.
+  let tapeScore = 50;
   if (window.length >= 4) {
-    const tokenAvg = window.reduce((s, x) => s + x.tokenDexVolume24hUsd, 0) / window.length;
-    const tokenRatio = tokenAvg > 0 ? m.tokenDexVolume24hUsd / tokenAvg : 1;
-    score = 0.7 * protoScore + 0.3 * ratioScore(tokenRatio, 100);
-    detail += `; token DEX volume ${fmtUsd(m.tokenDexVolume24hUsd)} (${tokenRatio.toFixed(2)}x trailing)`;
+    const tapeAvg = window.reduce((s, x) => s + tapeVolume(x), 0) / window.length;
+    const tapeRatio = tapeAvg > 0 ? tape / tapeAvg : 1;
+    tapeScore = ratioScore(tapeRatio, 100);
+    detail += `; ${tapeLabel} (${tapeRatio.toFixed(2)}x trailing)`;
   } else {
-    detail += `; token DEX volume ${fmtUsd(m.tokenDexVolume24hUsd)} (trailing avg pending)`;
+    detail += `; ${tapeLabel} (trailing avg pending)`;
   }
+  const score = 0.4 * protoScore + 0.6 * tapeScore;
   return { key: "volume", label: "Protocol & token volume", weight: WEIGHTS.volume, score, detail };
 }
 

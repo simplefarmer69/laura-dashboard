@@ -1,5 +1,6 @@
 import type { MetricsSnapshot, OnchainReads, Settings } from "@/lib/types";
 import { fetchOnchain } from "@/lib/grader/onchain";
+import { fetchEcosystemVolume, type EcosystemVolume } from "@/lib/grader/ecosystem";
 
 const TIMEOUT_MS = 15_000;
 
@@ -190,12 +191,24 @@ export async function collectMetrics(
   }
   const m = market.status === "fulfilled" ? market.value : null;
   const p = protocol.status === "fulfilled" ? protocol.value : null;
+  const ethUsd = m?.ethPriceUsd ?? prev?.onchain?.ethPriceUsd ?? 0;
   let onchain: OnchainReads | undefined;
-  try {
-    onchain = await fetchOnchain(settings, m?.ethPriceUsd ?? prev?.onchain?.ethPriceUsd ?? 0);
-  } catch (err) {
-    warnings.push(`RPC: ${String(err)}`);
+  let eco: EcosystemVolume | null = null;
+  const [onchainRes, ecoRes] = await Promise.allSettled([
+    fetchOnchain(settings, ethUsd),
+    fetchEcosystemVolume(settings.chainSlug, settings.tokenAddress, ethUsd),
+  ]);
+  if (onchainRes.status === "fulfilled") {
+    onchain = onchainRes.value;
+  } else {
+    warnings.push(`RPC: ${String(onchainRes.reason)}`);
     onchain = prev?.onchain;
+  }
+  if (ecoRes.status === "fulfilled") {
+    eco = ecoRes.value;
+    for (const w of eco.warnings) warnings.push(`Ecosystem volume: ${w}`);
+  } else {
+    warnings.push(`Ecosystem volume: ${String(ecoRes.reason)}`);
   }
   return {
     ts: Date.now(),
@@ -213,6 +226,12 @@ export async function collectMetrics(
     protocolRevenue7dUsd: p?.revenue7d ?? prev?.protocolRevenue7dUsd ?? 0,
     protocolVolume7dUsd: p?.volume7d ?? prev?.protocolVolume7dUsd ?? 0,
     tvlUsd: p?.tvl ?? prev?.tvlUsd ?? 0,
+    ecosystemVolume24hUsd: eco?.totalUsd ?? prev?.ecosystemVolume24hUsd,
+    ecosystemTokensVolume24hUsd: eco?.ecosystemTokensUsd ?? prev?.ecosystemTokensVolume24hUsd,
+    smartLpAttributedVolume24hUsd: eco?.smartLpAttributedUsd ?? prev?.smartLpAttributedVolume24hUsd,
+    smartLpPoolsGrossVolume24hUsd: eco?.smartLpPoolsGrossUsd ?? prev?.smartLpPoolsGrossVolume24hUsd,
+    ecosystemPairCount: eco?.pairCount ?? prev?.ecosystemPairCount,
+    smartLpPoolCount: eco?.smartLpPoolCount ?? prev?.smartLpPoolCount,
     onchain,
     source: market.status === "rejected" || protocol.status === "rejected" ? "partial" : "live",
     warnings,

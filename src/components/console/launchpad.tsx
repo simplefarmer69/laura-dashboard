@@ -11,6 +11,7 @@ import { EarningsPanel } from "@/components/console/earnings";
 import { ContractsPanel } from "@/components/console/contracts";
 import { ago, usd } from "@/components/console/format";
 import type { LaunchProposal, LaunchStatus } from "@/lib/types";
+import { txUrl } from "@/lib/explorer";
 
 interface PadInfo {
   address: string;
@@ -432,7 +433,7 @@ function LaunchCard({
                   token {l.tokenAddress.slice(0, 12)}… <ExternalLink className="size-3" />
                 </a>
               )}
-              <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/tx/${l.txHash}`} target="_blank" rel="noreferrer">
+              <a className="flex items-center gap-1 text-primary hover:underline" href={txUrl(l.txHash)} target="_blank" rel="noreferrer">
                 tx {l.txHash.slice(0, 14)}… <ExternalLink className="size-3" />
               </a>
               {l.imageHash && <p className="text-muted-foreground">logo live on launcher · {l.imageHash.slice(0, 14)}…</p>}

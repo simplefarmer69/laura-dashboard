@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ago, when } from "@/components/console/format";
 import { TREASURY_CAPS, buyEligibility, lpDeployedEthEquiv } from "@/lib/launchpad/treasury-caps";
 import type { ConsoleState } from "@/components/console/use-swarm-state";
+import { txUrl } from "@/lib/explorer";
 
 /**
  * LAURA's economics: treasury balances plus per-launch creator earnings.
@@ -130,7 +131,9 @@ function TreasuryOps({ state }: { state: ConsoleState }) {
       {lastBuy && (
         <p className="font-mono text-[11px] text-muted-foreground" title={when(lastBuy.ts)}>
           last buy {ago(lastBuy.ts)}: {lastBuy.ethIn.toFixed(4)} ETH → {lastBuy.tokensOut.toFixed(2)} $STONKBROKER · tx{" "}
-          {lastBuy.txHash.slice(0, 10)}…
+          <a className="text-primary hover:underline" href={txUrl(lastBuy.txHash)} target="_blank" rel="noreferrer">
+            {lastBuy.txHash.slice(0, 10)}…
+          </a>
         </p>
       )}
       <p className="text-[11px] text-muted-foreground">
