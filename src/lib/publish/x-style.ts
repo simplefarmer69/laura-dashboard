@@ -206,8 +206,11 @@ export function xPostProblems(text: string, recent: XPostLogEntry[]): string[] {
 export const xAuditSchema = z.object({
   verdict: z.enum(["pass", "veto"]),
   /** For a veto: the specific defect and the passing edit, if any. For a pass: what works.
-      Headroom: the Auditor's strategy mandates a verbose veto shape (2026-09-12 probe hit 600). */
-  reason: z.string().max(1400),
+      Headroom: the Auditor's strategy mandates a verbose veto shape (2026-09-12 probe hit
+      600; a 2026-09-13 veto ran past 1400 and failed validation, which read as "auditor
+      offline" and held a clean post). The prompt asks for 900; the schema tolerates far
+      more so a long reason is stored truncated instead of failing the whole read. */
+  reason: z.string().max(6000).transform((r) => (r.length > 1400 ? `${r.slice(0, 1397)}...` : r)),
   /**
    * Optional light edit that passes. Deleting words, fixing punctuation and
    * capitalisation, and cutting length are allowed; adding a fact, a number,
@@ -235,6 +238,7 @@ export function xAuditPrompt(input: {
     `You are the pre-publish auditor for the @LAURA_DAIO X account. A producer agent (${input.author}) wants to post the text below. Nothing goes out without your pass. You are the last reader before a public audience of traders who can smell a bot.`,
     X_STYLE_GUIDE,
     `VETO when any of these hold: a stranger cannot tell after the first sentence what the post is about, or a number in it has no unit or referent a human uses, or it carries pipeline vocabulary (experiment numbers, "proxy", "lever", "lane", "third call", "sale clock", "resubmitted") that only the briefing explains (the 2026-09-13 00:05 UTC post failed every one of these and shipped: never again); it reads like a template or a press release; it opens or closes with a label, a disclaimer or a sign-off; it is a thread or a numbered fragment; it repeats an opening, a closing, a phrase, a statistic or a theme from the posts below; it explains a mechanic in the abstract instead of saying what happened; it contains a claim with no number, date, source or event behind it; it predicts price, tells people to buy, or promises a return; it uses filler words, hashtags or stacked punctuation; a human reading it would not say "someone wrote this".`,
+    `Keep "reason" under 900 characters: name the defect(s) in one or two sentences each; the edit itself belongs in "edited", not in the reason.`,
     `PASS when a human who follows Robinhood Chain would read it, learn one concrete thing, and not notice it was written by an agent. When a light edit (cut words, fix case, drop a label, tighten a clause) turns a near-miss into a pass, return the edit in "edited"; never add a fact, a number, a link or a claim that is not already in the post, and never exceed ${TWEET_MAX} characters.`,
     `ALREADY POSTED FROM THIS ACCOUNT (newest first; the candidate must not echo any of these)\n${recent || "Nothing posted yet."}`,
     `PRODUCER'S RATIONALE (context only, do not judge the rationale)\n${input.rationale.slice(0, 600)}`,
