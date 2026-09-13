@@ -194,6 +194,7 @@ export interface PlaywrightLike {
           title(): Promise<string>;
           url(): string;
           evaluate<T>(fn: () => T): Promise<T>;
+          evaluate<T, A>(fn: (arg: A) => T | Promise<T>, arg: A): Promise<T>;
           waitForTimeout(ms: number): Promise<void>;
           close(): Promise<void>;
         }>;
