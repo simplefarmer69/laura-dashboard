@@ -247,12 +247,60 @@ export function validateAgainstBounds(p: LaunchProposal, pad: PadState): string[
   /* Modes the V2 pads reject as deployed (verified by simulation on all 8
      pads 2026-09-11, every parameter combination tested): refusing here saves
      the deploy attempt and names the on-chain error the pad would throw. */
-  if (!p.sellsEnabled) problems.push("Buy-only curves revert BadEconomics() on every V2 pad; sellsEnabled must be true");
+  /* sellsEnabled false is not refused here any more: the executor probes the
+     pad (probeBuyOnly) and falls back to sells-enabled when the pad reverts,
+     so a buy-only request never burns a deploy and deploys as designed the
+     day the pads accept it. */
   if (p.openEnded === false) problems.push("Closed-window sales revert BadParam() on every V2 pad; openEnded must be true");
   if (p.maxBuyPpm !== undefined && (p.maxBuyPpm < 0 || p.maxBuyPpm > 1_000_000)) problems.push("maxBuyPpm must be 0-1000000");
   if (p.bondVenue !== undefined && ![0, 1].includes(p.bondVenue)) problems.push("bondVenue must be 0 or 1");
   if (p.unsoldMode !== undefined && ![0, 1].includes(p.unsoldMode)) problems.push("unsoldMode must be 0 or 1 (2+ reverts BadParam())");
   return problems;
+}
+
+/**
+ * Asks the pad whether it would accept this launch as a buy-only curve
+ * (sellsEnabled false) by simulating createLaunch with the launch's own
+ * parameters. Simulation only; no gas. Returns the revert name when refused.
+ */
+export async function probeBuyOnly(p: LaunchProposal): Promise<{ accepted: boolean; detail: string }> {
+  const account = getAccount();
+  if (!account) return { accepted: false, detail: "no wallet configured" };
+  const pad = await padState(p.lane);
+  const params = {
+    token: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    name: p.name,
+    symbol: p.symbol,
+    supply: parseEther(String(p.supplyTokens)),
+    vanitySalt: `0x${"0".repeat(64)}` as `0x${string}`,
+    startMcapUsd8: BigInt(Math.round(p.startMcapUsd * 1e8)),
+    gradMcapUsd8: BigInt(Math.round(p.gradMcapUsd * 1e8)),
+    startTaxBps: p.startTaxBps,
+    taxDecayPerMinuteBps: p.taxDecayPerMinuteBps,
+    sellsEnabled: false,
+    bufferSecs: p.bufferSecs,
+    unsoldMode: p.unsoldMode ?? 0,
+    eoaOnly: p.eoaOnly ?? false,
+    openEnded: p.openEnded ?? true,
+    postTaxBps: p.postTaxBps,
+    bondVenue: p.bondVenue ?? 0,
+    maxBuyPpm: p.maxBuyPpm ?? 0,
+  };
+  try {
+    await publicClient.simulateContract({
+      account,
+      address: pad.address as `0x${string}`,
+      abi: PAD_ABI,
+      functionName: "createLaunch",
+      args: [params],
+      value: BigInt(pad.launchFeeWei),
+    });
+    return { accepted: true, detail: "pad accepted a buy-only curve in simulation" };
+  } catch (err) {
+    const m = String((err as Error).message ?? err);
+    const name = m.match(/Error: (\w+)\(/)?.[1] ?? m.split("\n")[0].slice(0, 80);
+    return { accepted: false, detail: `pad refused buy-only (${name})` };
+  }
 }
 
 export interface DeployResult {

@@ -9,6 +9,7 @@ import {
   findOrphanDeploy,
   getAccount,
   normalizeTaxDecay,
+  probeBuyOnly,
   verifyLaunchVisible,
   walletStatus,
 } from "@/lib/launchpad/service";
@@ -91,6 +92,23 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
     launch.taxDecayPerMinuteBps = snapped.taxDecayPerMinuteBps;
     launch.error = `Tax decay adjusted to the pad rule before deploy: ${before} → ${after}. The pads require the start tax to be an exact multiple of the decay with a 10-99 minute window.`;
     log(`autonomy: ${launch.symbol} tax decay snapped to the pad rule: ${before} → ${after}`);
+  }
+
+  /* Buy-only request (operator directive 2026-09-13): ask the pad first. The
+     V2 pads revert BadEconomics() on sellsEnabled false today; when they do,
+     the launch deploys with sells enabled and the fallback is public. */
+  if (!launch.sellsEnabled) {
+    launch.buyOnlyRequested = true;
+    const probe = await probeBuyOnly(launch);
+    if (probe.accepted) {
+      log(`autonomy: ${launch.symbol} deploys as a BUY-ONLY curve (${probe.detail})`);
+    } else {
+      launch.sellsEnabled = true;
+      launch.buyOnlyFallback = true;
+      const note = `Buy-only curve requested by ${launch.designer === "tokenintel" ? "Ticker" : "the designer"}; ${probe.detail}, so the curve deployed with sells enabled. The request stays on the record and deploys as designed the day the launcher enables buy-only lanes.`;
+      launch.error = launch.error ? `${launch.error} ${note}` : note;
+      log(`autonomy: ${launch.symbol} buy-only refused by the pad (${probe.detail}); deploying with sells enabled`);
+    }
   }
 
   launch.status = "deploying";

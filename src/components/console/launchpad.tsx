@@ -376,6 +376,8 @@ function LaunchCard({
               </CardTitle>
               <CardDescription className="truncate text-[11px]">
                 {ago(l.createdAt)} · {l.lane.toUpperCase()} lane · {usd(l.startMcapUsd)}→{usd(l.gradMcapUsd)} · tax {taxLine}
+                {l.designer === "tokenintel" ? " · by Ticker" : ""}
+                {l.buyOnlyFallback ? " · buy-only refused by pad, sells enabled" : l.buyOnlyRequested ? " · buy-only requested" : ""}
                 {open && l.artMotif ? ` · ${l.artMotif}/${l.artPalette ?? "emerald"}` : ""}
               </CardDescription>
               {!open && l.message && <p className="mt-0.5 line-clamp-1 text-xs italic text-muted-foreground">“{l.message}”</p>}

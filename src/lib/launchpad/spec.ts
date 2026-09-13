@@ -34,7 +34,7 @@ export const launchSpecShape = {
   sellsEnabled: z
     .boolean()
     .describe(
-      "MUST be true: buy-only curves (sellsEnabled false) revert BadEconomics() on every V2 pad in every tested combination (verified by simulation 2026-09-11). If the launcher ever enables buy-only lanes this flag opens up; until then always true.",
+      "true for a normal curve. false is a REQUEST for a buy-only curve (operator directive 2026-09-13, Ticker's design space): the V2 pads refuse buy-only today (BadEconomics(), re-verified by simulation 2026-09-13), so the executor probes the pad at deploy time and, when refused, deploys the same launch with sells enabled and says so publicly. Only request false when the concept is built around buy-only and the message explains what happens if the pad falls back.",
     ),
   bufferSecs: z.number().min(600).max(3600),
   /* Advanced pad options (operator-directed 2026-09-11), each verified by

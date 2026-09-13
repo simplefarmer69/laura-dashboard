@@ -698,6 +698,19 @@ export interface LaunchProposal {
   error: string | null;
   /** Launcher content hash once the logo is uploaded and attached */
   imageHash?: string | null;
+  /** Which agent designed the spec: Mint (default) or Ticker (market-tape launches, operator directive 2026-09-13). */
+  designer?: "mint" | "tokenintel";
+  /**
+   * The designer asked for a buy-only curve (sellsEnabled false). The V2 pads
+   * refuse it today (BadEconomics(), re-verified by simulation 2026-09-13), so
+   * the executor probes the pad at deploy time: accepted → deploys buy-only;
+   * refused → deploys with sells enabled and records the fallback here and in
+   * `error`. The moment the launcher enables buy-only lanes, these launches
+   * deploy as designed with no code change.
+   */
+  buyOnlyRequested?: boolean;
+  /** Set when the pad refused the buy-only request and the curve deployed with sells enabled. */
+  buyOnlyFallback?: boolean;
   /** Set when the supply is loaded (`arm`) and the sale clock started; a deployed
    *  launch without this is registered but NOT live on the floor. */
   armedAt?: number | null;

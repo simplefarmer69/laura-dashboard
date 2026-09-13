@@ -30,6 +30,8 @@ import {
   launchSchema,
   mintMock,
   mintPrompt,
+  tickerLaunchPrompt,
+  type LaunchOut,
   padOutcomeStudy,
   producerMock,
   producerPrompt,
@@ -71,6 +73,7 @@ import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { runTreasurer } from "@/lib/swarm/treasurer";
+import { tokenTapeDigest } from "@/lib/swarm/token-tape";
 import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { applyEditorReviews, editorMock, editorPrompt, editorSchema, isXPost } from "@/lib/publish/editor";
@@ -117,6 +120,8 @@ const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
 /** Forge works the upgrade queue about every 90 minutes: two targets per run
  *  covers the full 17-seat roster roughly daily. */
 const TRAINER_STRIDE_MS = 1.5 * 60 * 60_000;
+/** Ticker designs a market-tape launch at most this often (Mint keeps the per-cycle pace). */
+const TICKER_LAUNCH_STRIDE_MS = 3 * 60 * 60_000;
 
 /* On globalThis, not module scope: under dev HMR every compile gets its own
    module copy, and two copies (e.g. the scheduler loop and a manual /api/cycle
@@ -1025,78 +1030,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           }
         }
         if (spec) {
-          const autonomous = state.settings.autoExecuteLaunches || state.settings.autoApproveProposals;
-          const launch: LaunchProposal = {
-            id: newId("launch"),
-            cycleId: run.id,
-            createdAt: Date.now(),
-            /* Stock picks whose lane is closed at the projected deploy slot
-               resolve to an open crypto lane here; unknown lanes fall back to
-               the cycle rotation hint. */
-            lane: resolveLane(spec.lane, designSlot, state.runs.length),
-            name: spec.name,
-            symbol: spec.symbol,
-            supplyTokens: spec.supplyTokens,
-            startMcapUsd: spec.startMcapUsd,
-            gradMcapUsd: spec.gradMcapUsd,
-            startTaxBps: spec.startTaxBps,
-            taxDecayPerMinuteBps: spec.taxDecayPerMinuteBps,
-            postTaxBps: spec.postTaxBps,
-            sellsEnabled: spec.sellsEnabled,
-            bufferSecs: spec.bufferSecs,
-            openEnded: spec.openEnded,
-            eoaOnly: spec.eoaOnly,
-            maxBuyPpm: spec.maxBuyPpm,
-            bondVenue: spec.bondVenue,
-            unsoldMode: spec.unsoldMode,
-            concept: spec.concept,
-            rationale: spec.rationale,
-            message: spec.message,
-            artMotif: spec.artMotif,
-            artPalette: spec.artPalette,
-            artStyle: spec.artStyle,
-            imageQuery: spec.imageQuery,
-            status: autonomous ? "approved" : "pending",
-            reviewedAt: autonomous ? Date.now() : null,
-            reviewerNote: autonomous ? "Auto-approved: operator granted full launch autonomy" : null,
-            txHash: null,
-            tokenAddress: null,
-            launchId: null,
-            deployedAt: null,
-            error: null,
-            imageHash: null,
-          };
-          state.launches.push(launch);
-          mint.stats.drafts += 1;
-          if (autonomous) mint.stats.approved += 1;
-          pushEvent(state, {
-            kind: "launch.proposed",
-            agentId: "mint",
-            title: `Mint designed launch: ${spec.name} ($${spec.symbol})`,
-            detail: spec.message ? `LAURA says: "${spec.message}" · ${spec.concept}` : spec.concept,
-            refId: launch.id,
-          });
-          if (autonomous) {
-            pushEvent(state, {
-              kind: "launch.approved",
-              agentId: "system",
-              title: `Auto-approved ${spec.name} ($${spec.symbol})`,
-              detail: "Full launch autonomy is on; deploys when the wallet is funded, within hard caps.",
-              refId: launch.id,
-            });
-          }
-          try {
-            await ensureLaunchArt(launch.id, {
-              name: launch.name,
-              symbol: launch.symbol,
-              motif: launch.artMotif,
-              palette: launch.artPalette,
-              style: launch.artStyle,
-              imageQuery: launch.imageQuery,
-            });
-          } catch {
-            /* art regenerates on demand at deploy time */
-          }
+          await enqueueLaunch(state, run, spec, mint, designSlot);
           step({
             agentId: "mint",
             label: "Launch spec",
@@ -1119,6 +1053,77 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         mint.lastError = String(err);
         step({ agentId: "mint", label: "Launch spec", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "mint", title: "Mint failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 4a. Ticker: market-tape launches (operator directive 2026-09-13). On a
+       stride, Ticker designs a launch from what the token tape is actually
+       doing (movers, meme-stock currents, launcher volume) and may request a
+       buy-only curve; the executor probes the pad and falls back publicly. */
+    const ticker = agentById(state, "tokenintel");
+    const tickerGate = mintGate(state);
+    if (ticker.status === "paused") {
+      step({ agentId: "tokenintel", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (ticker.lastRunAt !== null && Date.now() - ticker.lastRunAt < TICKER_LAUNCH_STRIDE_MS) {
+      step({
+        agentId: "tokenintel",
+        label: "Tape launch",
+        status: "skipped",
+        summary: `Strided: next tape launch design in ~${Math.ceil((TICKER_LAUNCH_STRIDE_MS - (Date.now() - ticker.lastRunAt)) / 60_000)} min`,
+        durationMs: 0,
+      });
+    } else if (tickerGate.blocked) {
+      step({ agentId: "tokenintel", label: "Tape launch", status: "skipped", summary: tickerGate.reason, durationMs: 0 });
+    } else {
+      try {
+        const tape = await tokenTapeDigest();
+        const pending = state.launches.filter((l) => l.status === "pending" || l.status === "approved").length;
+        const spoken = spokenLaunchesDigest(state.launches);
+        const capacity = launchCapacityDigest(state);
+        const designSlot = new Date(nextDesignSlotAt(state.launches));
+        const laneMenu = laneMenuDigest(designSlot, state.runs.length, recentLaunchLanes(state.launches));
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: launchSchema,
+              system: agentSystem(ticker),
+              prompt: tickerLaunchPrompt(ctx, tape, pending, spoken, capacity, laneMenu, mintQueueLimit(state.settings)),
+              mock: () => ({ launch: null, skipReason: "Deterministic fallback (no live model): tape launches need a live read of the market." }),
+            }),
+          ),
+        );
+        let spec = out.value.value.launch ? stripLaunchSignoffs(out.value.value.launch) : null;
+        let skipReason = out.value.value.skipReason ?? "No tape launch this run";
+        if (spec && isDuplicateLaunch(state.launches, spec.name, spec.symbol)) {
+          skipReason = `Dropped duplicate concept: ${spec.name} ($${spec.symbol}) already exists in the queue or on-chain`;
+          spec = null;
+        }
+        if (spec) {
+          const hit = reservedLaunchNameHit(spec.name, spec.symbol);
+          if (hit) {
+            skipReason = `Dropped reserved name: ${spec.name} ($${spec.symbol}) contains "${hit}", which the launcher floor hides`;
+            spec = null;
+          }
+        }
+        if (spec) {
+          await enqueueLaunch(state, run, spec, ticker, designSlot);
+          step({
+            agentId: "tokenintel",
+            label: "Tape launch",
+            status: "ok",
+            summary: `${spec.name} ($${spec.symbol}) start $${spec.startMcapUsd.toLocaleString()} -> grad $${spec.gradMcapUsd.toLocaleString()}${spec.sellsEnabled === false ? " · buy-only requested (pad probe at deploy)" : ""}`,
+            durationMs: out.ms,
+          });
+        } else {
+          step({ agentId: "tokenintel", label: "Tape launch", status: "skipped", summary: skipReason, durationMs: out.ms });
+        }
+        markRan(ticker);
+        ticker.status = "idle";
+      } catch (err) {
+        ticker.lastError = String(err);
+        step({ agentId: "tokenintel", label: "Tape launch", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "tokenintel", title: "Ticker launch design failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }
@@ -1712,6 +1717,94 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     await saveState(state);
   }
   return run;
+}
+
+/**
+ * Queues a designed launch spec from Mint or Ticker: builds the proposal
+ * (auto-approved under launch autonomy), stamps the designer, events it and
+ * renders the logo. Shared so both designers go through one path.
+ */
+async function enqueueLaunch(
+  state: SwarmState,
+  run: CycleRun,
+  spec: LaunchOut["launch"] & object,
+  designer: Agent,
+  designSlot: Date,
+): Promise<LaunchProposal> {
+  const autonomous = state.settings.autoExecuteLaunches || state.settings.autoApproveProposals;
+  const launch: LaunchProposal = {
+    id: newId("launch"),
+    cycleId: run.id,
+    createdAt: Date.now(),
+    /* Stock picks whose lane is closed at the projected deploy slot resolve
+       to an open crypto lane here; unknown lanes fall back to the rotation. */
+    lane: resolveLane(spec.lane, designSlot, state.runs.length),
+    name: spec.name,
+    symbol: spec.symbol,
+    supplyTokens: spec.supplyTokens,
+    startMcapUsd: spec.startMcapUsd,
+    gradMcapUsd: spec.gradMcapUsd,
+    startTaxBps: spec.startTaxBps,
+    taxDecayPerMinuteBps: spec.taxDecayPerMinuteBps,
+    postTaxBps: spec.postTaxBps,
+    sellsEnabled: spec.sellsEnabled,
+    bufferSecs: spec.bufferSecs,
+    openEnded: spec.openEnded,
+    eoaOnly: spec.eoaOnly,
+    maxBuyPpm: spec.maxBuyPpm,
+    bondVenue: spec.bondVenue,
+    unsoldMode: spec.unsoldMode,
+    concept: spec.concept,
+    rationale: spec.rationale,
+    message: spec.message,
+    artMotif: spec.artMotif,
+    artPalette: spec.artPalette,
+    artStyle: spec.artStyle,
+    imageQuery: spec.imageQuery,
+    designer: designer.id === "tokenintel" ? "tokenintel" : "mint",
+    buyOnlyRequested: spec.sellsEnabled === false,
+    status: autonomous ? "approved" : "pending",
+    reviewedAt: autonomous ? Date.now() : null,
+    reviewerNote: autonomous ? "Auto-approved: operator granted full launch autonomy" : null,
+    txHash: null,
+    tokenAddress: null,
+    launchId: null,
+    deployedAt: null,
+    error: null,
+    imageHash: null,
+  };
+  state.launches.push(launch);
+  designer.stats.drafts += 1;
+  if (autonomous) designer.stats.approved += 1;
+  pushEvent(state, {
+    kind: "launch.proposed",
+    agentId: designer.id,
+    title: `${designer.name} designed launch: ${spec.name} ($${spec.symbol})${spec.sellsEnabled === false ? " · buy-only requested" : ""}`,
+    detail: spec.message ? `LAURA says: "${spec.message}" · ${spec.concept}` : spec.concept,
+    refId: launch.id,
+  });
+  if (autonomous) {
+    pushEvent(state, {
+      kind: "launch.approved",
+      agentId: "system",
+      title: `Auto-approved ${spec.name} ($${spec.symbol})`,
+      detail: "Full launch autonomy is on; deploys when the wallet is funded, within hard caps.",
+      refId: launch.id,
+    });
+  }
+  try {
+    await ensureLaunchArt(launch.id, {
+      name: launch.name,
+      symbol: launch.symbol,
+      motif: launch.artMotif,
+      palette: launch.artPalette,
+      style: launch.artStyle,
+      imageQuery: launch.imageQuery,
+    });
+  } catch {
+    /* art regenerates on demand at deploy time */
+  }
+  return launch;
 }
 
 function markRan(agent: Agent): void {
