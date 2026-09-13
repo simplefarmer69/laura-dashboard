@@ -22,10 +22,10 @@ export function ContractsShell({ title, tag, children }: { title: string; tag?: 
             )}
           </div>
           <div className="ml-auto flex items-center gap-3 text-xs">
-            <Link href="/contracts" className="text-muted-foreground hover:text-foreground">
+            <Link href="/contracts" className="whitespace-nowrap text-muted-foreground hover:text-foreground">
               all contracts
             </Link>
-            <Link href="/lab" className="text-muted-foreground hover:text-foreground">
+            <Link href="/lab" className="whitespace-nowrap text-muted-foreground hover:text-foreground">
               The Lab
             </Link>
           </div>
