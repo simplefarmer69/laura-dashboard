@@ -7,6 +7,7 @@ import { GET as smartLpFeed } from "@/app/api/feeds/smartlp/route";
 import { GET as brokertoolsFeed } from "@/app/api/feeds/brokertools/route";
 import { GET as feeBreakdownFeed } from "@/app/api/feeds/fee-breakdown/route";
 import { GET as llamaChainsFeed } from "@/app/api/feeds/llama-chains/route";
+import { GET as forgeFeed } from "@/app/api/forge/route";
 import { LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { libraryDocs } from "@/lib/swarm/library";
@@ -287,6 +288,13 @@ const TOOLS: ToolDef[] = [
       "Robinhood Chain against all of crypto (DeFiLlama): TVL rank and share among all chains with 7d/30d change, DEX volume and fees on the chain with their share of all-crypto totals, the top protocols on the chain, and where StonkBrokers ranks among them by volume, fees and TVL.",
     inputSchema: NO_ARGS,
     run: () => feedJson(llamaChainsFeed),
+  },
+  {
+    name: "laura_contracts",
+    description:
+      "Smart contracts LAURA wrote and deployed herself on Robinhood Chain (verified source): the flagship Ownership Market (buy and sell ownership of any Ownable contract, any token, 1% fee, escrowed ownership, anyone executes delivery) and Anvil's small utility contracts built from what people on X asked for. Each entry carries the address, explorer link, ABI, how-to-use text and status. Anyone can host a frontend for these; the guide for the Ownership Market is docs/OWNERSHIP-MARKET.md in the repo.",
+    inputSchema: NO_ARGS,
+    run: () => feedJson(forgeFeed),
   },
   {
     name: "contracts",

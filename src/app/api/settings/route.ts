@@ -23,6 +23,7 @@ const settingsSchema = z
     autoClaimEarnings: z.boolean(),
     mintFreedom: z.boolean(),
     autoPublishX: z.boolean(),
+    autoExecuteForge: z.boolean(),
   })
   .partial();
 

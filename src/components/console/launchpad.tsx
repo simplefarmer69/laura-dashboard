@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { patchJson, type ConsoleState } from "@/components/console/use-swarm-state";
 import { EarningsPanel } from "@/components/console/earnings";
+import { ContractsPanel } from "@/components/console/contracts";
 import { ago, usd } from "@/components/console/format";
 import type { LaunchProposal, LaunchStatus } from "@/lib/types";
 
@@ -271,6 +272,8 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
           />
         ))}
       </div>
+
+      <ContractsPanel projects={state.forgeProjects} />
 
       {info && info.grid.length > 0 && (
         <Card>

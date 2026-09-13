@@ -176,6 +176,20 @@ export function SettingsPanel({ state, refresh }: { state: ConsoleState; refresh
               onCheckedChange={(v) => set("autoPublishX", Boolean(v))}
             />
           </div>
+          <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3">
+            <div>
+              <Label className="text-xs">Anvil contract deploys</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Gate-checked, compiled contracts (Anvil designs and the audited flagship Ownership Market) deploy
+                from the swarm wallet inside FORGE_CAPS: 2 per day, 8 per week, 3h apart, 3M gas and 0.003 ETH per
+                deploy, never under the 0.35 ETH floor. Off keeps designing and compiling without deploying.
+              </p>
+            </div>
+            <Switch
+              checked={form.autoExecuteForge}
+              onCheckedChange={(v) => set("autoExecuteForge", Boolean(v))}
+            />
+          </div>
           <Button className="w-full" disabled={busy} onClick={() => void save()}>
             <Save className="size-3.5" /> Save settings
           </Button>
