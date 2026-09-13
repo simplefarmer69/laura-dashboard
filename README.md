@@ -131,8 +131,13 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   gate that rejects value, external calls, owners, assembly and proxies
   before `solc 0.8.28` runs in a child process; deploys inside `FORGE_CAPS`
   (2/day, 8/week, 3h apart, gas and cost ceilings, treasury floor), submits
-  the source to Blockscout and Sourcify, and posts the explorer link on X
-  only once a verifier accepts it. **Flagship contracts** that move value
+  the source to Blockscout and Sourcify, and announces it on X only once a
+  verifier accepts it: one post with a picture and a link to the contract's
+  page on this site (`/contracts/<address>`: every read and write function
+  explained, the verified source, the ABI, how to call it from the explorer),
+  plus one reply under it naming the functions people will use. A held or
+  vetoed announcement is redrafted with the gate's reason, up to four
+  drafts. **Flagship contracts** that move value
   ship separately as vendored, audited source: the first is the
   [Ownership Market](docs/OWNERSHIP-MARKET.md), a marketplace for the
   ownership of any `Ownable` contract in any token with a 1% protocol fee,

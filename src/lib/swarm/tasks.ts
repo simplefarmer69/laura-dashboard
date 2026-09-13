@@ -972,23 +972,51 @@ export function forgeMock(): ForgeOut {
 }
 
 export const forgeAnnounceSchema = z.object({
-  /** The X post: plain, one link (the explorer URL given), at most 280 characters */
+  /** The X post: plain, the links given, at most 280 characters */
   post: z.string().min(40).max(TWEET_MAX),
+  /**
+   * One reply posted under the announcement: how a person uses the contract,
+   * naming the read functions (free, Read tab) and the write functions (a
+   * transaction from a wallet, Write tab) with what to pass, then the page
+   * link that explains every function. At most 280 characters.
+   */
+  usageReply: z.string().min(40).max(TWEET_MAX),
+  /** One plain line per function: what it does, who calls it, what to pass. Skip ALL_CAPS constants. */
+  functionNotes: z.array(z.object({ name: z.string().min(1).max(64), note: z.string().min(8).max(240) })).max(40),
 });
 
+export interface ForgeAnnounceProject {
+  title: string;
+  blurb: string;
+  need: string;
+  howToUse: string;
+  contractName: string;
+  explorerUrl: string | null;
+  sourceAuthor: string | null;
+  /** Page on LAURA's site with every function explained (null until deployed) */
+  pageUrl: string | null;
+  /** READ / WRITE lines from the ABI */
+  functions: string;
+  /** Existing notes (flagships ship theirs); the model keeps them and fills gaps */
+  functionNotes: Record<string, string> | null;
+}
+
+const USAGE_REPLY_SHAPE = (link: { label: string; url: string } | null) =>
+  `USAGE REPLY (posted under the announcement): plain sentences a stranger follows. Name the read functions people will actually use and what they return (free, the explorer's Read tab, no wallet), then the write functions with what to pass and what happens (a transaction from a connected wallet, the Write tab). Skip ALL_CAPS constants.${link ? ` End with the ${link.label} (must appear verbatim): ${link.url}.` : ""} No hashtags, no emoji, no numbering, no "1/", at most ${TWEET_MAX} characters including the link.`;
+
 export function forgeAnnouncePrompt(
-  project: {
-    title: string;
-    blurb: string;
-    need: string;
-    howToUse: string;
-    contractName: string;
-    explorerUrl: string | null;
-    sourceAuthor: string | null;
-  },
+  project: ForgeAnnounceProject,
   flagship: { docUrl: string; frontendUrl: string | null; announceShape: string } | null = null,
   previous: { body: string; reason: string } | null = null,
 ): string {
+  const functions = `FUNCTIONS (from the verified ABI):\n${project.functions}${
+    project.functionNotes && Object.keys(project.functionNotes).length > 0
+      ? `\nNOTES ALREADY WRITTEN (keep them, fill the gaps): ${Object.entries(project.functionNotes)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(" | ")}`
+      : ""
+  }`;
+  const notesAsk = `FUNCTION NOTES: one plain line per function (what it does, who calls it, what to pass), for the page at ${project.pageUrl ?? "LAURA's site"} where every function is explained. Skip ALL_CAPS constants.`;
   const retry = previous
     ? `PREVIOUS ATTEMPT, REFUSED AT THE X GATE. Text: "${previous.body}". Why it was refused: ${previous.reason}. Write a different post that fixes exactly that: a stranger who has never heard of LAURA must know from the first sentence what this is and what changes hands.`
     : "";
@@ -1004,8 +1032,11 @@ export function forgeAnnouncePrompt(
       flagship.frontendUrl
         ? `GUIDE LINK (optional, only if it fits; the frontend links it): ${flagship.docUrl}`
         : `GUIDE LINK (must appear verbatim; it explains every call): ${flagship.docUrl}`,
+      functions,
       `${X_STYLE_GUIDE}`,
-      `SHAPE: ${flagship.announceShape} No hashtags, no emoji, no price or token-price talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including every link.`,
+      `SHAPE OF THE POST: ${flagship.announceShape} No hashtags, no emoji, no price or token-price talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including every link.`,
+      USAGE_REPLY_SHAPE(project.pageUrl ? { label: "page link, where every function is explained", url: project.pageUrl } : null),
+      notesAsk,
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -1016,16 +1047,25 @@ export function forgeAnnouncePrompt(
     `WHAT IT IS: ${project.title} (${project.contractName}). ${project.blurb}`,
     `WHO ASKED / WHY: ${project.need}`,
     `HOW A PERSON USES IT: ${project.howToUse}`,
-    `EXPLORER LINK (must appear verbatim, it is the way in): ${project.explorerUrl ?? ""}`,
+    project.pageUrl
+      ? `PAGE LINK (must appear verbatim; it explains every read and write function and links the explorer): ${project.pageUrl}`
+      : `EXPLORER LINK (must appear verbatim, it is the way in): ${project.explorerUrl ?? ""}`,
+    functions,
     `${X_STYLE_GUIDE}`,
-    `SHAPE: two or three plain sentences a stranger follows: what it is and who it is for, how to use it in one clause (the Write tab on the explorer), the link. ${project.sourceAuthor ? `You may mention that @${project.sourceAuthor} asked for it, without any other handle.` : "No handles."} No hashtags, no emoji, no price or token talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including the link.`,
+    `SHAPE OF THE POST: two or three plain sentences a stranger follows: what it is and who it is for, how to use it in one clause (which function to call, from the explorer's Write tab), the link. ${project.sourceAuthor ? `You may mention that @${project.sourceAuthor} asked for it, without any other handle.` : "No handles."} No hashtags, no emoji, no price or token talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including the link.`,
+    USAGE_REPLY_SHAPE(project.explorerUrl ? { label: "explorer link, where the Read and Write tabs are", url: project.explorerUrl } : null),
+    notesAsk,
   ]
     .filter(Boolean)
     .join("\n\n");
 }
 
-export function forgeAnnounceMock(project: { title: string; blurb: string; explorerUrl: string | null }): z.infer<typeof forgeAnnounceSchema> {
-  return { post: `new on robinhood chain: ${project.title.toLowerCase()}. ${project.blurb} verified source, open to anyone from the explorer: ${project.explorerUrl ?? ""}`.slice(0, TWEET_MAX) };
+export function forgeAnnounceMock(project: { title: string; blurb: string; explorerUrl: string | null; pageUrl?: string | null }): z.infer<typeof forgeAnnounceSchema> {
+  return {
+    post: `new on robinhood chain: ${project.title.toLowerCase()}. ${project.blurb} verified source, open to anyone from the explorer: ${project.pageUrl ?? project.explorerUrl ?? ""}`.slice(0, TWEET_MAX),
+    usageReply: `how to use it: the read functions answer for free from the explorer's Read tab; the write functions take a transaction from a connected wallet on the Write tab. every function explained: ${project.explorerUrl ?? ""}`.slice(0, TWEET_MAX),
+    functionNotes: [],
+  };
 }
 
 /* ----------------------------- launch comments ---------------------------- */

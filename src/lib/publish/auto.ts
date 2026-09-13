@@ -4,6 +4,7 @@ import { checkXGuards, recentXPosts } from "@/lib/publish/x-guard";
 import { isAuthFailure, publishToX, xStatus, type XMediaInput } from "@/lib/publish/x";
 import { loadDraftMedia } from "@/lib/publish/screenshot";
 import { flagshipScreenshot } from "@/lib/forge/executor";
+import { postFollowUp } from "@/lib/publish/follow-up";
 import {
   acceptAuditEdit,
   sanitizeXPost,
@@ -328,6 +329,7 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
       const media = await mediaForDraft(state, draft);
       const result = await publishToX(text, false, media.inputs);
       const mediaNote = `${result.mediaIds.length ? ` · ${result.mediaIds.length} image(s) attached` : media.note}${result.mediaErrors.length ? ` · image upload failed: ${result.mediaErrors.join("; ")}` : ""}`;
+      const followUp = await postFollowUp(draft, result.tweetIds[0]);
       await updateState((st) => {
         const d = st.drafts.find((x) => x.id === draft.id);
         if (!d) return null;
@@ -346,12 +348,13 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
           kind: "draft.published",
           agentId: d.agentId,
           title: `Published to X: ${d.title}`,
-          detail: `single post · ${result.url} · autonomous rail (${guard.postsLast24h + 1}/${guard.policy.maxPostsPerDay} today)${auditNote}${mediaNote}${clean.stripped.length > 0 ? ` · stripped ${clean.stripped.join(", ")}` : ""}`,
+          detail: `single post · ${result.url} · autonomous rail (${guard.postsLast24h + 1}/${guard.policy.maxPostsPerDay} today)${auditNote}${mediaNote}${followUp.note}${clean.stripped.length > 0 ? ` · stripped ${clean.stripped.join(", ")}` : ""}`,
           refId: d.id,
         });
+        if (followUp.url) d.autoPublishNote = `${d.autoPublishNote ? `${d.autoPublishNote} · ` : ""}usage reply: ${followUp.url}`;
         return d;
       });
-      log(`published ${draft.id} by ${draft.agentId}: ${result.url}${auditNote}${mediaNote}`);
+      log(`published ${draft.id} by ${draft.agentId}: ${result.url}${auditNote}${mediaNote}${followUp.note}`);
     } catch (err) {
       if (isAuthFailure(err)) {
         /* Expired or revoked token: the draft is fine, the credential is not.

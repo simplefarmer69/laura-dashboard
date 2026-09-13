@@ -8,6 +8,7 @@ import {
   BookOpen,
   FlaskConical,
   GitBranch,
+  Hammer,
   Inbox,
   LineChart as LineChartIcon,
   MessageCircle,
@@ -131,6 +132,10 @@ export function Console() {
             <Button variant="outline" size="sm" render={<Link href="/lab" />} title="The Lab: buy and sell smart contracts on Robinhood Chain">
               <FlaskConical className="size-3.5 text-primary" />
               <span className="hidden sm:inline">The Lab</span>
+            </Button>
+            <Button variant="outline" size="sm" render={<Link href="/contracts" />} title="Contracts LAURA deployed, every function explained">
+              <Hammer className="size-3.5 text-primary" />
+              <span className="hidden sm:inline">Contracts</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
               <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />

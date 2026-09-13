@@ -154,7 +154,7 @@ export const REPEAT_THRESHOLD = 0.5;
  * Deterministic checks a post must pass before it reaches the auditor. Every
  * violation is collected so the log and the veto note show the full picture.
  */
-export function xPostProblems(text: string, recent: XPostLogEntry[]): string[] {
+export function xPostProblems(text: string, recent: XPostLogEntry[], opts: { skipRepeatChecks?: boolean } = {}): string[] {
   const problems: string[] = [];
   const trimmed = text.trim();
   if (trimmed.length === 0) return ["empty body"];
@@ -175,7 +175,9 @@ export function xPostProblems(text: string, recent: XPostLogEntry[]): string[] {
   if (/\b(?:game[- ]changer|revolutionary|thrilled|excited to|dive in|unlock(?:s|ing)?|leverag(?:e|ing)|seamless|robust)\b/i.test(trimmed)) {
     problems.push("marketing filler word");
   }
-  const window = recent.slice(0, 12);
+  /* A usage reply under our own announcement legitimately shares words with
+     it and with earlier contract posts; only the format rules apply. */
+  const window = opts.skipRepeatChecks ? [] : recent.slice(0, 12);
   const open = firstWords(trimmed, 4);
   const close = lastWords(trimmed, 4);
   for (const e of window) {

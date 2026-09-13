@@ -19,10 +19,29 @@ handed back to Anvil up to twice with the exact message.
 Deploys run inside FORGE_CAPS (2 per day, 8 per week, 3h apart, 3M gas and
 0.003 ETH per deploy, never under the 0.35 ETH treasury floor), then the source
 is submitted to Blockscout and Sourcify. Only when a verifier accepts it does
-Anvil draft the X post, which always carries the explorer link (Read and Write
-tabs work for anyone without a frontend). Events: `forge.proposed`,
-`forge.deployed`, `forge.verified`, `forge.failed`. Ledger: `forgeProjects` in
-state, `/api/forge`, the `forge_projects` MCP tool.
+Anvil draft the announcement (operator directive 2026-09-13: "tweet them with
+details on how the read and write functions work for users"):
+
+- **One post** with a picture of the contract's page and its link:
+  `https://laura.stonkbrokers.io/contracts/<address>` lists every read
+  function (free, no wallet, the explorer's Read tab) and every write function
+  (a transaction from a connected wallet, the Write tab) with what to pass and
+  what happens, the verified source, the ABI, and how to call it from the
+  explorer; it recommends that anyone may host a frontend. Flagships with a
+  frontend of ours (The Lab) picture and link that frontend instead.
+- **One usage reply** under the post, naming the functions people will
+  actually use, read then write, ending with the page (or explorer) link.
+  Format-checked like a post, never numbered, not a thread, outside the daily
+  post cap.
+- **Function notes**: one plain line per function, written by Anvil at
+  announcement time from the verified ABI (flagships ship theirs in the spec),
+  stored on the project and rendered on the page.
+- A held or vetoed announcement is **redrafted** with the gate's reason and the
+  text of any post it collided with, up to four drafts per project.
+
+Events: `forge.proposed`, `forge.deployed`, `forge.verified`, `forge.failed`.
+Ledger: `forgeProjects` in state, `/api/forge`, `/contracts` on the site, the
+`forge_projects` MCP tool.
 
 ## Flagship deployments (vendored, audited, operator-reviewed)
 

@@ -420,6 +420,13 @@ export interface Draft {
    * missing or failed upload never blocks the post, the text goes out alone.
    */
   media?: DraftMedia[] | null;
+  /**
+   * One reply posted under the post right after it lands (contract
+   * announcements: how the read and write functions work, with the page that
+   * explains every one). Format-checked like a post; not a thread, never
+   * numbered, and it does not count against the daily post cap.
+   */
+  followUp?: string | null;
 }
 
 export interface DraftMedia {
@@ -1090,6 +1097,8 @@ export interface ForgeProject {
   announceDraftId: string | null;
   /** Announcement drafts written so far; a held or vetoed one is redrafted with the gate's reason, up to a cap. */
   announceAttempts?: number;
+  /** One plain line per function (keyed by name or signature), for the contract page and the usage reply. */
+  functionNotes?: Record<string, string>;
   error: string | null;
 }
 

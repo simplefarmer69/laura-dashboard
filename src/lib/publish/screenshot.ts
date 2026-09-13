@@ -42,7 +42,14 @@ export interface ScreenshotOptions {
   alt: string;
   /** Capture the whole page instead of the first viewport. */
   fullPage?: boolean;
+  /**
+   * Text the page must show before the picture is taken (a page rendering
+   * from a feed may still be loading or say "not found"). Polled for up to
+   * READY_TIMEOUT_MS; if it never shows, no picture rather than a wrong one.
+   */
+  readyText?: string;
 }
+const READY_TIMEOUT_MS = 90_000;
 
 /**
  * Captures `url` to MEDIA_DIR/<name>.png and returns the DraftMedia record,
@@ -72,6 +79,24 @@ export async function captureScreenshot(url: string, opts: ScreenshotOptions): P
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+      if (opts.readyText) {
+        const deadline = Date.now() + READY_TIMEOUT_MS;
+        let shown = false;
+        while (Date.now() < deadline) {
+          const html = await page.content();
+          if (html.includes(opts.readyText)) {
+            shown = true;
+            break;
+          }
+          await page.waitForTimeout(5_000);
+          await page.reload({ waitUntil: "domcontentloaded", timeout: PAGE_TIMEOUT_MS }).catch(() => undefined);
+          await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+        }
+        if (!shown) {
+          log(`${url} never showed "${opts.readyText}" within ${READY_TIMEOUT_MS / 1000}s; no picture`);
+          return null;
+        }
+      }
       await page.waitForTimeout(SETTLE_MS);
       const png = await page.screenshot({ type: "png", fullPage: opts.fullPage ?? false });
       if (png.length === 0 || png.length > X_IMAGE_MAX_BYTES) {

@@ -5,6 +5,7 @@ import { dryRunToX, publishToX, xStatus } from "@/lib/publish/x";
 import { checkXGuards } from "@/lib/publish/x-guard";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
 import { loadDraftMedia } from "@/lib/publish/screenshot";
+import { postFollowUp } from "@/lib/publish/follow-up";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]
   try {
     const media = await loadDraftMedia(draft);
     const result = await publishToX(text, false, media.inputs);
+    const followUp = await postFollowUp(draft, result.tweetIds[0]);
     const updated = await updateState((s) => {
       const d = s.drafts.find((x) => x.id === id);
       if (!d) return null;
@@ -81,9 +83,10 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]
         kind: "draft.published",
         agentId: "operator",
         title: `Published to X: ${d.title}`,
-        detail: `${result.tweetIds.length} post(s) · ${result.url}`,
+        detail: `${result.tweetIds.length} post(s) · ${result.url}${followUp.note}`,
         refId: d.id,
       });
+      if (followUp.url) d.autoPublishNote = `${d.autoPublishNote ? `${d.autoPublishNote} · ` : ""}usage reply: ${followUp.url}`;
       return d;
     });
     return NextResponse.json({ draft: updated, url: result.url, tweets: result.tweetIds.length });

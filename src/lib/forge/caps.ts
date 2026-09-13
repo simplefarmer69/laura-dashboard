@@ -90,6 +90,11 @@ export function forgeGate(state: SwarmState, caps: ForgeCaps = FORGE_CAPS): { bl
 
 export const REPO_URL = "https://github.com/simplefarmer69/laura-dashboard";
 export const LAB_URL = "https://laura.stonkbrokers.io/lab";
+/** Public page per contract LAURA deployed: every read and write function explained, source, explorer links. */
+export const CONTRACTS_URL = "https://laura.stonkbrokers.io/contracts";
+export function contractPageUrl(address: string): string {
+  return `${CONTRACTS_URL}/${address.toLowerCase()}`;
+}
 /** Public links per flagship key (client-bundle safe; flagship.ts reads these too). */
 export const FLAGSHIP_LINKS: Record<string, { docUrl: string; frontendUrl: string | null }> = {
   "ownership-market": { docUrl: `${REPO_URL}/blob/main/docs/OWNERSHIP-MARKET.md`, frontendUrl: LAB_URL },

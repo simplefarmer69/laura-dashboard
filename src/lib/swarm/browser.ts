@@ -203,6 +203,8 @@ export interface PlaywrightLike {
           evaluate<T, A>(fn: (arg: A) => T | Promise<T>, arg: A): Promise<T>;
           waitForTimeout(ms: number): Promise<void>;
           waitForLoadState(state: "load" | "domcontentloaded" | "networkidle", opts?: { timeout: number }): Promise<void>;
+          content(): Promise<string>;
+          reload(opts?: { waitUntil: "domcontentloaded" | "load" | "networkidle"; timeout: number }): Promise<unknown>;
           screenshot(opts: { type: "png" | "jpeg"; fullPage?: boolean; quality?: number }): Promise<Buffer>;
           close(): Promise<void>;
         }>;

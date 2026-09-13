@@ -7,7 +7,9 @@ import { checkVerified, explorerAddressUrl, explorerContractUrl, submitVerificat
 import { newId, pushEvent, updateState } from "@/lib/store";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
-import { forgeAnnounceMock, forgeAnnouncePrompt, forgeAnnounceSchema } from "@/lib/swarm/tasks";
+import { forgeAnnounceMock, forgeAnnouncePrompt, forgeAnnounceSchema, type ForgeAnnounceProject } from "@/lib/swarm/tasks";
+import { digestText, functionDigest, isConstantGetter } from "@/lib/forge/abi-digest";
+import { contractPageUrl } from "@/lib/forge/caps";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
 import { recentXPosts } from "@/lib/publish/x-guard";
 import { captureScreenshot } from "@/lib/publish/screenshot";
@@ -177,19 +179,74 @@ export function forgeAnnounceFallback(project: ForgeProject): string {
   return text.length <= TWEET_MAX ? text : `${project.title.toLowerCase()} is live on robinhood chain, verified and open to anyone: ${url}`;
 }
 
-/** Writes the X post announcing a verified contract as an approved draft so the normal X gates read it. */
 /**
- * Picture for a flagship announcement: the flagship's own frontend (The Lab
- * for the market and its registry). Null for prompt-designed contracts (they
- * have no frontend of ours) and whenever Chromium cannot deliver.
+ * Picture for a contract announcement: the flagship's own frontend when it
+ * has one (The Lab for the market and its registry), otherwise the contract's
+ * page on LAURA's site, where every read and write function is explained.
+ * Null whenever Chromium cannot deliver (text-only post).
  */
 export async function flagshipScreenshot(project: ForgeProject): Promise<DraftMedia | null> {
   const spec = flagshipSpec(project);
-  if (!spec?.frontendUrl) return null;
-  return captureScreenshot(spec.frontendUrl, {
-    name: `flagship-${spec.key}`,
-    alt: `${spec.title} on Robinhood Chain: ${spec.frontendUrl}. ${spec.blurb}`.slice(0, 1000),
+  if (spec?.frontendUrl) {
+    return captureScreenshot(spec.frontendUrl, {
+      name: `flagship-${spec.key}`,
+      alt: `${spec.title} on Robinhood Chain: ${spec.frontendUrl}. ${spec.blurb}`.slice(0, 1000),
+    });
+  }
+  if (!project.contractAddress) return null;
+  const url = contractPageUrl(project.contractAddress);
+  return captureScreenshot(url, {
+    name: `contract-${project.contractAddress.toLowerCase()}`,
+    alt: `${project.title} (${project.contractName}) on Robinhood Chain, every read and write function explained: ${url}. ${project.blurb}`.slice(0, 1000),
+    /* The page renders from the public snapshot; the project may take a few
+       minutes to appear there after verification. */
+    readyText: project.contractName,
   });
+}
+
+/** The project as the announcement prompt sees it: links plus the ABI digest. */
+function announceView(project: ForgeProject): ForgeAnnounceProject {
+  return {
+    title: project.title,
+    blurb: project.blurb,
+    need: project.need,
+    howToUse: project.howToUse,
+    contractName: project.contractName,
+    explorerUrl: project.explorerUrl ?? (project.contractAddress ? explorerContractUrl(project.contractAddress) : null),
+    sourceAuthor: project.sourceAuthor,
+    pageUrl: project.contractAddress ? contractPageUrl(project.contractAddress) : null,
+    functions: digestText(functionDigest(project.abi)),
+    functionNotes: project.functionNotes ?? null,
+  };
+}
+
+/**
+ * Deterministic usage reply when the model is unavailable or its reply fails
+ * the checks: the functions people will use, read then write, and the link
+ * where every one is explained.
+ */
+export function forgeUsageFallback(project: ForgeProject): string {
+  const d = functionDigest(project.abi);
+  const reads = d.reads.filter((f) => !isConstantGetter(f)).map((f) => f.name);
+  const writes = d.writes.map((f) => f.name);
+  const link = project.contractAddress ? contractPageUrl(project.contractAddress) : project.explorerUrl ?? "";
+  const clip = (names: string[], budget: number) => {
+    const out: string[] = [];
+    for (const n of names) {
+      const next = [...out, n].join(", ");
+      if (next.length + (out.length + 1 < names.length ? 9 : 0) > budget) break;
+      out.push(n);
+    }
+    return out.join(", ") + (out.length > 0 && out.length < names.length ? " and more" : "");
+  };
+  const frame = (r: string, w: string) => `how to use it: read ${r} for free from the explorer's Read tab; write ${w} from the Write tab with a connected wallet. every function explained: ${link}`;
+  const room = TWEET_MAX - frame("", "").length;
+  const readBudget = Math.max(0, Math.floor(room * (writes.length ? 0.45 : 1)));
+  const r = clip(reads, readBudget) || "its state";
+  const w = clip(writes, Math.max(0, room - r.length)) || "to it";
+  const text = frame(r, w);
+  if (text.length <= TWEET_MAX) return text;
+  return `how to use it: the Read tab answers for free, the Write tab takes a transaction from your wallet. every function explained: ${link}`.slice(0, TWEET_MAX);
 }
 
 /** Announcement drafts per project: the first, then redrafts after a hold or veto at the X gate. */
@@ -200,25 +257,42 @@ const REANNOUNCE_GAP_MS = 20 * 60_000;
 async function announceVerified(state: SwarmState, project: ForgeProject, previous: { body: string; reason: string } | null = null): Promise<string> {
   const resolved = resolveModel(state.settings.llmModel);
   let body = forgeAnnounceFallback(project);
+  let followUp = forgeUsageFallback(project);
+  let notes: Record<string, string> = { ...(project.functionNotes ?? {}) };
+  const view = announceView(project);
   try {
     const out = await generateStructured(resolved, {
       schema: forgeAnnounceSchema,
       system: "You write LAURA's X posts. Plain sentences a stranger follows, no hashtags, no emoji, no hype, no price talk, lowercase is fine.",
-      prompt: forgeAnnouncePrompt(project, flagshipSpec(project), previous),
-      mock: () => forgeAnnounceMock(project),
+      prompt: forgeAnnouncePrompt(view, flagshipSpec(project), previous),
+      mock: () => forgeAnnounceMock(view),
     });
     if (!out.usedMock) {
       const candidate = sanitizeXPost(out.value.post).text;
       const spec = flagshipSpec(project);
-      /* The explorer link must be there (short or full form); a flagship with a frontend must link it too. */
+      /* Flagship: explorer link (short or full form) and the frontend link.
+         Anvil design: the contract page link (it links the explorer). */
       const explorerOk =
         !project.contractAddress || candidate.toLowerCase().includes(`/address/${project.contractAddress}`.toLowerCase());
       const frontendOk = !spec?.frontendUrl || candidate.includes(spec.frontendUrl);
-      if (candidate.length > 0 && candidate.length <= TWEET_MAX && explorerOk && frontendOk) body = candidate;
+      const pageOk = !view.pageUrl || candidate.toLowerCase().includes(view.pageUrl.toLowerCase());
+      const linksOk = spec ? explorerOk && frontendOk : pageOk || explorerOk;
+      if (candidate.length > 0 && candidate.length <= TWEET_MAX && linksOk) body = candidate;
+      /* The usage reply must carry a way in: the page or the explorer. */
+      const reply = sanitizeXPost(out.value.usageReply).text;
+      const replyLinked =
+        (view.pageUrl && reply.toLowerCase().includes(view.pageUrl.toLowerCase())) ||
+        (project.contractAddress && reply.toLowerCase().includes(`/address/${project.contractAddress}`.toLowerCase()));
+      if (reply.length >= 40 && reply.length <= TWEET_MAX && replyLinked && !/(^|\s)#\w/.test(reply)) followUp = reply;
+      const known = new Set(functionDigest(project.abi).reads.concat(functionDigest(project.abi).writes).map((f) => f.name));
+      for (const n of out.value.functionNotes) {
+        if (known.has(n.name) && !notes[n.name]) notes[n.name] = n.note.trim();
+      }
     }
   } catch (err) {
     log(`announcement model call failed (${String(err).slice(0, 120)}); using the deterministic line`);
   }
+  if (Object.keys(notes).length === 0) notes = project.functionNotes ?? {};
   /* A flagship with a frontend is announced with a picture of that frontend
      (operator, 2026-09-13: "with a link to what it does and screenshots if
      possible"). Best effort: no picture, text-only post. */
@@ -246,6 +320,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject, previo
       publishedUrl: null,
       autoPublishNote: null,
       media: media ? [media] : null,
+      followUp,
     };
     s.drafts.push(draft);
     const smith = s.agents.find((a) => a.id === "smith");
@@ -257,6 +332,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject, previo
     if (p) {
       p.announceDraftId = draftId;
       p.announceAttempts = (p.announceAttempts ?? 0) + 1;
+      if (Object.keys(notes).length > 0) p.functionNotes = { ...(p.functionNotes ?? {}), ...notes };
     }
     pushEvent(s, {
       kind: "draft.created",

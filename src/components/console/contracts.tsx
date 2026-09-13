@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, ExternalLink, Hammer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,9 @@ function ProjectCard({ p }: { p: ForgeProject }) {
         {p.contractAddress && (
           <p className="flex flex-wrap items-center gap-2">
             <span className="break-all font-mono">{p.contractAddress}</span>
+            <Link className="inline-flex items-center gap-1 text-primary hover:underline" href={`/contracts/${p.contractAddress.toLowerCase()}`}>
+              how to use it (every function)
+            </Link>
             {explorer && (
               <a className="inline-flex items-center gap-1 text-primary hover:underline" href={explorer} target="_blank" rel="noreferrer">
                 explorer <ExternalLink className="size-3" />

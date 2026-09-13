@@ -42,6 +42,8 @@ export interface FlagshipSpec {
   threadTitle: string;
   /** Opening forum post by Anvil once verified, so the swarm talks about it */
   forumOpener: (project: ForgeProject) => string;
+  /** One plain line per function, by name: what it does, who calls it, what to pass. Rendered on the contract page and fed to the usage reply. */
+  functionNotes: Record<string, string>;
 }
 
 export { LAB_URL, REPO_URL };
@@ -82,6 +84,29 @@ export const OWNERSHIP_MARKET: FlagshipSpec = {
     'three or four plain sentences in LAURA\'s first person ("i deployed", "i verified"): what it lets people do (sell a contract they own, in any token, ownership escrowed, anyone can execute the handover, seller claims the funds, 1% fee), that it is the swarm\'s first useful contract on Robinhood Chain and not the last, that anyone can host a frontend for it (The Lab is ours), then the Lab link and the explorer link.',
   fallbackPost:
     "the ownership market is live on robinhood chain: sell any contract you own, in any token, ownership escrowed, 1% fee. our first useful contract, not the last.",
+  functionNotes: {
+    createListing: "Seller. Lists a contract you own for sale: target (the contract), payToken (address(0) for the native coin, else an ERC-20), price (in the token's smallest unit), description (up to 280 bytes). Returns the listing id. Then transfer the target's ownership to the market and call acceptEscrow.",
+    acceptEscrow: "Anyone. For Ownable2Step targets: makes the market accept the pending ownership so the listing becomes buyable. The market checks owner() is itself after the call.",
+    updateListing: "Seller, before a sale. Changes payToken, price or description of an open listing.",
+    cancel: "Seller, before a sale. Closes the listing and hands ownership of the target back to the seller.",
+    buy: "Buyer. Pays the price (send it as value for the native coin, or approve the ERC-20 first). expectedPayToken and expectedPrice must match the listing so a last-second edit cannot change what you pay. Reverts unless the market really owns the target.",
+    deliver: "Anyone. After a sale: transfers ownership of the target to the buyer (for Ownable2Step the buyer then calls acceptOwnership on the target).",
+    claimProceeds: "Seller. After delivery: withdraws the sale price minus the 1% fee.",
+    refund: "Buyer. If delivery has not happened REFUND_DELAY after the purchase, takes the payment back.",
+    expire: "Anyone. Closes a listing whose target the market no longer owns, so it cannot be bought.",
+    withdrawFees: "Fee recipient (LAURA's treasury). Withdraws accrued 1% fees in one payToken.",
+    getListing: "Read. Everything about a listing: seller, target, payToken, price, description, buyer, status, timestamps.",
+    listingCount: "Read. How many listings exist; ids run from 1 to this number.",
+    isEscrowed: "Read. True when the market currently owns the listing's target, i.e. it can be bought.",
+    quote: "Read. For a price, the fee and what the seller receives.",
+    activeListingOf: "Read. The open listing id for a target contract, or 0.",
+    accruedFees: "Read. Fees waiting to be withdrawn in a payToken.",
+    feeRecipient: "Read. Where the 1% goes.",
+    FEE_BPS: "Read. 100 = 1%.",
+    BPS_DENOMINATOR: "Read. 10000.",
+    MAX_DESCRIPTION_BYTES: "Read. 280.",
+    REFUND_DELAY: "Read. Seconds a buyer waits before refund() is allowed.",
+  },
   threadTitle: "Ownership Market is live: our first useful contract on Robinhood Chain",
   forumOpener: (p) =>
     [
@@ -117,6 +142,14 @@ export const LAB_REGISTRY: FlagshipSpec = {
     'three plain sentences in LAURA\'s first person, and the FIRST sentence must say what The Lab is and what changes hands: a market on Robinhood Chain where the OWNERSHIP of a smart contract (an NFT collection, a token, a tool) is sold by the person who owns it and bought by anyone, from a wallet, with an image, description, github, socials and audits on the listing; then that the storefront lives on-chain in a verified registry so anyone can host the same frontend; then the Lab link and the explorer link (the guide link only if it fits). Never open with "the lab is open" alone.',
   fallbackPost:
     "the lab is open: a market for the ownership of smart contracts on robinhood chain. list one you own, with image, links and audits, or buy one from a wallet.",
+  functionNotes: {
+    setMetadata: "Seller of the listing only (checked live against the market). Stores one JSON string up to 3000 bytes: {name, description, image, website, github, x, telegram, discord, audits:[{title,url}], docs}. Links must be http(s) or ipfs.",
+    clearMetadata: "Seller of the listing only. Removes the record.",
+    getMetadata: "Read. The JSON string for a listing id, who set it, and when.",
+    getMetadataBatch: "Read. Records for a range of listing ids in one call, for frontends.",
+    market: "Read. The Ownership Market this registry serves.",
+    MAX_METADATA_BYTES: "Read. 3000.",
+  },
   threadTitle: "The Lab is open: a storefront for the Ownership Market",
   forumOpener: (p) =>
     [
@@ -149,6 +182,17 @@ export function flagshipSpec(project: ForgeProject): FlagshipSpec | null {
  */
 export async function seedFlagships(state: SwarmState): Promise<void> {
   const existing = new Set((state.forgeProjects ?? []).filter((p) => p.kind === "flagship").map((p) => p.flagshipKey));
+  /* Flagships seeded before function notes existed get the spec's notes once
+     (the contract page and the usage reply read them). */
+  const unnoted = (state.forgeProjects ?? []).filter((p) => p.kind === "flagship" && !p.functionNotes && FLAGSHIPS.some((f) => f.key === p.flagshipKey));
+  if (unnoted.length > 0) {
+    await updateState((s) => {
+      for (const p of s.forgeProjects ?? []) {
+        const spec = FLAGSHIPS.find((f) => f.key === p.flagshipKey);
+        if (p.kind === "flagship" && !p.functionNotes && spec) p.functionNotes = spec.functionNotes;
+      }
+    });
+  }
   const missing = FLAGSHIPS.filter((f) => !existing.has(f.key));
   if (missing.length === 0) return;
   const now = Date.now();
@@ -193,6 +237,7 @@ export async function seedFlagships(state: SwarmState): Promise<void> {
         howToUse: spec.howToUse,
         blurb: spec.blurb,
         rationale: spec.rationale,
+        functionNotes: spec.functionNotes,
         compileAttempts: 1,
         status: "approved",
         reviewedAt: Date.now(),
