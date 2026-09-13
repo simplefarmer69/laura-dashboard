@@ -1,6 +1,6 @@
 import { pushEvent, redactSecrets, updateState } from "@/lib/store";
 import { isViewerMode } from "@/lib/viewer/mode";
-import { isAuthFailure, replyOnX, xStatus } from "@/lib/publish/x";
+import { isAuthFailure, publishToX, replyOnX, xStatus } from "@/lib/publish/x";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
 import { findWatchedOrRequested } from "@/lib/publish/x-watch";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
@@ -77,6 +77,11 @@ async function giveUp(launchId: string, reason: string): Promise<void> {
   });
 }
 
+/** X's "You can only reply to or quote posts where you are mentioned or are the author." */
+function isReplyForbidden(err: unknown): boolean {
+  return /X API 403\b/.test(String(err)) && /only reply to or quote/i.test(String(err));
+}
+
 export async function runLaunchCommentTick(state: SwarmState): Promise<void> {
   if (isViewerMode()) return;
   if (!state.settings.autoPublishX) return;
@@ -146,7 +151,26 @@ export async function runLaunchCommentTick(state: SwarmState): Promise<void> {
   }
 
   try {
-    const posted = await replyOnX(text, insp.tweetId);
+    let posted: { id: string; url: string };
+    let how = `under @${insp.author}'s post`;
+    try {
+      posted = await replyOnX(text, insp.tweetId);
+    } catch (err) {
+      if (!isReplyForbidden(err)) throw err;
+      /* This account's X tier may only reply to or quote posts that mention
+         it. Elon/Trump/Vitalik/Vlad never will, so the comment goes out as an
+         original post addressed to the author instead: same text, the author's
+         handle in front, through the regular original-post guards and caps. */
+      const standalone = `@${insp.author} ${text}`.trim();
+      if (standalone.length > TWEET_MAX) {
+        log(`comment for ${launch.symbol} too long as a standalone post (${standalone.length}); waiting for the next attempt`);
+        return;
+      }
+      const pub = await publishToX(standalone, false);
+      posted = { id: pub.tweetIds[0], url: pub.url };
+      text = standalone;
+      how = `as an original post addressed to @${insp.author} (X refuses replies to posts that do not mention this account)`;
+    }
     await updateState((s) => {
       const l = s.launches.find((x) => x.id === launch.id);
       if (!l) return;
@@ -154,12 +178,12 @@ export async function runLaunchCommentTick(state: SwarmState): Promise<void> {
       pushEvent(s, {
         kind: "launch.commented",
         agentId: l.designer === "tokenintel" ? "tokenintel" : "mint",
-        title: `Commented under @${insp.author}'s post with ${l.name} ($${l.symbol})`,
+        title: `Commented ${how} with ${l.name} ($${l.symbol})`,
         detail: `${text} · ${posted.url}`,
         refId: posted.id,
       });
     });
-    log(`commented under @${insp.author} (${insp.tweetId}) with ${launch.symbol}: ${posted.url}`);
+    log(`commented ${how} (${insp.tweetId}) with ${launch.symbol}: ${posted.url}`);
   } catch (err) {
     if (isAuthFailure(err)) {
       r.nextAttemptAt = Date.now() + AUTH_BACKOFF_MS;
