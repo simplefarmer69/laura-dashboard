@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { similarity } from "@/lib/swarm/novelty";
+import { REPEAT_MIN_SHARED_WORDS, sharedWords, similarity, stripLinks } from "@/lib/swarm/novelty";
 import { metricsLine, xPerformanceDigest } from "@/lib/publish/x-metrics";
 import type { XPostLogEntry } from "@/lib/publish/x-guard";
 
@@ -194,8 +194,8 @@ export function xPostProblems(text: string, recent: XPostLogEntry[]): string[] {
   }
   const mine = statsIn(trimmed);
   for (const e of window) {
-    const s = similarity(trimmed, e.text);
-    if (s >= REPEAT_THRESHOLD) {
+    const s = similarity(stripLinks(trimmed), stripLinks(e.text));
+    if (s >= REPEAT_THRESHOLD && sharedWords(stripLinks(trimmed), stripLinks(e.text)) >= REPEAT_MIN_SHARED_WORDS) {
       problems.push(`${(s * 100).toFixed(0)}% word overlap with ${e.url}`);
       break;
     }

@@ -27,6 +27,24 @@ export function tokenSet(text: string): Set<string> {
   return out;
 }
 
+/** Links out of a text: for post-to-post comparison, where the same frontend
+ *  and explorer links legitimately recur and their tokens ("https", the host,
+ *  the address) would otherwise count as repeated prose. */
+export function stripLinks(text: string): string {
+  return text.replace(/https?:\/\/\S+/gi, " ");
+}
+
+/** |A ∩ B| in content words: a floor for the post-to-post repeat checks, so a
+ *  four-word collision with an eight-word post does not read as a repeat. */
+export function sharedWords(a: string, b: string): number {
+  const sa = tokenSet(a);
+  const sb = tokenSet(b);
+  let inter = 0;
+  for (const w of sa) if (sb.has(w)) inter += 1;
+  return inter;
+}
+export const REPEAT_MIN_SHARED_WORDS = 6;
+
 /** Overlap coefficient: |A ∩ B| / min(|A|, |B|). Robust to length differences. */
 export function similarity(a: string, b: string): number {
   const sa = tokenSet(a);

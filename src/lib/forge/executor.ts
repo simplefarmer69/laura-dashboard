@@ -9,6 +9,7 @@ import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { forgeAnnounceMock, forgeAnnouncePrompt, forgeAnnounceSchema } from "@/lib/swarm/tasks";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
+import { recentXPosts } from "@/lib/publish/x-guard";
 import { captureScreenshot } from "@/lib/publish/screenshot";
 import type { Draft, DraftMedia, ForgeProject, SwarmState } from "@/lib/types";
 
@@ -297,8 +298,19 @@ export async function runForgeAnnounceTick(state: SwarmState): Promise<boolean> 
   });
   if (!refused) return false;
   const prior = state.drafts.find((x) => x.id === refused.announceDraftId);
+  /* A style veto names the earlier post by URL; the writer needs its text to
+     write something else (attempt 2 of The Lab collided with the Ownership
+     Market post: same opening, same "sell ownership of a contract" clause). */
+  let reason = prior?.reviewerNote ?? "refused at the X gate";
+  const cited = new Set(reason.match(/https:\/\/x\.com\/\S+/g) ?? []);
+  if (cited.size > 0) {
+    const posts = await recentXPosts(40);
+    for (const e of posts) {
+      if (cited.has(e.url)) reason += ` That earlier post read: "${e.text.replace(/\s+/g, " ").trim()}". Do not reuse its opening, its verbs or its phrasing; say something that post did not.`;
+    }
+  }
   try {
-    const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason: prior?.reviewerNote ?? "refused at the X gate" });
+    const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason });
     log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${(refused.announceAttempts ?? 1) + 1}/${MAX_ANNOUNCE_ATTEMPTS})`);
     return true;
   } catch (err) {

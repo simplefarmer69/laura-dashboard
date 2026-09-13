@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { similarity } from "@/lib/swarm/novelty";
+import { REPEAT_MIN_SHARED_WORDS, sharedWords, similarity, stripLinks } from "@/lib/swarm/novelty";
 
 /**
  * Shared-account guardrails for the X posting rail.
@@ -174,7 +174,7 @@ export async function checkXGuards(body: string): Promise<XGuardVerdict> {
 
   const recent = log.filter((e) => now - e.at < DUPLICATE_WINDOW_MS);
   for (const e of recent) {
-    if (similarity(body, e.text) >= DUPLICATE_THRESHOLD) {
+    if (similarity(stripLinks(body), stripLinks(e.text)) >= DUPLICATE_THRESHOLD && sharedWords(stripLinks(body), stripLinks(e.text)) >= REPEAT_MIN_SHARED_WORDS) {
       reasons.push(`near-duplicate of an already-posted tweet (${e.url})`);
       break;
     }
