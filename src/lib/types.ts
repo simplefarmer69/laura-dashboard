@@ -14,12 +14,42 @@ export interface MetricsSnapshot {
   pairCount: number;
   /** DefiLlama: protocol-wide dimensions */
   protocolFees24hUsd: number;
+  /**
+   * Protocol revenue as the site shows it. Since 2026-09-13 (sdbFlowVersion
+   * 1) this is DeFiLlama revenue PLUS the Safety Deposit Box flow DeFiLlama
+   * files as supply-side: the locker protocol cuts that reach activated
+   * brokers through the Safety Deposit Clock In (90% of every cut; the 10%
+   * protocol-wallet slice is already inside the DeFiLlama figure). Older
+   * snapshots (sdbFlowVersion absent) are the raw DeFiLlama number.
+   */
   protocolRevenue24hUsd: number;
   protocolVolume24hUsd: number;
   protocolFees7dUsd: number;
   protocolRevenue7dUsd: number;
   protocolVolume7dUsd: number;
   tvlUsd: number;
+  /** DeFiLlama revenue before the Safety Deposit Box add-back (what the site showed until 2026-09-13). */
+  llamaRevenue24hUsd?: number;
+  llamaRevenue7dUsd?: number;
+  /**
+   * Safety Deposit Box flow: everything the lockers paid into the Safety
+   * Deposit Clock In (SafetyDepositClockInV3), priced in USD, measured at
+   * the box from ERC-20 transfers in and the native ETH it flushes.
+   */
+  sdbFlowVersion?: 1;
+  sdbFlow24hUsd?: number;
+  sdbFlow7dUsd?: number;
+  /** The box's hard split of the 24h flow: brokers (Clock In rewards) vs protocol wallet. */
+  sdbBrokersShare24hUsd?: number;
+  sdbProtocolWallet24hUsd?: number;
+  sdbProtocolBps?: number;
+  /** 24h flow by desk: v3, v4, upcl, upv2, vesting lockers; vaults (up. v2 per-lock vaults); eth (native leg). */
+  sdbBySource24hUsd?: Record<string, number>;
+  sdbTransfers24h?: number;
+  /** Tokens received with no USD price (contributed zero). */
+  sdbUnpricedTokens?: number;
+  /** False when part of the 7d scan failed, so sdbFlow7dUsd undercounts. */
+  sdbComplete7d?: boolean;
   /**
    * Ecosystem tape (DexScreener + launcher grid + Smart LP registry). Version 2
    * (2026-09-13) is all-in: $STONKBROKER DEX volume + Special Projects pairs +

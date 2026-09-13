@@ -122,7 +122,8 @@ function fallbackReply(text: string, state: SwarmState): string {
   }
   if (q.includes("revenue") || q.includes("volume") || q.includes("fees") || q.includes("stats")) {
     if (!m) return "No fresh snapshot yet. Try me again in a minute.";
-    return `Last 24h: protocol fees ${fmt(m.protocolFees24hUsd)}, revenue ${fmt(m.protocolRevenue24hUsd)}, volume ${fmt(m.protocolVolume24hUsd)}. TVL ${fmt(m.tvlUsd)}. Numbers from DefiLlama; my daily grade hangs on them${grade ? ` (today: ${grade.letter})` : ""}.`;
+    const sdb = m.sdbFlowVersion === 1 ? ` Revenue includes ${fmt(m.sdbFlow24hUsd ?? 0)} of Safety Deposit Box flow (locker cuts paid into the Safety Deposit Clock In) read straight from Robinhood Chain; the rest is DefiLlama.` : " Numbers from DefiLlama.";
+    return `Last 24h: protocol fees ${fmt(m.protocolFees24hUsd)}, revenue ${fmt(m.protocolRevenue24hUsd)}, volume ${fmt(m.protocolVolume24hUsd)}. TVL ${fmt(m.tvlUsd)}.${sdb} My daily grade hangs on them${grade ? ` (today: ${grade.letter})` : ""}.`;
   }
   if (q.includes("mission") || q.includes("1b") || q.includes("billion") || q.includes("daio") || q.includes("goal")) {
     return `The mission: grow StonkBrokers until $STONKBROKER holds a $1B market cap. It is currently at ${fmt(mission.marketCapUsd)}, ${Number.isFinite(mission.multipleToTarget) ? mission.multipleToTarget.toFixed(1) : "?"}x to go. At $1B I take the operating mandate of the StonkBrokers DAIO under the foundation's oversight. Every day I'm graded on price, revenue and volume${grade ? `. Today's grade is ${grade.letter}` : ""}.`;

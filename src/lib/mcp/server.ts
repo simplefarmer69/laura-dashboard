@@ -153,6 +153,16 @@ function summarizeMetrics(m: MetricsSnapshot | undefined | null) {
             smartLpShareUsd: m.smartLpAttributedVolume24hUsd ?? 0,
           }
         : null,
+    protocolRevenueBreakdown:
+      m.sdbFlowVersion === 1
+        ? {
+            llamaRevenue24hUsd: m.llamaRevenue24hUsd ?? 0,
+            safetyDepositBoxFlow24hUsd: m.sdbFlow24hUsd ?? 0,
+            safetyDepositBoxBrokersShare24hUsd: m.sdbBrokersShare24hUsd ?? 0,
+            safetyDepositBoxProtocolWallet24hUsd: m.sdbProtocolWallet24hUsd ?? 0,
+            note: "protocolRevenue24hUsd = DeFiLlama revenue + the brokers' share of Safety Deposit Box locker cuts (DeFiLlama books only the protocol-wallet slice).",
+          }
+        : null,
     tvlUsd: m.tvlUsd,
   };
 }

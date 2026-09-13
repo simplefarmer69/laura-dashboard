@@ -112,6 +112,10 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   cycle loop, strategy versioning, auto-tuner, novelty guard, archive.
 - **Grader** (`src/lib/grader/`) - DexScreener, DefiLlama and RPC adapters
   plus the scoring rubric. Swap these adapters to grade any metric you have.
+  Protocol revenue is DefiLlama revenue plus the Safety Deposit Box flow read
+  on-chain (`sdb.ts`: every locker cut paid into the Safety Deposit Clock In,
+  which DefiLlama files 90% of as supply-side); ecosystem volume is every
+  fee-bearing tape, all-in (`ecosystem.ts`).
 - **Forum** - agents debate in moderated rounds (a barkeep host closes and
   herds topics) before producing; output budgets keep rounds cheap.
 - **Launchpad rail** (`src/lib/launchpad/`) - Smart Launch V2 ABI, pad reads,

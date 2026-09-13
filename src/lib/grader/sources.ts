@@ -1,6 +1,7 @@
 import type { MetricsSnapshot, OnchainReads, Settings } from "@/lib/types";
 import { fetchOnchain } from "@/lib/grader/onchain";
 import { fetchEcosystemVolume, type EcosystemVolume } from "@/lib/grader/ecosystem";
+import { fetchSafetyDepositFlow, revenueWithSafetyDeposit, type SafetyDepositFlow } from "@/lib/grader/sdb";
 
 const TIMEOUT_MS = 15_000;
 
@@ -216,9 +217,16 @@ export async function collectMetrics(
   const ethUsd = m?.ethPriceUsd ?? prev?.onchain?.ethPriceUsd ?? 0;
   let onchain: OnchainReads | undefined;
   let eco: EcosystemVolume | null = null;
-  const [onchainRes, ecoRes] = await Promise.allSettled([
+  let sdb: SafetyDepositFlow | null = null;
+  const [onchainRes, ecoRes, sdbRes] = await Promise.allSettled([
     fetchOnchain(settings, ethUsd),
     fetchEcosystemVolume(settings.chainSlug, settings.tokenAddress, ethUsd, m?.volume24hUsd ?? prev?.tokenDexVolume24hUsd ?? 0),
+    fetchSafetyDepositFlow({
+      chainSlug: settings.chainSlug,
+      ethUsd,
+      stonkAddress: settings.tokenAddress,
+      stonkPriceUsd: m?.priceUsd ?? prev?.priceUsd ?? 0,
+    }),
   ]);
   if (onchainRes.status === "fulfilled") {
     onchain = onchainRes.value;
@@ -232,6 +240,23 @@ export async function collectMetrics(
   } else {
     warnings.push(`Ecosystem volume: ${String(ecoRes.reason)}`);
   }
+  if (sdbRes.status === "fulfilled") {
+    sdb = sdbRes.value;
+    for (const w of sdb.warnings) warnings.push(`Safety Deposit Box: ${w}`);
+  } else {
+    warnings.push(`Safety Deposit Box: ${String(sdbRes.reason)}`);
+  }
+
+  /* Revenue: DeFiLlama plus the Safety Deposit Box share it leaves out. When
+   * the box scan fails the previous flow carries so the number never drops to
+   * the bare DeFiLlama figure for one cycle. Snapshots from before the box
+   * was measured hold the raw DeFiLlama revenue in protocolRevenue*, so that
+   * is the last-resort fallback for the DeFiLlama leg. */
+  const llamaRevenue24h = p?.revenue24h ?? prev?.llamaRevenue24hUsd ?? prev?.protocolRevenue24hUsd ?? 0;
+  const llamaRevenue7d = p?.revenue7d ?? prev?.llamaRevenue7dUsd ?? prev?.protocolRevenue7dUsd ?? 0;
+  const sdbFlow24h = sdb?.flow24hUsd ?? prev?.sdbFlow24hUsd ?? 0;
+  const sdbFlow7d = sdb?.flow7dUsd ?? prev?.sdbFlow7dUsd ?? 0;
+  const sdbBps = sdb?.protocolBps ?? prev?.sdbProtocolBps ?? 1000;
   return {
     ts: Date.now(),
     priceUsd: m?.priceUsd ?? prev?.priceUsd ?? 0,
@@ -242,12 +267,24 @@ export async function collectMetrics(
     fdvUsd: m?.fdvUsd ?? prev?.fdvUsd ?? 0,
     pairCount: m?.pairCount ?? prev?.pairCount ?? 0,
     protocolFees24hUsd: p?.fees24h ?? prev?.protocolFees24hUsd ?? 0,
-    protocolRevenue24hUsd: p?.revenue24h ?? prev?.protocolRevenue24hUsd ?? 0,
+    protocolRevenue24hUsd: revenueWithSafetyDeposit(llamaRevenue24h, sdbFlow24h, sdbBps),
     protocolVolume24hUsd: p?.volume24h ?? prev?.protocolVolume24hUsd ?? 0,
     protocolFees7dUsd: p?.fees7d ?? prev?.protocolFees7dUsd ?? 0,
-    protocolRevenue7dUsd: p?.revenue7d ?? prev?.protocolRevenue7dUsd ?? 0,
+    protocolRevenue7dUsd: revenueWithSafetyDeposit(llamaRevenue7d, sdbFlow7d, sdbBps),
     protocolVolume7dUsd: p?.volume7d ?? prev?.protocolVolume7dUsd ?? 0,
     tvlUsd: p?.tvl ?? prev?.tvlUsd ?? 0,
+    llamaRevenue24hUsd: llamaRevenue24h,
+    llamaRevenue7dUsd: llamaRevenue7d,
+    sdbFlowVersion: 1,
+    sdbFlow24hUsd: sdbFlow24h,
+    sdbFlow7dUsd: sdbFlow7d,
+    sdbBrokersShare24hUsd: sdb?.brokersShare24hUsd ?? prev?.sdbBrokersShare24hUsd,
+    sdbProtocolWallet24hUsd: sdb?.protocolWallet24hUsd ?? prev?.sdbProtocolWallet24hUsd,
+    sdbProtocolBps: sdbBps,
+    sdbBySource24hUsd: sdb?.bySource24hUsd ?? prev?.sdbBySource24hUsd,
+    sdbTransfers24h: sdb?.transfers24h ?? prev?.sdbTransfers24h,
+    sdbUnpricedTokens: sdb?.unpricedTokens ?? prev?.sdbUnpricedTokens,
+    sdbComplete7d: sdb ? sdb.complete7d : prev?.sdbComplete7d,
     ecosystemVolume24hUsd: eco?.totalUsd ?? prev?.ecosystemVolume24hUsd,
     ecosystemVolumeVersion: eco ? 2 : prev?.ecosystemVolumeVersion,
     ecosystemTokensVolume24hUsd: eco?.ecosystemTokensUsd ?? prev?.ecosystemTokensVolume24hUsd,

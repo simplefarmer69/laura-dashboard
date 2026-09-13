@@ -20,6 +20,9 @@ export function metricsDigest(m: MetricsSnapshot): string {
     `Token DEX liquidity: ${usd(m.liquidityUsd)} across ${m.pairCount} pairs; token DEX volume 24h: ${usd(m.tokenDexVolume24hUsd)}`,
     `Protocol fees 24h: ${usd(m.protocolFees24hUsd)} (7d total ${usd(m.protocolFees7dUsd)})`,
     `Protocol revenue 24h: ${usd(m.protocolRevenue24hUsd)} vs 7d avg ${usd(rev7)} (${rev7 > 0 ? (m.protocolRevenue24hUsd / rev7).toFixed(2) : "n/a"}x)`,
+    m.sdbFlowVersion === 1
+      ? `  of which Safety Deposit Box flow 24h: ${usd(m.sdbFlow24hUsd ?? 0)} (7d ${usd(m.sdbFlow7dUsd ?? 0)}${m.sdbComplete7d === false ? ", partial scan" : ""}) = locker protocol cuts paid into the Safety Deposit Clock In, ${usd(m.sdbBrokersShare24hUsd ?? 0)} to activated brokers + ${usd(m.sdbProtocolWallet24hUsd ?? 0)} protocol wallet; DeFiLlama alone reads ${usd(m.llamaRevenue24hUsd ?? 0)} because it files the broker share as supply-side`
+      : "  Safety Deposit Box flow: pending first read (revenue is the bare DeFiLlama figure)",
     `Protocol volume 24h: ${usd(m.protocolVolume24hUsd)} vs 7d avg ${usd(vol7)} (${vol7 > 0 ? (m.protocolVolume24hUsd / vol7).toFixed(2) : "n/a"}x)`,
     m.ecosystemVolume24hUsd == null
       ? "Ecosystem volume 24h: pending first read"

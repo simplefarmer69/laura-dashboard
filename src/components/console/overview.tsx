@@ -137,7 +137,11 @@ export function Overview({
         <Metric
           label="Protocol revenue 24h"
           value={usd(metrics.protocolRevenue24hUsd)}
-          sub={`7d avg ${usd(metrics.protocolRevenue7dUsd / 7)} · fees ${usd(metrics.protocolFees24hUsd)}`}
+          sub={
+            metrics.sdbFlowVersion === 1
+              ? `DeFiLlama ${usd(metrics.llamaRevenue24hUsd ?? 0)} + Safety Deposit Box flow ${usd(metrics.sdbFlow24hUsd ?? 0)} (locker cuts into the Safety Deposit Clock In: ${usd(metrics.sdbBrokersShare24hUsd ?? 0)} to brokers, ${usd(metrics.sdbProtocolWallet24hUsd ?? 0)} protocol wallet; the wallet slice is already in DeFiLlama) · 7d avg ${usd(metrics.protocolRevenue7dUsd / 7)} · fees ${usd(metrics.protocolFees24hUsd)}`
+              : `DeFiLlama only (Safety Deposit Box flow pending first read) · 7d avg ${usd(metrics.protocolRevenue7dUsd / 7)} · fees ${usd(metrics.protocolFees24hUsd)}`
+          }
           tone={metrics.protocolRevenue24hUsd >= metrics.protocolRevenue7dUsd / 7 ? "up" : "down"}
         />
         <Metric

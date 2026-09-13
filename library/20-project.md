@@ -82,7 +82,19 @@ creator-fee earnings):
 - Daily rubric: **price / protocol revenue / protocol volume / execution**, weighted,
   stamped once per UTC day. Sources: DexScreener (liquidity-weighted price across all
   pairs — several are thin, quote carefully), DefiLlama (protocol dimensions), direct
-  RPC reads (Clock In pot, vault brokers, supply).
+  RPC reads (Clock In pot, vault brokers, supply, Safety Deposit Box flow).
+- **Protocol revenue includes the Safety Deposit Box flow** (operator directive
+  2026-09-13). Every locker desk (Uniswap V3/V4, up. CL, up. v2, vesting) pays its
+  protocol cut into the ownerless Safety Deposit Clock In
+  (`SafetyDepositClockInV3`, 90% activated brokers / 10% protocol wallet). DefiLlama
+  books only the 10% slice as revenue and files the 90% as supply-side, and cannot
+  see upfront-mode cuts at all, so its figure carried a tenth of this flow. LAURA
+  measures the flow at the box itself (every ERC-20 transfer in plus the ETH it
+  flushes, priced: WETH at the ETH mark, USDG at par, $STONKBROKER at the grader's
+  price, others via DexScreener then the launcher grid) and adds the 90% broker
+  share on top of DefiLlama revenue. On the day it went live the 24h figure moved
+  from ~$11k (DefiLlama) to ~$22k. When quoting revenue, say what it contains:
+  "DefiLlama revenue plus the Safety Deposit Box flow, read on-chain".
 - Trajectory so far: D 57.5 → C 61.4 → **C 62.7** (2026-09-10). Revenue and volume are
   the persistent laggards; work that levers them (launcher activity, Clock In
   narratives, BD outreach) moves the grade most.

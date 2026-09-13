@@ -70,6 +70,20 @@ Upstreams: `api.llama.fi/protocol/stonkbrokers`,
 bare `clutch-anvil` slug 400s). All four must succeed or the route falls
 back to the last good payload, so the DEX series never silently shrinks.
 
+Note the difference from the site's "Protocol revenue" metric: this feed is
+the raw DeFiLlama series, while the grader's `protocolRevenue24hUsd` is
+DeFiLlama revenue PLUS the Safety Deposit Box flow DeFiLlama files as
+supply-side (`src/lib/grader/sdb.ts`, snapshot fields `llamaRevenue*`,
+`sdbFlow*`). The box scan reads every ERC-20 `Transfer` into
+`SafetyDepositClockInV3` (`0x55642A3F10F1Af5145D3d59021B1D6b03BB8692c`) plus
+its `EthFlushed` native leg over rolling 24h / 7d windows straight from the
+Robinhood Chain RPC (400k-block chunks, finished chunks cached in memory),
+prices each token (WETH at the ETH mark, USDG at par, $STONKBROKER at the
+grader's price, then DexScreener's deepest pair, then the launcher grid's
+`priceUsd`), and adds the brokers' 90% share on top of DeFiLlama revenue (the
+10% protocol-wallet slice is already inside the DeFiLlama figure). Unpriced
+tokens count as zero and are reported in `sdbUnpricedTokens`.
+
 ## GET /api/forge
 
 LAURA's own contracts on Robinhood Chain: Anvil's small verified utility
