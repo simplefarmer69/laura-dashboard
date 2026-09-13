@@ -13,10 +13,12 @@ calls each way.
 
 - Source: [`src/lib/forge/contracts/OwnershipMarket.sol`](../src/lib/forge/contracts/OwnershipMarket.sol)
 - Tests and audit note: [`audits/ownership-market/`](../audits/ownership-market/)
-- Deployed address and explorer link: posted by LAURA on X and listed on the
-  [live dashboard](https://laura.stonkbrokers.io) under Contracts once the
-  explorer has verified the source. The address is also in the `forge.deployed`
-  and `forge.verified` events of the swarm.
+- **Deployed address (Robinhood Chain mainnet): [`0x184aceB1FFE04701d6fdF75f7AdC638651578923`](https://robinhoodchain.blockscout.com/address/0x184aceB1FFE04701d6fdF75f7AdC638651578923?tab=contract)**
+  Deployed 2026-09-13 in tx
+  [`0x92476d27f3fb31c2025262dab96f460297b87d408262b2e87bbcb130e87966c7`](https://robinhoodchain.blockscout.com/tx/0x92476d27f3fb31c2025262dab96f460297b87d408262b2e87bbcb130e87966c7);
+  source verified on [Sourcify](https://sourcify.dev/#/lookup/0x184aceB1FFE04701d6fdF75f7AdC638651578923) (exact match)
+  and on Blockscout. Also listed on the [live dashboard](https://laura.stonkbrokers.io)
+  under Contracts and in the swarm's `forge.deployed` / `forge.verified` events.
 - Chain: Robinhood Chain, chain id 4663, explorer `https://robinhoodchain.blockscout.com`
 - Compiler: solc 0.8.28, optimizer 200 runs, EVM `paris`. Verified source,
   so every function below is on the explorer's **Read Contract** and
@@ -161,7 +163,7 @@ viem, native-coin listing, seller side:
 
 ```ts
 import { createWalletClient, http, parseEther } from "viem";
-const market = "0x<market address>";
+const market = "0x184aceB1FFE04701d6fdF75f7AdC638651578923";
 const id = await wallet.writeContract({
   address: market, abi, functionName: "createListing",
   args: [myContract, "0x0000000000000000000000000000000000000000", parseEther("2"), "a finished tip-jar contract, 300 users"],
@@ -179,6 +181,7 @@ await wallet.writeContract({ address: market, abi, functionName: "deliver", args
 `cast` from foundry works too:
 
 ```
+MARKET=0x184aceB1FFE04701d6fdF75f7AdC638651578923
 cast send $MARKET "createListing(address,address,uint256,string)" $TARGET 0x0000000000000000000000000000000000000000 2000000000000000000 "what it does" --rpc-url https://rpc.mainnet.chain.robinhood.com --private-key $PK
 cast send $TARGET "transferOwnership(address)" $MARKET --rpc-url ... --private-key $PK
 cast call $MARKET "isEscrowed(uint256)(bool)" 1 --rpc-url ...

@@ -137,7 +137,9 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   [Ownership Market](docs/OWNERSHIP-MARKET.md), a marketplace for the
   ownership of any `Ownable` contract in any token with a 1% protocol fee,
   escrowed ownership and permissionless delivery (`forge test` from the repo
-  root runs its 20-test suite; audit note in `audits/ownership-market/`).
+  root runs its 20-test suite; audit note in `audits/ownership-market/`),
+  live on Robinhood Chain at
+  [`0x184aceB1FFE04701d6fdF75f7AdC638651578923`](https://robinhoodchain.blockscout.com/address/0x184aceB1FFE04701d6fdF75f7AdC638651578923?tab=contract).
   Anyone can host a frontend for these contracts.
 - **X watch and X-inspired launches** (`src/lib/publish/x-watch.ts`,
   `launch-comment.ts`) - follows Elon Musk, Donald Trump, Vitalik Buterin

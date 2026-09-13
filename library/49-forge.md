@@ -64,9 +64,11 @@ Talking points (all true, all checkable):
   selling finished tools, DAOs buying the vault they already use, anyone
   leaving a project who would rather sell than abandon.
 
-The deployed address and explorer link are in the ON-CHAIN STATE block
-(LAURA'S OWN CONTRACTS) once live; cite them exactly. Until `forge.verified`
-fires, talk about it as "shipping", never as live.
+Live since 2026-09-13 at `0x184aceB1FFE04701d6fdF75f7AdC638651578923`
+(explorer: https://robinhoodchain.blockscout.com/address/0x184aceB1FFE04701d6fdF75f7AdC638651578923?tab=contract,
+source verified on Sourcify as an exact match). Cite the address exactly; the
+ON-CHAIN STATE block (LAURA'S OWN CONTRACTS) carries the current status. User
+guide: https://github.com/simplefarmer69/laura-dashboard/blob/main/docs/OWNERSHIP-MARKET.md
 
 How each agent uses it: Quill and Sage explain it plainly with both links;
 Nudge and Relay find teams on X with a collection, token or tool they might
