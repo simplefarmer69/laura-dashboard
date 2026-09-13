@@ -1,7 +1,9 @@
 import { pushEvent, updateState } from "@/lib/store";
 import { isViewerMode } from "@/lib/viewer/mode";
 import { checkXGuards, recentXPosts } from "@/lib/publish/x-guard";
-import { isAuthFailure, publishToX, xStatus } from "@/lib/publish/x";
+import { isAuthFailure, publishToX, xStatus, type XMediaInput } from "@/lib/publish/x";
+import { loadDraftMedia } from "@/lib/publish/screenshot";
+import { flagshipScreenshot } from "@/lib/forge/executor";
 import {
   acceptAuditEdit,
   sanitizeXPost,
@@ -42,6 +44,14 @@ import type { Draft, SwarmState } from "@/lib/types";
  */
 
 const FRESH_WINDOW_MS = 6 * 3600_000;
+/**
+ * Flagship announcements (a verified contract of ours going live) wait on
+ * the daily cap behind whatever the cycles produced; they keep for two days
+ * and go first when a slot opens, so a launch is never announced stale or
+ * starved by routine posts (The Lab, 2026-09-13: verified at 15:58 UTC with
+ * the account at 10/10 for the day).
+ */
+const FLAGSHIP_FRESH_WINDOW_MS = 48 * 3600_000;
 const ERROR_BACKOFF_MS = 15 * 60_000;
 /** A 401 means the token is gone, not that the post is bad: wait for the operator. */
 const AUTH_BACKOFF_MS = 60 * 60_000;
@@ -70,17 +80,45 @@ function isXChannel(d: Draft): boolean {
   return /^(x|twitter)$/i.test(d.channel.trim());
 }
 
-/** Fresh, approved, X-targeted, not yet skipped by a permanent guard verdict; newest first. */
+/** Announcements of the swarm's own verified contracts (Anvil's flagship queue). */
+function isFlagshipAnnouncement(d: Draft): boolean {
+  return d.cycleId === "flagship" && d.agentId === "smith";
+}
+
+/** Fresh, approved, X-targeted, not yet skipped by a permanent guard verdict; flagship announcements first, then newest first. */
 export function autoPublishCandidates(state: SwarmState, now = Date.now()): Draft[] {
   return state.drafts
     .filter(
       (d) =>
         d.status === "approved" &&
         isXChannel(d) &&
-        now - d.createdAt < FRESH_WINDOW_MS &&
+        now - d.createdAt < (isFlagshipAnnouncement(d) ? FLAGSHIP_FRESH_WINDOW_MS : FRESH_WINDOW_MS) &&
         !d.autoPublishNote,
     )
-    .sort((a, b) => b.createdAt - a.createdAt);
+    .sort((a, b) => {
+      const fa = isFlagshipAnnouncement(a) ? 1 : 0;
+      const fb = isFlagshipAnnouncement(b) ? 1 : 0;
+      if (fa !== fb) return fb - fa;
+      return b.createdAt - a.createdAt;
+    });
+}
+
+/**
+ * Images for the post: what the draft carries, or, for a flagship
+ * announcement drafted without one, a fresh picture of the flagship's
+ * frontend taken now. Never throws; an empty list means text only.
+ */
+async function mediaForDraft(state: SwarmState, draft: Draft): Promise<{ inputs: XMediaInput[]; note: string }> {
+  let media = draft.media ?? [];
+  if (media.length === 0 && isFlagshipAnnouncement(draft)) {
+    const project = (state.forgeProjects ?? []).find((p) => p.announceDraftId === draft.id);
+    const shot = project ? await flagshipScreenshot(project).catch(() => null) : null;
+    if (shot) media = [shot];
+  }
+  if (media.length === 0) return { inputs: [], note: "" };
+  const loaded = await loadDraftMedia({ media });
+  const note = `${loaded.inputs.length ? ` · ${loaded.inputs.length} image(s)` : ""}${loaded.missing.length ? ` · media missing: ${loaded.missing.join("; ")}` : ""}`;
+  return { inputs: loaded.inputs, note };
 }
 
 function isRateReason(reason: string): boolean {
@@ -287,7 +325,9 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
     }
 
     try {
-      const result = await publishToX(text, false);
+      const media = await mediaForDraft(state, draft);
+      const result = await publishToX(text, false, media.inputs);
+      const mediaNote = `${result.mediaIds.length ? ` · ${result.mediaIds.length} image(s) attached` : media.note}${result.mediaErrors.length ? ` · image upload failed: ${result.mediaErrors.join("; ")}` : ""}`;
       await updateState((st) => {
         const d = st.drafts.find((x) => x.id === draft.id);
         if (!d) return null;
@@ -306,12 +346,12 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
           kind: "draft.published",
           agentId: d.agentId,
           title: `Published to X: ${d.title}`,
-          detail: `single post · ${result.url} · autonomous rail (${guard.postsLast24h + 1}/${guard.policy.maxPostsPerDay} today)${auditNote}${clean.stripped.length > 0 ? ` · stripped ${clean.stripped.join(", ")}` : ""}`,
+          detail: `single post · ${result.url} · autonomous rail (${guard.postsLast24h + 1}/${guard.policy.maxPostsPerDay} today)${auditNote}${mediaNote}${clean.stripped.length > 0 ? ` · stripped ${clean.stripped.join(", ")}` : ""}`,
           refId: d.id,
         });
         return d;
       });
-      log(`published ${draft.id} by ${draft.agentId}: ${result.url}${auditNote}`);
+      log(`published ${draft.id} by ${draft.agentId}: ${result.url}${auditNote}${mediaNote}`);
     } catch (err) {
       if (isAuthFailure(err)) {
         /* Expired or revoked token: the draft is fine, the credential is not.

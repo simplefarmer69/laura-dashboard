@@ -73,28 +73,29 @@ async function authHeader(method: "POST" | "GET" | "DELETE", url: string): Promi
   return `Bearer ${token || (process.env.X_OAUTH2_ACCESS_TOKEN ?? "")}`;
 }
 
-async function sendTweet(auth: string, text: string, replyToId?: string): Promise<Response> {
+async function sendTweet(auth: string, text: string, replyToId?: string, mediaIds?: string[]): Promise<Response> {
   return fetch("https://api.x.com/2/tweets", {
     method: "POST",
     headers: { authorization: auth, "content-type": "application/json" },
     body: JSON.stringify({
       text,
       ...(replyToId ? { reply: { in_reply_to_tweet_id: replyToId } } : {}),
+      ...(mediaIds && mediaIds.length > 0 ? { media: { media_ids: mediaIds } } : {}),
     }),
     signal: AbortSignal.timeout(20_000),
   });
 }
 
-async function postTweet(text: string, replyToId?: string): Promise<{ id: string }> {
+async function postTweet(text: string, replyToId?: string, mediaIds?: string[]): Promise<{ id: string }> {
   const url = "https://api.x.com/2/tweets";
-  let res = await sendTweet(await authHeader("POST", url), text, replyToId);
+  let res = await sendTweet(await authHeader("POST", url), text, replyToId, mediaIds);
   /* An expired OAuth 2.0 access token 401s once; a forced refresh mints a new
      one from the stored refresh token and the post retries immediately. Only
      the OAuth 2.0 path can be revived this way — 1.0a keys never expire. */
   const s = xStatus();
   if (res.status === 401 && !(s.appKeys && s.accessKeys)) {
     const fresh = await forceOauth2Refresh();
-    if (fresh) res = await sendTweet(`Bearer ${fresh}`, text, replyToId);
+    if (fresh) res = await sendTweet(`Bearer ${fresh}`, text, replyToId, mediaIds);
   }
   const json = (await res.json()) as { data?: { id: string }; title?: string; detail?: string; errors?: unknown };
   if (!res.ok || !json.data) {
@@ -106,6 +107,61 @@ async function postTweet(text: string, replyToId?: string): Promise<{ id: string
 /** True for a rejected credential (expired OAuth 2.0 user token, revoked app access). */
 export function isAuthFailure(err: unknown): boolean {
   return /X API 401\b|Unauthorized/i.test(String(err));
+}
+
+/** X's simple-upload ceiling for images; larger files need the chunked flow, which the rail does not use. */
+export const X_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+export interface XMediaInput {
+  bytes: Buffer;
+  /** image/png, image/jpeg, image/webp or image/gif. */
+  mimeType: string;
+  alt: string;
+}
+
+/**
+ * Uploads one image through the v2 media endpoint (`POST /2/media/upload`,
+ * simple one-shot upload, `tweet_image` category) and sets its alt text.
+ * Returns the media id to reference from a tweet. Multipart bodies carry no
+ * OAuth 1.0a body parameters, so the signature covers the URL only. Throws on
+ * any failure; callers decide whether the post goes out without the image.
+ */
+export async function uploadMediaToX(input: XMediaInput): Promise<{ mediaId: string }> {
+  const status = xStatus();
+  if (!status.ready) throw new Error(`X media upload not configured. Missing: ${status.missing.join(", ")}`);
+  if (input.bytes.length === 0) throw new Error("media upload: empty file");
+  if (input.bytes.length > X_IMAGE_MAX_BYTES) throw new Error(`media upload: ${input.bytes.length} bytes exceeds the ${X_IMAGE_MAX_BYTES} byte simple-upload limit`);
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(input.mimeType)) throw new Error(`media upload: unsupported type ${input.mimeType}`);
+
+  const uploadUrl = "https://api.x.com/2/media/upload";
+  const form = new FormData();
+  form.set("media", new Blob([new Uint8Array(input.bytes)], { type: input.mimeType }), `image.${input.mimeType.split("/")[1]}`);
+  form.set("media_category", "tweet_image");
+  form.set("media_type", input.mimeType);
+  const res = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { authorization: await authHeader("POST", uploadUrl) },
+    body: form,
+    signal: AbortSignal.timeout(45_000),
+  });
+  const json = (await res.json().catch(() => ({}))) as { data?: { id?: string; media_key?: string }; title?: string; detail?: string; errors?: unknown };
+  const mediaId = json.data?.id;
+  if (!res.ok || !mediaId) {
+    throw new Error(`X media API ${res.status}: ${json.detail ?? json.title ?? JSON.stringify(json.errors ?? json).slice(0, 300)}`);
+  }
+
+  /* Alt text is best effort: a failure here leaves the image attached without a description. */
+  const alt = input.alt.trim().slice(0, 1000);
+  if (alt) {
+    const metaUrl = "https://api.x.com/2/media/metadata";
+    await fetch(metaUrl, {
+      method: "POST",
+      headers: { authorization: await authHeader("POST", metaUrl), "content-type": "application/json" },
+      body: JSON.stringify({ id: mediaId, metadata: { alt_text: { text: alt } } }),
+      signal: AbortSignal.timeout(20_000),
+    }).catch(() => undefined);
+  }
+  return { mediaId };
 }
 
 /**
@@ -177,6 +233,10 @@ export function splitForThread(body: string, isThread: boolean): string[] {
 export interface PublishResult {
   url: string;
   tweetIds: string[];
+  /** Media ids attached to the first tweet (empty when none were requested or every upload failed). */
+  mediaIds: string[];
+  /** One line per image that could not be uploaded; the post still went out. */
+  mediaErrors: string[];
 }
 
 export interface DryRunResult {
@@ -204,9 +264,10 @@ export async function dryRunToX(body: string, isThread: boolean): Promise<DryRun
  * Posts a draft as a tweet or reply-chained thread. Throws if creds are
  * missing or the shared-account guards (rate caps, duplicate memory,
  * self-interaction) refuse the post. Successful posts land in the local post
- * log so the guards see them.
+ * log so the guards see them. Up to four images ride on the first tweet;
+ * an image that fails to upload is reported, never a reason to hold the post.
  */
-export async function publishToX(body: string, isThread: boolean): Promise<PublishResult> {
+export async function publishToX(body: string, isThread: boolean, media: XMediaInput[] = []): Promise<PublishResult> {
   const status = xStatus();
   if (!status.ready) {
     throw new Error(
@@ -219,14 +280,25 @@ export async function publishToX(body: string, isThread: boolean): Promise<Publi
   }
   const tweets = splitForThread(body, isThread);
   if (tweets.length === 0) throw new Error("Nothing to post: draft body is empty");
+
+  const mediaIds: string[] = [];
+  const mediaErrors: string[] = [];
+  for (const m of media.slice(0, 4)) {
+    try {
+      mediaIds.push((await uploadMediaToX(m)).mediaId);
+    } catch (err) {
+      mediaErrors.push(String(err).slice(0, 200));
+    }
+  }
+
   const ids: string[] = [];
   for (const t of tweets) {
     const prev = ids.at(-1);
-    const posted = await postTweet(t, prev);
+    const posted = await postTweet(t, prev, ids.length === 0 ? mediaIds : undefined);
     ids.push(posted.id);
     if (tweets.length > 1) await new Promise((r) => setTimeout(r, 1_200));
   }
   const url = `https://x.com/i/web/status/${ids[0]}`;
   await recordXPost({ url, firstTweetId: ids[0], text: body });
-  return { url, tweetIds: ids };
+  return { url, tweetIds: ids, mediaIds, mediaErrors };
 }

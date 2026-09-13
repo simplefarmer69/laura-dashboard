@@ -9,7 +9,8 @@ import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { forgeAnnounceMock, forgeAnnouncePrompt, forgeAnnounceSchema } from "@/lib/swarm/tasks";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
-import type { Draft, ForgeProject, SwarmState } from "@/lib/types";
+import { captureScreenshot } from "@/lib/publish/screenshot";
+import type { Draft, DraftMedia, ForgeProject, SwarmState } from "@/lib/types";
 
 /**
  * Anvil execution: puts the contracts Anvil wrote on Robinhood Chain and gets
@@ -176,6 +177,20 @@ export function forgeAnnounceFallback(project: ForgeProject): string {
 }
 
 /** Writes the X post announcing a verified contract as an approved draft so the normal X gates read it. */
+/**
+ * Picture for a flagship announcement: the flagship's own frontend (The Lab
+ * for the market and its registry). Null for prompt-designed contracts (they
+ * have no frontend of ours) and whenever Chromium cannot deliver.
+ */
+export async function flagshipScreenshot(project: ForgeProject): Promise<DraftMedia | null> {
+  const spec = flagshipSpec(project);
+  if (!spec?.frontendUrl) return null;
+  return captureScreenshot(spec.frontendUrl, {
+    name: `flagship-${spec.key}`,
+    alt: `${spec.title} on Robinhood Chain: ${spec.frontendUrl}. ${spec.blurb}`.slice(0, 1000),
+  });
+}
+
 async function announceVerified(state: SwarmState, project: ForgeProject): Promise<string> {
   const resolved = resolveModel(state.settings.llmModel);
   let body = forgeAnnounceFallback(project);
@@ -198,6 +213,10 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
   } catch (err) {
     log(`announcement model call failed (${String(err).slice(0, 120)}); using the deterministic line`);
   }
+  /* A flagship with a frontend is announced with a picture of that frontend
+     (operator, 2026-09-13: "with a link to what it does and screenshots if
+     possible"). Best effort: no picture, text-only post. */
+  const media = await flagshipScreenshot(project);
   const draftId = newId("draft");
   await updateState((s) => {
     const autonomous = s.settings.autoApproveProposals;
@@ -219,6 +238,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
       reviewerNote: autonomous ? AUTO_APPROVE_NOTE : null,
       publishedUrl: null,
       autoPublishNote: null,
+      media: media ? [media] : null,
     };
     s.drafts.push(draft);
     const smith = s.agents.find((a) => a.id === "smith");

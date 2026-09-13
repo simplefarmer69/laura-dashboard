@@ -412,6 +412,21 @@ export interface Draft {
   editorNote?: string | null;
   /** The producer's text before Redline rewrote it, kept so the producer can learn from the diff. */
   originalBody?: string | null;
+  /**
+   * Images to attach when the X rail posts this draft (screenshots of a live
+   * surface the post points at). Files live under SWARM_DATA_DIR/media; a
+   * missing or failed upload never blocks the post, the text goes out alone.
+   */
+  media?: DraftMedia[] | null;
+}
+
+export interface DraftMedia {
+  /** File name under SWARM_DATA_DIR/media (no directories). */
+  file: string;
+  /** Alt text for the image, written for a screen reader. */
+  alt: string;
+  /** Where the screenshot was taken from, for the record. */
+  sourceUrl?: string;
 }
 
 export type ProposalStatus = "pending" | "approved" | "rejected";

@@ -188,14 +188,22 @@ const PLAYWRIGHT_MODULE = "playwright";
 export interface PlaywrightLike {
   chromium: {
     launch(opts: { headless: boolean; executablePath?: string }): Promise<{
-      newContext(opts: { userAgent: string; javaScriptEnabled: boolean }): Promise<{
+      newContext(opts: {
+        userAgent: string;
+        javaScriptEnabled: boolean;
+        viewport?: { width: number; height: number };
+        deviceScaleFactor?: number;
+        colorScheme?: "dark" | "light";
+      }): Promise<{
         newPage(): Promise<{
-          goto(url: string, opts: { waitUntil: "domcontentloaded"; timeout: number }): Promise<unknown>;
+          goto(url: string, opts: { waitUntil: "domcontentloaded" | "load" | "networkidle"; timeout: number }): Promise<unknown>;
           title(): Promise<string>;
           url(): string;
           evaluate<T>(fn: () => T): Promise<T>;
           evaluate<T, A>(fn: (arg: A) => T | Promise<T>, arg: A): Promise<T>;
           waitForTimeout(ms: number): Promise<void>;
+          waitForLoadState(state: "load" | "domcontentloaded" | "networkidle", opts?: { timeout: number }): Promise<void>;
+          screenshot(opts: { type: "png" | "jpeg"; fullPage?: boolean; quality?: number }): Promise<Buffer>;
           close(): Promise<void>;
         }>;
         close(): Promise<void>;

@@ -4,6 +4,7 @@ import { loadState, pushEvent, saveState, updateState } from "@/lib/store";
 import { dryRunToX, publishToX, xStatus } from "@/lib/publish/x";
 import { checkXGuards } from "@/lib/publish/x-guard";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
+import { loadDraftMedia } from "@/lib/publish/screenshot";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,8 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/drafts/[id]
     );
 
   try {
-    const result = await publishToX(text, false);
+    const media = await loadDraftMedia(draft);
+    const result = await publishToX(text, false, media.inputs);
     const updated = await updateState((s) => {
       const d = s.drafts.find((x) => x.id === id);
       if (!d) return null;
