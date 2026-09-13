@@ -193,7 +193,7 @@ export async function flagshipScreenshot(project: ForgeProject): Promise<DraftMe
 }
 
 /** Announcement drafts per project: the first, then redrafts after a hold or veto at the X gate. */
-export const MAX_ANNOUNCE_ATTEMPTS = 3;
+export const MAX_ANNOUNCE_ATTEMPTS = 4;
 /** Gap between a refused announcement and its redraft (lets the same cycle's reviewers finish). */
 const REANNOUNCE_GAP_MS = 20 * 60_000;
 
