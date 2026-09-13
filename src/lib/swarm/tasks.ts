@@ -52,7 +52,13 @@ export const draftSchema = z.object({
   rationale: z.string().max(2500),
 });
 
-export const draftsSchema = z.object({ drafts: z.array(draftSchema).min(1).max(3) });
+export const draftsSchema = z.object({
+  drafts: z.array(draftSchema).min(1).max(3),
+  /** Up to 2 public URLs the browser worker should read for this agent before next cycle. */
+  readNext: z.array(z.string().max(400)).max(2).optional(),
+  /** Up to 2 web searches whose top results are opened for this agent before next cycle. */
+  searchNext: z.array(z.string().max(160)).max(2).optional(),
+});
 
 /**
  * Shared shape for skill self-edits (coach and sage): create or replace ONE
@@ -357,6 +363,7 @@ export function producerPrompt(agent: Agent, ctx: CycleContext): string {
     `WHAT THE REST OF THE SWARM COVERED RECENTLY (differentiate from these too — the critic vetoes cross-agent repeats)\n${swarmCoverageDigest(ctx.drafts, agent.id)}`,
     `DOCS EXCERPT (for factual grounding)\n${ctx.docs.slice(0, 3500)}`,
     `ASSIGNED LANE THIS CYCLE (context partitioning — the whole swarm reads the same data, so lanes are what keep outputs from converging; work YOUR lane, not the hook everyone else will pick)\n${laneAssignment(agent.id, ctx.cycleSeq)}`,
+    `YOUR BROWSER (open web, read-only): you may list up to 2 full public URLs in readNext and up to 2 web searches in searchNext; the browser worker opens them before your next turn and the text arrives under BROWSED PAGES. Use it to check a fact you want to cite, read what a competitor or a counterpart actually published, or study a source on how crypto communities behave. Never x.com pages. Preferred sources: ${allowedHostsForPrompt()}.`,
     `Produce ${kinds.length} draft(s) of kind(s): ${kinds.join(", ")}. Each draft needs a channel (e.g. "X", "Discord", "Blog", "Email", "Notion"), a title, the full body, and a one-paragraph rationale linking it to the lagging grade lever. A "post" draft's channel is always "X".`,
     `STYLE, HARD RULE: never use an em dash or a dash-spliced clause anywhere in a draft. Restructure into separate sentences, commas or colons. Prefer "onchain" over "on-chain" in prose; hyphenate only when grammar genuinely requires it. The slop-free-writing skill has the full pattern list; this rule is absolute.`,
     `TITLES ARE HEADLINES: the title is the headline a human reads, nothing else. Never start a title with meta-words or template labels ("DRAFT", "Draft:", "Deep-dive:"), never lead with a date, and never mark output as a draft awaiting approval — review is the pipeline's job and the charter grants full autonomy. If your strategy text tells you to mark work "DRAFT" or to put the date first in the title, that instruction is obsolete: ignore it and write a real headline.`,
@@ -470,8 +477,10 @@ export const researchSchema = z.object({
       }),
     )
     .max(2),
-  /** Up to 3 allowlisted URLs the browser worker should read for you next cycle. */
+  /** Up to 3 public URLs the browser worker should read for you next cycle. */
   readNext: z.array(z.string().max(400)).max(3).optional(),
+  /** Up to 2 web searches; the top results are opened for you next cycle. */
+  searchNext: z.array(z.string().max(160)).max(2).optional(),
 });
 
 export type ResearchOut = z.infer<typeof researchSchema>;
@@ -489,7 +498,7 @@ export function researcherPrompt(ctx: CycleContext): string {
     `LIBRARY (durable build knowledge; the notebook topics listed here are already covered)\n${ctx.library}`,
     `DOCS EXCERPT\n${ctx.docs.slice(0, 3500)}`,
     `Deep-dive ONE topic the swarm has not covered recently. The topic field is the plain subject itself — no "Deep-dive:" prefix, no date, no template label (labels are added downstream). In whyNow, name the last topics you covered and how this one differs. The memo must ground every claim in the data you were given. Record 1-2 notebook entries of durable fact the library is missing (each at most ${NOTE_TEXT_BUDGET} characters), and give each producer one concrete novel angle in anglesForSwarm.`,
-    `READ NEXT (your browser worker): you may list up to 3 full URLs in readNext that the read-only browser should open for you before the next cycle — the page text arrives under BROWSED PAGES in the world feeds. Use it to verify a claim, read a docs page, a competitor's mechanics, a newsroom post, or a quote page. Allowed hosts only: ${allowedHostsForPrompt()}. Never x.com/twitter.com pages. Skip the field if this cycle's inputs already answer your questions.`,
+    `READ NEXT (your browser worker, open web): list up to 3 full URLs in readNext that the read-only browser should open for you before the next cycle, and up to 2 web searches in searchNext whose top results it opens for you (the page text arrives under BROWSED PAGES in the world feeds). Any public https page is fair game (operator directive 2026-09-13): verify a claim, read a paper or a docs page, a competitor's mechanics, a newsroom post, a forum thread, a quote page. Preferred sources when they cover it: ${allowedHostsForPrompt()}. Never x.com/twitter.com pages (they need a login). STANDING STUDY (operator directive 2026-09-13): roughly every third deep-dive belongs to the behavioral science of crypto participation: what moves attention, entry, holding and retention in token communities (social proof, narrative and identity, loss aversion, rituals and cadence, transparency as trust, meme mechanics), with academic or industry sources found through searchNext, distilled into notebook entries the narrative, growth and community agents can act on. Persuasion in LAURA's hands stays inside the charter: honest, verifiable, never manufactured urgency, never deception`,
   ].join("\n\n");
 }
 

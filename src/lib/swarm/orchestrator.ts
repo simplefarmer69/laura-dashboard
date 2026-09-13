@@ -73,7 +73,7 @@ import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { runTreasurer } from "@/lib/swarm/treasurer";
 import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
-import { browseCandidates, browseDigest, browsePages, requestBrowse } from "@/lib/swarm/browser";
+import { browseCandidates, browseDigest, browsePages, requestBrowse, requestSearch } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
 import { coachProposalBudget, mintGate, mintQueueLimit, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
 import { builderGate } from "@/lib/builder/caps";
@@ -576,7 +576,10 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             refId: rec.entry.id,
           });
         }
-        const queued = r.readNext?.length ? await requestBrowse(r.readNext, "researcher", r.topic) : [];
+        const queued = [
+          ...(r.readNext?.length ? await requestBrowse(r.readNext, "researcher", r.topic) : []),
+          ...(r.searchNext?.length ? await requestSearch(r.searchNext, "researcher", r.topic) : []),
+        ];
         markRan(researcher);
         step({
           agentId: "researcher",
@@ -625,6 +628,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           ),
         );
         const accepted = out.value.value.drafts.slice(0, budget);
+        if (out.value.value.readNext?.length) await requestBrowse(out.value.value.readNext, id, `${agent.name} asked`);
+        if (out.value.value.searchNext?.length) await requestSearch(out.value.value.searchNext, id, `${agent.name} asked`);
         let rejectedForRepetition = 0;
         const autoApprove = state.settings.autoApproveProposals;
         for (const d of accepted) {
