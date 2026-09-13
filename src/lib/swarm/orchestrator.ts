@@ -69,6 +69,7 @@ import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recentXPosts } from "@/lib/publish/x-guard";
 import { recentXPostsDigest } from "@/lib/publish/x-style";
+import { robinhoodPeopleDigest } from "@/lib/publish/x-people";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
@@ -423,7 +424,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       skills,
       opsHealth: runsDigest(state.runs.filter((r) => r.id !== run.id)),
       priceTrend: priceTrendDigest(state.metricsHistory, grader.value.metrics),
-      intel: intelText,
+      intel: `${intelText}\n\n${await robinhoodPeopleDigest().catch(() => "")}`,
       world: worldText,
       onchain: onchainText,
       cycleSeq: state.runs.length,

@@ -11,6 +11,7 @@ import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
 import { runBuilderTick } from "@/lib/builder/executor";
 import { runXPublishTick } from "@/lib/publish/auto";
 import { runXMentionsTick } from "@/lib/publish/mentions";
+import { runXPeopleTick } from "@/lib/publish/x-people";
 import { refreshXPostMetrics } from "@/lib/publish/x-metrics";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
@@ -308,6 +309,14 @@ async function tick(): Promise<void> {
     await runXMentionsTick(state);
   } catch (err) {
     log(`x mentions tick failed: ${String(err)}`);
+  }
+
+  /* Robinhood people: discover staff by their own public bios (6h stride)
+     and follow them from the account, one per 90 s, 25 per day. */
+  try {
+    await runXPeopleTick(state);
+  } catch (err) {
+    log(`x people tick failed: ${String(err)}`);
   }
 
   /* Read-back: engagement counters for the account's own recent posts

@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { checkXGuards, recordXPost, type XGuardVerdict } from "@/lib/publish/x-guard";
+import { checkXGuards, recordXPost, X_ACCOUNT_USER_ID, type XGuardVerdict } from "@/lib/publish/x-guard";
 import { currentOauth2Token, forceOauth2Refresh } from "@/lib/publish/x-oauth2";
 
 /**
@@ -42,7 +42,7 @@ function pct(s: string): string {
   return encodeURIComponent(s).replace(/[!*'()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
-function oauthHeader(method: "POST", url: string): string {
+function oauthHeader(method: "POST" | "GET" | "DELETE", url: string): string {
   const params: Record<string, string> = {
     oauth_consumer_key: process.env.X_API_KEY ?? "",
     oauth_nonce: randomBytes(16).toString("hex"),
@@ -66,7 +66,7 @@ function oauthHeader(method: "POST", url: string): string {
 }
 
 /** OAuth 1.0a when the full key set exists, else the (auto-refreshed) OAuth 2.0 user token. */
-async function authHeader(method: "POST", url: string): Promise<string> {
+async function authHeader(method: "POST" | "GET" | "DELETE", url: string): Promise<string> {
   const s = xStatus();
   if (s.appKeys && s.accessKeys) return oauthHeader(method, url);
   const token = await currentOauth2Token();
@@ -122,6 +122,28 @@ export async function replyOnX(text: string, toTweetId: string): Promise<{ id: s
   if (t.length === 0 || t.length > TWEET_MAX) throw new Error(`Reply must be 1-${TWEET_MAX} chars (got ${t.length})`);
   const posted = await postTweet(t, toTweetId);
   return { id: posted.id, url: `https://x.com/i/web/status/${posted.id}` };
+}
+
+/**
+ * Follows one account from LAURA's X account (OAuth 1.0a user context,
+ * `POST /2/users/:id/following`). The only social-graph write the account
+ * makes; the Robinhood-people rail owns the caps and the ledger. Idempotent
+ * on X's side: following an account already followed returns following:true.
+ */
+export async function followOnX(targetUserId: string): Promise<{ following: boolean; pending: boolean }> {
+  const status = xStatus();
+  if (!(status.appKeys && status.accessKeys)) throw new Error("X follow needs the OAuth 1.0a key set");
+  if (!/^\d{1,25}$/.test(targetUserId)) throw new Error("target user id must be numeric");
+  const url = `https://api.x.com/2/users/${X_ACCOUNT_USER_ID}/following`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { authorization: oauthHeader("POST", url), "content-type": "application/json" },
+    body: JSON.stringify({ target_user_id: targetUserId }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = (await res.json()) as { data?: { following: boolean; pending_follow: boolean }; title?: string; detail?: string; errors?: unknown };
+  if (!res.ok || !json.data) throw new Error(`X API ${res.status}: ${json.detail ?? json.title ?? JSON.stringify(json.errors ?? json)}`);
+  return { following: json.data.following, pending: json.data.pending_follow };
 }
 
 /**
