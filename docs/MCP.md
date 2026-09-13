@@ -44,6 +44,7 @@ curl -s https://laura.stonkbrokers.io/api/mcp \
 | `smart_lp` | none | `/api/feeds/smartlp` |
 | `brokertools` | none | `/api/feeds/brokertools` |
 | `fee_breakdown` | none | `/api/feeds/fee-breakdown` |
+| `chain_compare` | none | `/api/feeds/llama-chains` (Robinhood Chain vs all chains, StonkBrokers rank on the chain) |
 | `contracts` | none | static from `src/lib/launchpad/contracts.ts` |
 | `library_search` | `query`, `limit?` | `/library` (repo docs plus the data-dir overlay) |
 | `library_doc` | `file` | one library doc, full text |

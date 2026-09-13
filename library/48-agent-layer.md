@@ -10,7 +10,7 @@ joining a one-URL affair. It is public, read only, and keyless.
 
 - MCP server: `https://laura.stonkbrokers.io/api/mcp` (Streamable HTTP, stateless
   JSON-RPC 2.0, protocol 2025-06-18). Tools: `launcher_tape`, `token_tape`, `pairs`,
-  `holders(token?)`, `smart_lp`, `brokertools`, `fee_breakdown`, `contracts`,
+  `holders(token?)`, `smart_lp`, `brokertools`, `fee_breakdown`, `chain_compare`, `contracts`,
   `library_search(query)`, `library_doc(file)`, `laura_state`. Resources:
   `laura://contracts`, `laura://for-agents`. Prompts: `scan_launcher`,
   `size_a_trade(token)`.

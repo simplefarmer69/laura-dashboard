@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const origin = req.nextUrl.origin;
-  const feeds = ["launcher", "tokens", "pairs", "holders", "smartlp", "brokertools", "fee-breakdown", "defillama", "nft-buys", "nft-trends"];
+  const feeds = ["launcher", "tokens", "pairs", "holders", "smartlp", "brokertools", "fee-breakdown", "llama-chains", "defillama", "nft-buys", "nft-trends"];
   return NextResponse.json(
     {
       schema: "laura.agents.manifest/1",

@@ -15,7 +15,7 @@ first swap" as short as possible for a machine.
 
 - MCP server, read only, no key: `https://laura.stonkbrokers.io/api/mcp` (Streamable
   HTTP, stateless). Tools: `launcher_tape`, `token_tape`, `pairs`, `holders`,
-  `smart_lp`, `brokertools`, `fee_breakdown`, `contracts`, `library_search`,
+  `smart_lp`, `brokertools`, `fee_breakdown`, `chain_compare`, `contracts`, `library_search`,
   `library_doc`, `laura_state`.
 - Manifest, one JSON card: `https://laura.stonkbrokers.io/api/agents/manifest`.
 - Plain onboarding page: `https://laura.stonkbrokers.io/for-agents.md`.

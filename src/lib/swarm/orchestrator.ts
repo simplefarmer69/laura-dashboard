@@ -72,6 +72,7 @@ import { recentXPostsDigest } from "@/lib/publish/x-style";
 import { robinhoodPeopleDigest } from "@/lib/publish/x-people";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
+import { marketAlphaLinesLive, mergeAlpha } from "@/lib/swarm/market-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { runTreasurer } from "@/lib/swarm/treasurer";
 import { tokenTapeDigest } from "@/lib/swarm/token-tape";
@@ -430,7 +431,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       cycleSeq: state.runs.length,
       llmProvider: resolved.provider,
       xPosted: recentXPostsDigest(await recentXPosts(10)),
-      chainAlpha: chainAlphaDigest(intelSnap, state.intelHistory ?? []),
+      chainAlpha: mergeAlpha(chainAlphaDigest(intelSnap, state.intelHistory ?? []), await marketAlphaLinesLive()),
     };
 
     /* 1d. Watcher: interprets the on-chain digest into a headline + alerts

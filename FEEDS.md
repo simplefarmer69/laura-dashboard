@@ -70,6 +70,30 @@ Upstreams: `api.llama.fi/protocol/stonkbrokers`,
 bare `clutch-anvil` slug 400s). All four must succeed or the route falls
 back to the last good payload, so the DEX series never silently shrinks.
 
+## GET /api/feeds/llama-chains
+
+Robinhood Chain against all of crypto, from DeFiLlama's chain-level
+endpoints, plus StonkBrokers' rank among the protocols on the chain. Cached
+10 minutes module side plus a 300s CDN s-maxage; a failed upstream serves
+the last good snapshot. Feeds the MARKET lines of the swarm's CHAIN ALPHA
+block and the MCP tool `chain_compare`.
+
+- `tvl`: `usd`, `rank`, `chainsRanked`, `shareOfAllChainsPct`,
+  `allChainsUsd`, `change7dPct`, `change30dPct`, `topChains[]`,
+  `neighbours[]` (the chains ranked just above and below).
+- `dex` / `fees`: `usd24h`, `usd7d`, `change1dPct`, `change7dPct`,
+  `allChainsUsd24h`, `allChainsUsd7d`, `shareOfAllChains24hPct`,
+  `shareOfAllChains7dPct`, `protocolsOnChain`, `topOnChain[]`,
+  `ours[]` (StonkBrokers, Clutch Anvil AMM, BaseStonk with rank and volume).
+- `protocolTvl`: `protocolsOnChain`, `topOnChain[]`, `ours[]`.
+- `warnings[]`: the all-chains 24h fee or DEX total is occasionally polluted
+  by one protocol's bad day; when it exceeds 5x the 7d daily average the 24h
+  share is left `null` and a warning says so.
+
+Upstreams: `api.llama.fi/v2/chains`, `/v2/historicalChainTvl/Robinhood%20Chain`,
+`/overview/dexs/Robinhood%20Chain`, `/overview/dexs`,
+`/overview/fees/Robinhood%20Chain`, `/overview/fees`, `/protocols`.
+
 ## GET /api/feeds/espn
 
 Live and upcoming games across NFL, MLB and NBA from ESPN's public

@@ -6,6 +6,7 @@ import { GET as holdersFeed } from "@/app/api/feeds/holders/route";
 import { GET as smartLpFeed } from "@/app/api/feeds/smartlp/route";
 import { GET as brokertoolsFeed } from "@/app/api/feeds/brokertools/route";
 import { GET as feeBreakdownFeed } from "@/app/api/feeds/fee-breakdown/route";
+import { GET as llamaChainsFeed } from "@/app/api/feeds/llama-chains/route";
 import { LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { libraryDocs } from "@/lib/swarm/library";
@@ -279,6 +280,13 @@ const TOOLS: ToolDef[] = [
     description: "Where protocol fees come from: per-lane and per-venue fee and revenue breakdown for the Stonkbrokers protocol.",
     inputSchema: NO_ARGS,
     run: () => feedJson(feeBreakdownFeed),
+  },
+  {
+    name: "chain_compare",
+    description:
+      "Robinhood Chain against all of crypto (DeFiLlama): TVL rank and share among all chains with 7d/30d change, DEX volume and fees on the chain with their share of all-crypto totals, the top protocols on the chain, and where StonkBrokers ranks among them by volume, fees and TVL.",
+    inputSchema: NO_ARGS,
+    run: () => feedJson(llamaChainsFeed),
   },
   {
     name: "contracts",

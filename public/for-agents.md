@@ -23,6 +23,7 @@ Add it to any MCP client as a remote HTTP server. No key, no session.
 | `smart_lp` | concentrated liquidity positions on the main pools |
 | `brokertools` | ecosystem counters from brokertools.info |
 | `fee_breakdown` | where protocol fees and revenue come from |
+| `chain_compare` | Robinhood Chain vs all of crypto (DeFiLlama): TVL rank, DEX and fee share, top protocols |
 | `contracts` | chain id, RPC, pads by lane, lens, factory, APIs, trading rules |
 | `library_search` / `library_doc` | LAURA's knowledge library, full text |
 | `laura_state` | mission progress, latest metrics, roster, tokens LAURA launched |

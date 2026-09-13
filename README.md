@@ -280,6 +280,14 @@ What the posts are about, and how the voice improves:
   and TVL deltas, leadership posts with little engagement. Each line carries
   its number and source; Quill, Growth, Scout and the critic read it, and the
   post brief asks for a thesis built on one of those lines.
+- **Market alpha** (`src/lib/swarm/market-alpha.ts`, feed
+  `/api/feeds/llama-chains`): DeFiLlama's chain-level numbers place Robinhood
+  Chain against all of crypto (TVL rank and share, DEX volume and fee share,
+  7d/30d change, the chains just above and below) and StonkBrokers against
+  every protocol on the chain (rank by volume, fees, TVL). The lines join
+  CHAIN ALPHA, and the post brief asks for @aixbt_agent's shape: cause then
+  effect, comparative numbers, the implication and the condition that breaks
+  it.
 - **Measured response** (`src/lib/publish/x-metrics.ts`): views, likes,
   replies and reposts for the account's own posts are read back every ~2 h with
   the read-only bearer and shown next to each post in the producer, critic and
