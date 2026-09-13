@@ -134,13 +134,15 @@ async function fetchChunk(from: bigint, to: bigint): Promise<Inflow[]> {
   ]);
   const out: Inflow[] = [];
   for (const l of transfers) {
-    const value = l.args.value ?? 0n;
-    if (value <= 0n || l.blockNumber == null) continue;
-    const from = String(l.args.from ?? "").toLowerCase();
+    /* ERC-721 Transfer shares this topic0 with a third indexed topic; those
+     * logs (a lock NFT sent to the box) decode without args and are skipped. */
+    const value = l.args?.value ?? 0n;
+    if (value <= 0n || l.blockNumber == null || l.topics.length !== 3) continue;
+    const from = String(l.args?.from ?? "").toLowerCase();
     out.push({ block: l.blockNumber, token: l.address.toLowerCase(), value, source: DESK_BY_ADDRESS.get(from) ?? "vaults" });
   }
   for (const l of flushes) {
-    const value = (l.args.boosterAmount ?? 0n) + (l.args.protocolAmount ?? 0n);
+    const value = (l.args?.boosterAmount ?? 0n) + (l.args?.protocolAmount ?? 0n);
     if (value <= 0n || l.blockNumber == null) continue;
     out.push({ block: l.blockNumber, token: "eth", value, source: "eth" });
   }
