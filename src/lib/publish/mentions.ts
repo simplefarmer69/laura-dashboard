@@ -6,6 +6,7 @@ import { isViewerMode } from "@/lib/viewer/mode";
 import { X_ACCOUNT_HANDLE, X_ACCOUNT_PREVIOUS_HANDLE, X_ACCOUNT_USER_ID } from "@/lib/publish/x-guard";
 import { isAuthFailure, replyOnX, xStatus } from "@/lib/publish/x";
 import { sanitizeXPost, TWEET_MAX } from "@/lib/publish/x-style";
+import { looksLikeLaunchRequest, noteLaunchRequest } from "@/lib/publish/x-watch";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import { liveContext, PUBLIC_PERSONA, wrapUntrusted } from "@/lib/chat/laura";
@@ -322,6 +323,17 @@ export async function runXMentionsTick(state: SwarmState): Promise<void> {
       m.authorId === X_ACCOUNT_USER_ID ||
       authorHandle === X_ACCOUNT_HANDLE.toLowerCase() ||
       authorHandle === X_ACCOUNT_PREVIOUS_HANDLE.toLowerCase();
+    /* Launch requests feed the designers whether or not they are questions
+       (operator directive 2026-09-13: launches from X interactions). */
+    if (!selfAuthor && !m.isRetweet && !tagSpam(m.text) && looksLikeLaunchRequest(m.text)) {
+      await noteLaunchRequest({
+        tweetId: m.id,
+        author: m.author,
+        authorFollowers: m.authorFollowers,
+        text: m.text.slice(0, 400),
+        createdAt: m.createdAt,
+      }).catch(() => undefined);
+    }
     if (selfAuthor || m.isRetweet || tagSpam(m.text) || !looksLikeQuestion(m.text) || ageMs > MAX_MENTION_AGE_MS) {
       skipped += 1;
       finalize(m);
