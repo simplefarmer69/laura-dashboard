@@ -158,7 +158,11 @@ async function fetchVoice(voice: WatchedVoice, sinceId: string | null): Promise<
   });
 }
 
-/** Polls the one voice that is most overdue; the others wait for later ticks. */
+/**
+ * Polls every voice that is due (each at most once per PER_VOICE_INTERVAL_MS).
+ * Scheduler ticks are far apart when a swarm cycle is in flight, so polling
+ * one voice per tick would leave the later voices unread for hours.
+ */
 export async function runXWatchTick(): Promise<void> {
   if (isViewerMode()) return;
   const r = rs();
@@ -173,10 +177,13 @@ export async function runXWatchTick(): Promise<void> {
   const due = WATCHED_VOICES.filter((v) => (r.nextPollAt[v.username] ?? 0) <= now).sort(
     (a, b) => (r.nextPollAt[a.username] ?? 0) - (r.nextPollAt[b.username] ?? 0),
   );
-  const voice = due[0];
-  if (!voice) return;
-  r.nextPollAt[voice.username] = now + PER_VOICE_INTERVAL_MS;
+  for (const voice of due) {
+    r.nextPollAt[voice.username] = Date.now() + PER_VOICE_INTERVAL_MS;
+    await pollVoice(voice, r);
+  }
+}
 
+async function pollVoice(voice: WatchedVoice, r: ReturnType<typeof rs>): Promise<void> {
   const ledger = await readWatchLedger();
   let posts: WatchedPost[];
   try {
