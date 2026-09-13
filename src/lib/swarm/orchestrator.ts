@@ -122,10 +122,28 @@ const TRAINER_STRIDE_MS = 1.5 * 60 * 60_000;
    (run_6220e642, 2026-09-11). One process, one cycle, whichever module runs it. */
 declare global {
   var __lauraCycleInFlight: Promise<CycleRun> | null | undefined;
+  var __lauraCycleStartedAt: number | undefined;
 }
 
+/**
+ * A cycle older than this is treated as hung and its lock is released so the
+ * scheduler can finalize the orphan and start fresh. Host suspension on
+ * 2026-09-12 froze one call for two hours; with the lock held, no cycle,
+ * forum round or self-heal could run. Every model call now also carries its
+ * own timeout, so the zombie unwinds on its own shortly after.
+ */
+const CYCLE_HARD_LIMIT_MS = 90 * 60_000;
+
 export function isCycleRunning(): boolean {
-  return (globalThis.__lauraCycleInFlight ?? null) !== null;
+  const inFlight = globalThis.__lauraCycleInFlight ?? null;
+  if (inFlight === null) return false;
+  const startedAt = globalThis.__lauraCycleStartedAt ?? Date.now();
+  if (Date.now() - startedAt > CYCLE_HARD_LIMIT_MS) {
+    console.warn(`[laura] cycle in flight for ${Math.round((Date.now() - startedAt) / 60_000)} min: treating as hung and releasing the lock`);
+    globalThis.__lauraCycleInFlight = null;
+    return false;
+  }
+  return true;
 }
 
 /** Collects metrics, grades, records milestones. Shared by cycles and the daily stamp. */
@@ -178,9 +196,12 @@ export function runCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
   const inFlight = globalThis.__lauraCycleInFlight ?? null;
   if (inFlight) return inFlight;
   const p = executeCycle(trigger).finally(() => {
-    globalThis.__lauraCycleInFlight = null;
+    /* Only clear our own lock: a hung predecessor released by isCycleRunning
+       must not wipe the lock of the cycle that replaced it. */
+    if (globalThis.__lauraCycleInFlight === p) globalThis.__lauraCycleInFlight = null;
   });
   globalThis.__lauraCycleInFlight = p;
+  globalThis.__lauraCycleStartedAt = Date.now();
   return p;
 }
 

@@ -74,6 +74,14 @@ function schemaIssues(cause: string): string {
   }
 }
 
+/**
+ * Hard wall-clock cap per model call. On 2026-09-12 the host was suspended
+ * mid-request (22:10 to 23:56 UTC) and the socket never errored, so the cycle
+ * hung on one call for two hours with the in-flight lock held. A timed-out
+ * call falls into the same repair/mock path as any other failure.
+ */
+const LLM_CALL_TIMEOUT_MS = Number(process.env.SWARM_LLM_TIMEOUT_MS ?? 4 * 60_000);
+
 export async function generateStructured<T>(
   resolved: ResolvedModel,
   call: StructuredCall<T>,
@@ -86,6 +94,7 @@ export async function generateStructured<T>(
       system: call.system,
       prompt: call.prompt,
       maxRetries: 2,
+      abortSignal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
     });
     return { value: object, usedMock: false, repaired: false };
   } catch (err) {
@@ -103,6 +112,7 @@ export async function generateStructured<T>(
         system: call.system,
         prompt: `${call.prompt}\n\nYOUR PREVIOUS ATTEMPT FAILED SCHEMA VALIDATION.\nValidation error: ${cause.slice(0, 1200)}\nPrevious output (may be truncated):\n${(e.text ?? "").slice(0, 3000)}\n\nReturn a corrected response that satisfies the schema exactly. Respect every min/max length and enum.`,
         maxRetries: 1,
+        abortSignal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
       });
       return { value: object, usedMock: false, repaired: true };
     } catch (err2) {
@@ -130,6 +140,7 @@ export async function generateChat(
       system: call.system,
       messages: call.messages,
       maxRetries: 2,
+      abortSignal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
     });
     return { text, usedMock: false };
   } catch (err) {
