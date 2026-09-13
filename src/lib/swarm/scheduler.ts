@@ -14,7 +14,7 @@ import { runXMentionsTick } from "@/lib/publish/mentions";
 import { runXPeopleTick } from "@/lib/publish/x-people";
 import { runXWatchTick } from "@/lib/publish/x-watch";
 import { runLaunchCommentTick } from "@/lib/publish/launch-comment";
-import { runForgeTick } from "@/lib/forge/executor";
+import { runForgeAnnounceTick, runForgeTick } from "@/lib/forge/executor";
 import { refreshXPostMetrics } from "@/lib/publish/x-metrics";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
@@ -303,49 +303,11 @@ async function tick(): Promise<void> {
      inside FORGE_CAPS. Never throws. */
   await withChainWork("forge", () => runForgeTick(state));
 
-  /* Outbound: fresh approved X drafts post themselves inside the x-guard
-     caps (one per tick); silent no-op until the access keys exist. */
-  try {
-    await runXPublishTick(state);
-  } catch (err) {
-    log(`x auto-publish tick failed: ${String(err)}`);
-  }
-
-  /* Watched voices (Elon, Trump, Vitalik, Vlad): one timeline per tick, each
-     about every 20 min, into the ledger the launch designers read. */
-  try {
-    await runXWatchTick();
-  } catch (err) {
-    log(`x watch tick failed: ${String(err)}`);
-  }
-
-  /* Launch comments: once a launch built from an X post is live, one reply
-     under that post with the token (own caps inside). */
-  try {
-    await runLaunchCommentTick(state);
-  } catch (err) {
-    log(`launch comment tick failed: ${String(err)}`);
-  }
-
-  /* Inbound: people who tag @LAURA_DAIO with a question get one answer,
-     inside the mentions rail's own caps. Polls every 10 minutes. */
-  try {
-    await runXMentionsTick(state);
-  } catch (err) {
-    log(`x mentions tick failed: ${String(err)}`);
-  }
-
-  /* Robinhood people: discover staff by their own public bios (6h stride)
-     and follow them from the account, one per 90 s, 25 per day. */
-  try {
-    await runXPeopleTick(state);
-  } catch (err) {
-    log(`x people tick failed: ${String(err)}`);
-  }
-
-  /* Read-back: engagement counters for the account's own recent posts
-     (bearer, one request every ~2h). Feeds the voice study. Never throws. */
-  await refreshXPostMetrics();
+  /* Outbound rails (X publish, mentions, watched voices, launch comments,
+     people follows, metrics read-back, Anvil's announcement redraft) do NOT
+     run here: this tick awaits the cycle, so with back-to-back cycles it
+     fires two to four times an hour. They run on their own minute loop
+     (see startOutboundLoop) so a post goes out the minute its cap frees. */
 
   /* Daily grade first: with back-to-back cycles the "nothing due" branch
      below may never be reached, so the stamp must not depend on it. One
@@ -445,6 +407,57 @@ async function tick(): Promise<void> {
   log(`tick · next cycle in ~${minsToNext}m · budget ${used}/${state.settings.maxLlmCyclesPerDay} in 24h`);
 }
 
+/**
+ * Outbound rails on their own minute loop, decoupled from the cycle tick.
+ * The cycle tick awaits each LLM cycle (30-60 min) and each forum round, so
+ * anything living inside it ran only in the two to four quiet ticks an hour
+ * between them: The Lab announcement sat approved through a free cap slot at
+ * 18:37 UTC on 2026-09-13 until the cycle ended at 18:55. None of these
+ * touch the wallet; each has its own caps, strides and ledgers, and writes
+ * through updateState (merge-on-save), so they are safe beside a running
+ * cycle. One pass at a time: a slow pass (an LLM gate, an upload) is never
+ * overlapped by the next timer, which is what kept two publishers from
+ * picking the same draft.
+ */
+async function outboundPass(): Promise<void> {
+  const state = await loadState();
+  const step = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (err) {
+      log(`${label} tick failed: ${String(err)}`);
+    }
+  };
+  /* Anvil's redraft after a gate refusal: no wallet, one per pass. */
+  await step("forge announce", () => runForgeAnnounceTick(state));
+  /* Publishing is marked as in-flight work so a release switch does not land
+     between the tweet and its ledger write (a lost record means a repost). */
+  await step("x auto-publish", () => withChainWork("x-publish", () => runXPublishTick(state)));
+  await step("x watch", () => runXWatchTick());
+  await step("launch comment", () => runLaunchCommentTick(state));
+  await step("x mentions", () => runXMentionsTick(state));
+  await step("x people", () => runXPeopleTick(state));
+  await step("x metrics", () => refreshXPostMetrics());
+}
+
+function startOutboundLoop(): void {
+  let inFlight = false;
+  const run = async () => {
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      await outboundPass();
+    } catch (err) {
+      log(`outbound pass failed: ${String(err)}`);
+    } finally {
+      inFlight = false;
+    }
+  };
+  setInterval(() => void run(), TICK_MS);
+  setTimeout(() => void run(), 15_000);
+  log("outbound rails online (own minute loop: X publish, mentions, watch, comments, people, metrics, Anvil redraft)");
+}
+
 export function startScheduler(options: { firstTickDelayMs?: number } = {}): void {
   if (globalThis.__lauraSchedulerV2?.started) return;
   /* Retire any pre-V2 loop from an older module snapshot: its tick checks
@@ -484,4 +497,5 @@ export function startScheduler(options: { firstTickDelayMs?: number } = {}): voi
     }
   };
   setTimeout(() => void loop(), options.firstTickDelayMs ?? 0);
+  startOutboundLoop();
 }

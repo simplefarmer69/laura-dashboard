@@ -88,6 +88,14 @@ Mechanisms now in force, each traceable to a published finding:
 - **Cheap gates every tick, expensive work only when justified** (cascade scheduling):
   the scheduler's per-minute tick does cost-free checks (queue state, capacity, budget,
   trigger events) and only spends LLM cycles when the checks say it's worth it.
+- **Outbound rails never wait on a cycle** (2026-09-13). The cycle tick awaits each
+  LLM cycle, so anything inside it ran only in the quiet ticks between cycles: an
+  approved post sat through a free X cap slot for twenty minutes. X publishing,
+  mention replies, watched voices, launch comments, follows, metrics read-back and
+  Anvil's announcement redraft run on their own minute loop, one pass at a time.
+- **A refused announcement is redrafted, not abandoned.** When Redline holds or the
+  Auditor vetoes a contract announcement, Anvil writes the next draft with the gate's
+  reason in the prompt, at most three drafts per project.
 - **Budget before dispatch.** Check the daily cycle budget and machine capacity before
   starting work, not after. A deferred cycle retries next tick; nothing is lost.
 - **More cycles only pay if each cycle is different.** Cadence increases must ship with

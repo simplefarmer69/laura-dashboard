@@ -279,6 +279,33 @@ async function failProject(projectId: string, msg: string, title: string): Promi
 }
 
 /**
+ * Redraft an announcement the X gate refused (Redline hold or Auditor veto):
+ * the reason goes into the prompt, at most MAX_ANNOUNCE_ATTEMPTS drafts per
+ * project, one redraft per pass, no wallet involved. Runs on the outbound
+ * loop, not the cycle tick. The Lab's first announcement was held 2026-09-13
+ * 18:57 UTC for not saying what The Lab is; without this the project would
+ * have stayed unannounced forever.
+ */
+export async function runForgeAnnounceTick(state: SwarmState): Promise<void> {
+  const now = Date.now();
+  const projects = state.forgeProjects ?? [];
+  const refused = projects.find((p) => {
+    if (p.status !== "verified" || !p.announceDraftId) return false;
+    if ((p.announceAttempts ?? 1) >= MAX_ANNOUNCE_ATTEMPTS) return false;
+    const d = state.drafts.find((x) => x.id === p.announceDraftId);
+    return Boolean(d && d.status === "rejected" && now - (d.reviewedAt ?? d.createdAt) >= REANNOUNCE_GAP_MS);
+  });
+  if (!refused) return;
+  const prior = state.drafts.find((x) => x.id === refused.announceDraftId);
+  try {
+    const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason: prior?.reviewerNote ?? "refused at the X gate" });
+    log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${(refused.announceAttempts ?? 1) + 1}/${MAX_ANNOUNCE_ATTEMPTS})`);
+  } catch (err) {
+    log(`redraft for ${refused.title} failed: ${String(err).slice(0, 200)}`);
+  }
+}
+
+/**
  * Scheduler entry point. Advances at most one project by one step per tick.
  * Never throws; deploy failures back off 30 minutes and a project fails after
  * 3 consecutive errors.
@@ -290,31 +317,6 @@ export async function runForgeTick(state: SwarmState): Promise<void> {
   await seedFlagships(state);
   const now = Date.now();
   const projects = state.forgeProjects ?? [];
-
-  /* Redraft an announcement the X gate refused (Redline hold or Auditor
-     veto): the reason goes into the prompt, at most MAX_ANNOUNCE_ATTEMPTS
-     drafts per project, one redraft per tick, no wallet involved. The Lab's
-     first announcement was held 2026-09-13 18:57 UTC for not saying what
-     The Lab is; without this the project would stay unannounced forever. */
-  const refused = projects.find((p) => {
-    if (p.status !== "verified" || !p.announceDraftId) return false;
-    if ((p.announceAttempts ?? 1) >= MAX_ANNOUNCE_ATTEMPTS) return false;
-    const d = state.drafts.find((x) => x.id === p.announceDraftId);
-    return Boolean(d && d.status === "rejected" && now - (d.reviewedAt ?? d.createdAt) >= REANNOUNCE_GAP_MS);
-  });
-  if (refused) {
-    const prior = state.drafts.find((x) => x.id === refused.announceDraftId);
-    ops.running = true;
-    try {
-      const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason: prior?.reviewerNote ?? "refused at the X gate" });
-      log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${(refused.announceAttempts ?? 1) + 1}/${MAX_ANNOUNCE_ATTEMPTS})`);
-    } catch (err) {
-      log(`redraft for ${refused.title} failed: ${String(err).slice(0, 200)}`);
-    } finally {
-      ops.running = false;
-    }
-    return;
-  }
 
   /* Verification polling first: cheap, no wallet. */
   const deployed = projects.find((p) => p.status === "deployed" && p.contractAddress);
