@@ -55,6 +55,13 @@ function normalizeState(parsed: Partial<SwarmState>): SwarmState {
       ? { ...def, ...saved, role: def.role, objective: def.objective, stats: { ...def.stats, ...saved.stats } }
       : def;
   });
+  /* Agents the Architect created at runtime live only in state: keep them
+     (retired ones included, for the record) after the static roster. */
+  for (const saved of parsed.agents ?? []) {
+    if (saved.dynamic === true && !agents.some((a) => a.id === saved.id)) {
+      agents.push({ ...saved, stats: { ...saved.stats } });
+    }
+  }
   /* Retired sign-off tail ("I am LAURA, an AI; ... not a promise.") is
      scrubbed from stored launch copy on load; idempotent, lands on the next
      save through the normal merge. */

@@ -73,6 +73,8 @@ import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { runTreasurer } from "@/lib/swarm/treasurer";
 import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
+import { applyEditorReviews, editorMock, editorPrompt, editorSchema, isXPost } from "@/lib/publish/editor";
+import { ARCHITECT_STRIDE_MS, activeDynamicAgents, applyArchitectAction, architectMock, architectPrompt, architectSchema } from "@/lib/swarm/architect";
 import { browseCandidates, browseDigest, browsePages, requestBrowse, requestSearch } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
 import { coachProposalBudget, mintGate, mintQueueLimit, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
@@ -228,6 +230,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
      showing them "running" for a whole cycle they never take part in read as
      a stall on the dashboard (operator report 2026-09-11). */
   for (const a of state.agents) {
+    if (a.retiredAt) continue;
     if (a.status !== "paused" && !FORUM_ONLY_AGENTS.includes(a.id)) a.status = "running";
   }
   pushEvent(state, {
@@ -601,7 +604,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     const weakest = [...ctx.grade.components].sort((a, b) => a.score - b.score)[0];
     const producers = producerOrder(
       state,
-      AGENT_ORDER.filter((id) => !NON_PRODUCER_AGENTS.includes(id)),
+      [...AGENT_ORDER.filter((id) => !NON_PRODUCER_AGENTS.includes(id)), ...activeDynamicAgents(state).map((a) => a.id)],
       weakest.key,
     );
     let budget = state.settings.maxDraftsPerCycle;
@@ -886,6 +889,50 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         critic.lastError = String(err);
         step({ agentId: "critic", label: "Red-team review", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "critic", title: "Auditor failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+
+    /* 3c. Redline: readability pass over this cycle's X-bound posts. The
+       Auditor judges repetition and honesty; Redline judges whether a stranger
+       can read the post at all (operator report 2026-09-13: a published post
+       read as pipeline telemetry). Rewrites keep the original on the draft so
+       the producer learns from the diff; holds carry a lesson. */
+    const editor = agentById(state, "editor");
+    const xPosts = state.drafts.filter((d) => d.cycleId === run.id && d.status === "approved" && isXPost(d) && !d.editorVerdict);
+    if (editor.status === "paused") {
+      step({ agentId: "editor", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (xPosts.length === 0) {
+      step({ agentId: "editor", label: "Readability edit", status: "skipped", summary: "No X posts to read this cycle", durationMs: 0 });
+      editor.status = "idle";
+    } else {
+      try {
+        const recentForEditor = await recentXPosts(8).catch(() => []);
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: editorSchema,
+              system: agentSystem(editor),
+              prompt: editorPrompt({ drafts: xPosts, recent: recentForEditor, today: ctx.grade.date }),
+              mock: () => editorMock(xPosts),
+            }),
+          ),
+        );
+        const applied = applyEditorReviews(state, xPosts, out.value.value, out.value.usedMock);
+        markRan(editor);
+        step({
+          agentId: "editor",
+          label: "Readability edit",
+          status: "ok",
+          summary: `${xPosts.length} read: ${applied.passed} passed, ${applied.rewritten} rewritten, ${applied.held} held${applied.lessons.length ? ` · lesson: ${applied.lessons[0].slice(0, 140)}` : ""}${out.value.usedMock ? " (fallback: code flags only)" : ""}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        editor.status = "error";
+        editor.lastError = String(err);
+        step({ agentId: "editor", label: "Readability edit", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "editor", title: "Redline failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }
@@ -1242,7 +1289,13 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       const proposalBudget = coachProposalBudget(state);
       const overBudgetDropped: string[] = [];
       for (const p of out.value.value.proposals.slice(0, proposalBudget)) {
-        const target = agentById(state, p.agentId);
+        /* agentId is a free string in the schema (dynamic agents): unknown,
+           retired or self-targeting proposals are dropped here. */
+        const target = state.agents.find((a) => a.id === p.agentId);
+        if (!target || target.id === "coach" || target.retiredAt) {
+          overBudgetDropped.push(`${p.agentId} (not an active roster id)`);
+          continue;
+        }
         const hasPending = state.proposals.some((x) => x.agentId === target.id && x.status === "pending");
         if (hasPending) continue;
         /* Length rail: a revision may exceed the budget only if it shrinks the
@@ -1342,11 +1395,11 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       const dropped: string[] = [];
       for (const u of out.value.value.upgrades.slice(0, 2)) {
         /* Forge only touches its assigned queue; an off-target rewrite is dropped. */
-        if (!targetIds.has(u.agentId)) {
+        const target = state.agents.find((a) => a.id === u.agentId);
+        if (!target || !targetIds.has(target.id)) {
           dropped.push(`${u.agentId} (not in this run's queue)`);
           continue;
         }
-        const target = agentById(state, u.agentId);
         if (state.proposals.some((x) => x.agentId === target.id && x.status === "pending")) continue;
         if (u.proposedStrategy.length > STRATEGY_BUDGET_CHARS && u.proposedStrategy.length >= target.strategy.length) {
           dropped.push(`${target.id} (${u.proposedStrategy.length} chars over budget)`);
@@ -1395,6 +1448,53 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         summary: `Queue: ${targets.map((t) => `${t.id} v${t.strategyVersion}`).join(", ")} → ${created} upgrade(s)${state.settings.autoApplyStrategyProposals || state.settings.autoApproveProposals ? " auto-applied" : ""}${skipNote ? ` · kept: ${skipNote}` : ""}${dropped.length ? ` · dropped: ${dropped.join(", ")}` : ""}${out.value.usedMock ? " (fallback)" : ""}`,
         durationMs: out.ms,
       });
+      await saveState(state);
+    }
+
+    /* 5b. Hive: the swarm architect. Strided (~6h) and one action per run:
+       create a dynamic producer for an unowned job, rewrite a dynamic agent's
+       brief from evidence, or retire one. Caps re-checked in code. */
+    const architect = agentById(state, "architect");
+    if (architect.status === "paused") {
+      step({ agentId: "architect", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (architect.lastRunAt !== null && Date.now() - architect.lastRunAt < ARCHITECT_STRIDE_MS) {
+      step({
+        agentId: "architect",
+        label: "Roster design",
+        status: "skipped",
+        summary: `Strided: next roster pass in ~${Math.ceil((ARCHITECT_STRIDE_MS - (Date.now() - architect.lastRunAt)) / 60_000)} min · ${activeDynamicAgents(state).length} dynamic agent(s) alive`,
+        durationMs: 0,
+      });
+      architect.status = "idle";
+    } else {
+      try {
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: architectSchema,
+              system: agentSystem(architect),
+              prompt: architectPrompt(ctx, state),
+              mock: () => architectMock(state),
+            }),
+          ),
+        );
+        const applied = out.value.usedMock
+          ? { summary: "no live model; roster unchanged", changed: false }
+          : await applyArchitectAction(state, out.value.value);
+        markRan(architect);
+        step({
+          agentId: "architect",
+          label: "Roster design",
+          status: "ok",
+          summary: `${applied.summary} · ${out.value.value.assessment.slice(0, 200)}`,
+          durationMs: out.ms,
+        });
+      } catch (err) {
+        architect.status = "error";
+        architect.lastError = String(err);
+        step({ agentId: "architect", label: "Roster design", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "architect", title: "Hive failed", detail: String(err), refId: run.id });
+      }
       await saveState(state);
     }
 

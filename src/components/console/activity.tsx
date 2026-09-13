@@ -29,6 +29,8 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "forum.thread":
     case "forum.post":
     case "x.replied":
+    case "x.followed":
+    case "pipeline.noted":
     case "treasury.proposed":
     case "cycle.started":
     case "cycle.finished":
@@ -45,6 +47,11 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "tuner.adjusted":
     case "skill.updated":
     case "library.updated":
+    case "editor.rewrote":
+    case "editor.held":
+    case "roster.created":
+    case "roster.improved":
+    case "roster.retired":
       return "evolution";
     case "grade.stamped":
     case "milestone.reached":
@@ -110,10 +117,15 @@ export function kindTone(kind: SwarmEventKind): string {
     case "tuner.adjusted":
     case "skill.updated":
     case "library.updated":
+    case "editor.rewrote":
+    case "roster.created":
+    case "roster.improved":
+    case "pipeline.noted":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.approved":
     case "draft.published":
     case "x.replied":
+    case "x.followed":
     case "launch.approved":
     case "launch.deployed":
     case "launch.armed":
@@ -129,6 +141,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "utility.failed":
     case "novelty.rejected":
     case "critic.vetoed":
+    case "editor.held":
     case "swarm.health":
     case "error":
       return "bg-destructive/15 text-destructive";
@@ -145,6 +158,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "cycle.finished":
     case "agent.paused":
     case "agent.resumed":
+    case "roster.retired":
       return "bg-muted text-muted-foreground";
     default: {
       const _exhaustive: never = kind;

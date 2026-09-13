@@ -10,6 +10,7 @@ import {
   xAuditSchema,
   xPostProblems,
 } from "@/lib/publish/x-style";
+import { applyEditorReviews, editorMock, editorPrompt, editorSchema, readabilityProblems } from "@/lib/publish/editor";
 import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { agentSystem } from "@/lib/swarm/tasks";
 import { utcDate } from "@/lib/grader/score";
@@ -29,11 +30,15 @@ import type { Draft, SwarmState } from "@/lib/types";
  *   1. sanitizer: banned openers/sign-offs and dashes stripped in code;
  *   2. style checks: length, thread markers, filler, and repetition against
  *      the account's own recent posts (opening, closing, statistics, overlap);
- *   3. the Auditor (critic agent) reads the exact text with the recent posts
+ *   3. Redline (editor agent) has read it for a stranger's comprehension,
+ *      in the cycle or here at the gate: a post without an editor verdict is
+ *      read now; a held post never ships; deterministic readability flags
+ *      (pipeline jargon, bare counters, no subject) refuse a post outright;
+ *   4. the Auditor (critic agent) reads the exact text with the recent posts
  *      beside it and passes, vetoes, or returns a light edit that code then
  *      verifies added nothing.
  * A veto rejects the draft with the auditor's reason so the producer sees it
- * next cycle under RECENT REVIEWER DECISIONS.
+ * next cycle under RECENT REVIEWER DECISIONS and LEARN FROM YOUR DENIED POSTS.
  */
 
 const FRESH_WINDOW_MS = 6 * 3600_000;
@@ -178,6 +183,57 @@ export async function runXPublishTick(state: SwarmState): Promise<void> {
       await veto(draft, `style check: ${problems.join("; ")}`);
       log(`${draft.id} vetoed by style checks: ${problems.join("; ")}`);
       continue;
+    }
+
+    /* Readability, code level: the 00:05 UTC 2026-09-13 post ("skip the
+       third call and the sale clock never starts ... 1089 to 1113") passed
+       every gate above because none of them asked whether a reader could
+       follow it. These flags are the part of that question a regex can see. */
+    const unreadable = readabilityProblems(clean.text);
+    if (unreadable.length > 0) {
+      await veto(draft, `readability: ${unreadable.join("; ")}`);
+      log(`${draft.id} vetoed by readability checks: ${unreadable.join("; ")}`);
+      continue;
+    }
+
+    /* Redline at the gate: a post the cycle's editor pass never read (older
+       draft, editor paused, editor errored) is read now with a live model.
+       No live model means no post: the account stays silent rather than
+       publish something nobody read for a stranger. */
+    if (draft.editorVerdict !== "pass" && draft.editorVerdict !== "rewrite") {
+      if (audits >= MAX_AUDITS_PER_TICK) return;
+      audits += 1;
+      const editor = state.agents.find((a) => a.id === "editor");
+      const read = await generateStructured(resolved, {
+        schema: editorSchema,
+        system: editor ? agentSystem(editor) : "You are Redline, the readability editor for the @LAURA_DAIO X account.",
+        prompt: editorPrompt({ drafts: [draft], recent, today: utcDate() }),
+        mock: () => editorMock([draft]),
+      });
+      if (read.usedMock) {
+        s.nextAttemptAt = Date.now() + ERROR_BACKOFF_MS;
+        log(`${draft.id} held: editor offline (no live model); retrying in ${ERROR_BACKOFF_MS / 60_000} min rather than posting unread`);
+        return;
+      }
+      let verdict: "pass" | "rewrite" | "hold" = "hold";
+      let rewritten = draft.body;
+      await updateState((st) => {
+        const d = st.drafts.find((x) => x.id === draft.id);
+        if (!d) return null;
+        applyEditorReviews(st, [d], read.value, false);
+        verdict = d.editorVerdict ?? "hold";
+        rewritten = d.body;
+        return d;
+      });
+      if (verdict === "hold") {
+        log(`${draft.id} held by Redline at the gate`);
+        continue;
+      }
+      if (verdict === "rewrite") {
+        draft.body = rewritten;
+        clean.text = sanitizeXPost(rewritten).text;
+        log(`${draft.id} rewritten by Redline at the gate`);
+      }
     }
 
     const guard = await checkXGuards(clean.text);

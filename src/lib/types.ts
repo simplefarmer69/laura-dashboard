@@ -269,7 +269,7 @@ export interface DailyGrade {
   summary: string;
 }
 
-export type AgentId =
+export type KnownAgentId =
   | "scout"
   | "watcher"
   | "researcher"
@@ -280,15 +280,32 @@ export type AgentId =
   | "growth"
   | "vault"
   | "critic"
+  /** Redline: readability editor for everything bound for the X account. */
+  | "editor"
   | "mint"
   | "builder"
   | "coach"
   | "sage"
   | "trainer"
+  /** Hive: swarm architect; creates, improves and retires dynamic agents. */
+  | "architect"
+  /** Nudge: behavioral analyst (honest-persuasion producer). */
+  | "behaviorist"
+  /** Relay: agentic-trader ambassador (outreach to agent builders and bot operators). */
+  | "ambassador"
   | "smartlp"
   | "nftintel"
   | "tokenintel"
   | "treasurer";
+
+/**
+ * Agents the Architect creates at runtime carry a `dyn_` id. They live only
+ * in state (never in DEFAULT_AGENTS) and are draft producers with the kinds
+ * the Architect assigned.
+ */
+export type DynamicAgentId = `dyn_${string}`;
+
+export type AgentId = KnownAgentId | DynamicAgentId;
 
 export type AgentStatus = "idle" | "running" | "error" | "paused";
 
@@ -324,6 +341,16 @@ export interface Agent {
     rejected: number;
     published: number;
   };
+  /** True for agents the Architect created at runtime (id `dyn_*`). */
+  dynamic?: boolean;
+  createdAt?: number;
+  /** Agent that created this one (the Architect) or "operator". */
+  createdBy?: string;
+  /** Draft kinds a dynamic producer writes; static producers use the code table. */
+  kinds?: DraftKind[];
+  /** Set when the Architect retired the agent; retired agents keep their record but never run. */
+  retiredAt?: number | null;
+  retiredReason?: string | null;
 }
 
 export type DraftKind =
@@ -357,6 +384,12 @@ export interface Draft {
   publishedUrl?: string | null;
   /** Why the autonomous X rail skipped or failed this draft (it stays approved for manual publishing). */
   autoPublishNote?: string | null;
+  /** Redline's readability verdict on an X-bound post; the rail refuses to post without one. */
+  editorVerdict?: "pass" | "rewrite" | "hold" | null;
+  /** Redline's reason (what a stranger could not follow, or what the rewrite changed). */
+  editorNote?: string | null;
+  /** The producer's text before Redline rewrote it, kept so the producer can learn from the diff. */
+  originalBody?: string | null;
 }
 
 export type ProposalStatus = "pending" | "approved" | "rejected";
@@ -548,6 +581,20 @@ export type SwarmEventKind =
   | "library.updated"
   /** LAURA answered someone who tagged @LAURA_DAIO on X with a question. */
   | "x.replied"
+  /** LAURA's X account followed a public Robinhood-affiliated account. */
+  | "x.followed"
+  /** Redline rewrote an X-bound post so a stranger can read it (original kept on the draft). */
+  | "editor.rewrote"
+  /** Redline held an X-bound post that no rewrite could save; the producer reads why next cycle. */
+  | "editor.held"
+  /** The Architect created a new dynamic agent. */
+  | "roster.created"
+  /** The Architect rewrote a dynamic agent's brief. */
+  | "roster.improved"
+  /** The Architect retired a dynamic agent. */
+  | "roster.retired"
+  /** Scout recorded an upcoming official project from the operator's public comms. */
+  | "pipeline.noted"
   | "swarm.health"
   | "error";
 

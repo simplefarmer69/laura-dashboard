@@ -14,7 +14,7 @@ export const TUNER_RAILS = {
   /** Step size for cadence adjustments */
   cycleStepMinutes: 5,
   minDraftsPerCycle: 3,
-  maxDraftsPerCycle: 8,
+  maxDraftsPerCycle: 14,
   /** Minimum reviewed drafts before approval-rate rules fire */
   minReviewedSample: 5,
 } as const;

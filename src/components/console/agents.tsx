@@ -97,6 +97,11 @@ function AgentCard({ agent, refresh }: { agent: Agent; refresh: () => Promise<vo
           <Badge variant="outline" className="font-mono text-[10px]">
             strategy v{agent.strategyVersion}
           </Badge>
+          {agent.dynamic ? (
+            <Badge variant="outline" className="text-[10px] text-[var(--sb-gold)]">
+              {agent.retiredAt ? "retired by Hive" : "created by Hive"}
+            </Badge>
+          ) : null}
           <span className="ml-auto text-xs text-muted-foreground">last run {ago(agent.lastRunAt)}</span>
         </div>
         <CardDescription>

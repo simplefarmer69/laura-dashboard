@@ -1,7 +1,7 @@
 ---
 name: behavioral-influence
 description: Use when writing anything meant to change what a human does (post, reply, community message, outreach, launch message) so the ask lands through honest behavioral levers
-agents: narrative, growth, steward, bd, researcher, behaviorist, forge
+agents: narrative, growth, steward, bd, researcher, behaviorist, architect, ambassador
 ---
 
 # Behavioral influence (honest persuasion)

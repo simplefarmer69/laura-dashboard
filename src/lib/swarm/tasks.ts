@@ -20,6 +20,7 @@ import type { GridToken } from "@/lib/launchpad/service";
 import { ART_MOTIFS, ART_STYLES } from "@/lib/launchpad/art";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import { TWEET_MAX, X_STYLE_GUIDE } from "@/lib/publish/x-style";
+import { deniedPostsDigest } from "@/lib/publish/editor";
 import {
   briefDigest,
   gradeDigest,
@@ -71,23 +72,9 @@ const skillEditSchema = z.object({
   description: z.string().min(10).max(200),
   agents: z
     .array(
-      z.enum([
-        "all",
-        "scout",
-        "watcher",
-        "researcher",
-        "narrative",
-        "steward",
-        "bd",
-        "analyst",
-        "growth",
-        "vault",
-        "critic",
-        "mint",
-        "builder",
-        "coach",
-        "sage",
-      ]),
+      /* "all" or any roster id, including dynamic dyn_* agents; unknown ids
+         are harmless (no agent reads them). */
+      z.string().min(2).max(40),
     )
     .min(1)
     .max(15),
@@ -139,7 +126,9 @@ export const proposalsSchema = z.object({
            smartlp/nftintel/tokenintel/trainer were missing until 2026-09-11 —
            the intel voices literally could not be upgraded, which is why they
            sat on v1 while bd reached v16. */
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "sage", "trainer", "smartlp", "nftintel", "tokenintel", "treasurer"]),
+        /* Any roster id but the coach's own; validated against state.agents
+           in the orchestrator so dynamic (dyn_*) agents can be upgraded too. */
+        agentId: z.string().min(2).max(40),
         /* Budget is 3500 (prompted); the schema leaves headroom so a slightly
            long rewrite lands instead of failing to the deterministic mock —
            eight cycles of that appended identical boilerplate to bd on
@@ -295,7 +284,15 @@ const KIND_BY_AGENT: Record<string, DraftKind[]> = {
   bd: ["outreach"],
   analyst: ["report"],
   growth: ["post"],
+  behaviorist: ["post"],
+  ambassador: ["outreach"],
 };
+
+/** Draft kinds for a producer: dynamic agents carry theirs; static ones use the table. */
+export function producerKinds(agent: Agent): DraftKind[] {
+  if (agent.kinds && agent.kinds.length > 0) return agent.kinds;
+  return KIND_BY_AGENT[agent.id] ?? ["post"];
+}
 
 /**
  * The X-post brief for producers whose kinds include "post". Sits after the
@@ -309,19 +306,23 @@ const KIND_BY_AGENT: Record<string, DraftKind[]> = {
  * in run_e88054c4, 2026-09-12). Odd and even lines swap owners each cycle so
  * neither agent always gets the sharpest line.
  */
+const X_PRODUCERS: string[] = ["narrative", "growth", "behaviorist"];
+
 function chainAlphaLane(ctx: CycleContext, agentId: AgentId): string {
   const lines = ctx.chainAlpha.split("\n").filter((l) => l.startsWith("- "));
   if (lines.length < 2) return ctx.chainAlpha;
-  const parity = (agentId === "growth" ? 1 : 0) ^ (ctx.cycleSeq % 2);
-  const mine = lines.filter((_, i) => i % 2 === parity);
-  const theirs = lines.filter((_, i) => i % 2 !== parity);
+  const n = Math.min(X_PRODUCERS.length, lines.length);
+  const idx = Math.max(0, X_PRODUCERS.indexOf(agentId));
+  const slot = (idx + ctx.cycleSeq) % n;
+  const mine = lines.filter((_, i) => i % n === slot);
+  const theirs = lines.filter((_, i) => i % n !== slot);
   const [header, ...rest] = ctx.chainAlpha.split("\n");
   const footer = rest.filter((l) => !l.startsWith("- ")).join("\n");
   return [
     header,
-    `YOUR LINES (build on one of these; the other X producer has the rest this cycle, so a post on one of theirs is a duplicate and gets vetoed):`,
+    `YOUR LINES (build on one of these; the other X producers have the rest this cycle, so a post on one of theirs is a duplicate and gets vetoed):`,
     ...mine,
-    `THE OTHER PRODUCER'S LINES (context only):`,
+    `THE OTHER PRODUCERS' LINES (context only):`,
     ...theirs,
     footer,
   ].join("\n");
@@ -335,12 +336,14 @@ function xPostBrief(ctx: CycleContext, agentId: AgentId): string {
     chainAlphaLane(ctx, agentId),
     `WHAT TO POST ABOUT (pick the single sharpest thing in this cycle's inputs, in this order of preference): a line from CHAIN ALPHA above, turned into a thesis with its numbers and the condition that would confirm or break it; a concrete Robinhood Chain event from LIVE INTERNET INTEL or WORLD FEEDS (a launch, a liquidity move, a stock-token number, what Vlad or Johann just said and what it means for the chain); something LAURA's own wallet did or is doing in ON-CHAIN STATE, stated with the number; or the best line from THE CAFE BAR debate in WORLD FEEDS, quoted with the agent's name. The account's readers want alpha on the chain they have not noticed, not a lesson. If CHAIN ALPHA says nothing is anomalous, do not invent an anomaly.`,
     `ALREADY ON THE ACCOUNT'S TIMELINE (newest first). Your post must not share an opening, a closing, a phrase, a statistic or a theme with any of these:\n${ctx.xPosted}`,
+    `THE READER TEST (operator directive 2026-09-13, hard rule; Redline the editor enforces it after the Auditor and the rail refuses posts that fail it): the reader never sees your rationale. After the first sentence a stranger must be able to say what the post is about; every number must carry a unit and a referent a human uses (dollars, ETH, holders, launches on the Stonk Launcher, percent, a date), never a bare counter like "1089 to 1113"; no pipeline words in the body (experiment numbers, "proxy", "lever", "lane", "third call", "sale clock", "resubmitted", "this cycle"); one concrete takeaway about StonkBrokers, Robinhood Chain, a launch, a market or LAURA's own onchain moves. A post that fails is held or rewritten and you read the reason next cycle under LEARN FROM YOUR DENIED POSTS. Name the product or the chain before the first number.`,
+    `LEARN FROM YOUR DENIED POSTS (what the Auditor and Redline stopped or rewrote on your record, newest last; the same defect twice is a veto)\n${deniedPostsDigest(ctx.drafts, agentId)}`,
     `The title field of a "post" draft is a short internal label for the dashboard (not published). The rationale names the input the post came from and, in one clause, what makes it unlike every post on the timeline above.`,
   ].join("\n\n");
 }
 
 export function producerPrompt(agent: Agent, ctx: CycleContext): string {
-  const kinds = KIND_BY_AGENT[agent.id] ?? ["post"];
+  const kinds = producerKinds(agent);
   return [
     `TODAY (UTC): ${ctx.grade.date}. Use this date; never invent another.`,
     `METRICS\n${metricsDigest(ctx.metrics)}`,
@@ -444,18 +447,24 @@ export function producerMock(agent: Agent, ctx: CycleContext): DraftsOut {
           },
         ],
       };
-    default:
+    default: {
+      /* Dynamic and newer static producers: one draft of the agent's first
+         kind, live numbers plugged in; the X rail never posts fallback text. */
+      const first = producerKinds(agent)[0];
+      const kind: DraftsOut["drafts"][number]["kind"] = first === "research" || first === "thread" ? "post" : first;
+      const channel = kind === "post" ? "X" : kind === "community" ? "Telegram" : kind === "outreach" ? "Email" : kind === "report" ? "Notion" : "Blog";
       return {
         drafts: [
           {
-            kind: "post",
-            channel: "X",
-            title: "Fallback",
-            body: "No producer mapped for this agent.",
+            kind,
+            channel,
+            title: `${agent.name}: StonkBrokers by the numbers, ${ctx.grade.date}`,
+            body: `$STONKBROKER trades at ${usd(m.priceUsd, 5)} with ${usd(m.liquidityUsd)} of DEX liquidity across ${m.pairCount} pairs on Robinhood Chain; the protocol took ${usd(m.protocolFees24hUsd)} in fees over the last 24h (DefiLlama).`,
             rationale,
           },
         ],
       };
+    }
   }
 }
 
@@ -1019,7 +1028,7 @@ export function coachPrompt(ctx: CycleContext): string {
  * agents take turns instead of the same pair monopolizing the slot.
  */
 export function trainerTargets(agents: Agent[], cycleSeq: number, count = 2): Agent[] {
-  const pool = agents.filter((a) => a.id !== "trainer" && a.status !== "paused");
+  const pool = agents.filter((a) => a.id !== "trainer" && a.status !== "paused" && !a.retiredAt);
   if (pool.length === 0) return [];
   const rot = cycleSeq % pool.length;
   const rotated = [...pool.slice(rot), ...pool.slice(0, rot)];
@@ -1034,7 +1043,7 @@ export const trainerSchema = z.object({
   upgrades: z
     .array(
       z.object({
-        agentId: z.enum(["scout", "watcher", "researcher", "narrative", "steward", "bd", "analyst", "growth", "vault", "critic", "mint", "builder", "coach", "sage", "smartlp", "nftintel", "tokenintel", "treasurer"]),
+        agentId: z.string().min(2).max(40),
         proposedStrategy: z.string().min(80).max(STRATEGY_SCHEMA_MAX),
         rationale: z.string().max(1500),
         evidence: z.array(z.string().max(500)).min(1).max(6),
