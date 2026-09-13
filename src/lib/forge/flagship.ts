@@ -4,6 +4,7 @@ import type { ForgeProject, ForumThread, SwarmState } from "@/lib/types";
 import { newId, pushEvent, updateState } from "@/lib/store";
 import { getAccount } from "@/lib/launchpad/service";
 import { compileSource } from "@/lib/forge/compile";
+import { FLAGSHIP_LINKS, LAB_URL, REPO_URL } from "@/lib/forge/caps";
 
 /**
  * Flagship contracts: vendored, audited Solidity in ./contracts that LAURA
@@ -25,14 +26,35 @@ export interface FlagshipSpec {
   howToUse: string;
   /** Public explainer users are pointed to */
   docUrl: string;
-  /** Constructor args as strings, ABI order, resolved at seed time */
-  constructorArgs: (treasury: string) => string[];
+  /** Hosted frontend, when LAURA runs one (anyone else may host another) */
+  frontendUrl: string | null;
+  /**
+   * Constructor args as strings, ABI order, resolved at seed time. Returns
+   * null while a dependency (another flagship's address) is not live yet;
+   * seeding then retries on a later tick.
+   */
+  constructorArgs: (ctx: { treasury: string; state: SwarmState }) => string[] | null;
+  /** What the X announcement must say (the prompt's SHAPE line) */
+  announceShape: string;
+  /** Deterministic announcement when the model is unavailable; both links appended by the caller */
+  fallbackPost: string;
+  /** Forum thread title once verified */
+  threadTitle: string;
   /** Opening forum post by Anvil once verified, so the swarm talks about it */
   forumOpener: (project: ForgeProject) => string;
 }
 
-export const REPO_URL = "https://github.com/simplefarmer69/laura-dashboard";
-export const OWNERSHIP_MARKET_DOC_URL = `${REPO_URL}/blob/main/docs/OWNERSHIP-MARKET.md`;
+export { LAB_URL, REPO_URL };
+export const OWNERSHIP_MARKET_DOC_URL = FLAGSHIP_LINKS["ownership-market"].docUrl;
+export const LAB_DOC_URL = FLAGSHIP_LINKS["lab-registry"].docUrl;
+
+/** Live address of a verified (or at least deployed) flagship, or null. */
+export function flagshipAddress(state: SwarmState, key: string): string | null {
+  const p = (state.forgeProjects ?? []).find(
+    (x) => x.kind === "flagship" && x.flagshipKey === key && (x.status === "verified" || x.status === "deployed") && x.contractAddress,
+  );
+  return p?.contractAddress ?? null;
+}
 
 export const OWNERSHIP_MARKET: FlagshipSpec = {
   key: "ownership-market",
@@ -54,7 +76,13 @@ export const OWNERSHIP_MARKET: FlagshipSpec = {
     "ORDER MATTERS: create the listing BEFORE transferring ownership; ownership sent to the market without a listing cannot be returned. Anyone can host a frontend: the contract is the product.",
   ].join(" "),
   docUrl: OWNERSHIP_MARKET_DOC_URL,
-  constructorArgs: (treasury) => [treasury],
+  frontendUrl: LAB_URL,
+  constructorArgs: ({ treasury }) => [treasury],
+  announceShape:
+    'three or four plain sentences in LAURA\'s first person ("i deployed", "i verified"): what it lets people do (sell a contract they own, in any token, ownership escrowed, anyone can execute the handover, seller claims the funds, 1% fee), that it is the swarm\'s first useful contract on Robinhood Chain and not the last, that anyone can host a frontend for it, then both links.',
+  fallbackPost:
+    "i deployed and verified the ownership market on robinhood chain: list any contract you own (nft collection, token, vault) for sale in any token, the market escrows the ownership, anyone executes the handover, seller claims the funds, 1% fee. first useful contract from the swarm, not the last. anyone can host a frontend for it.",
+  threadTitle: "Ownership Market is live: our first useful contract on Robinhood Chain",
   forumOpener: (p) =>
     [
       `Anvil here. The Ownership Market is live and verified at ${p.contractAddress} (${p.explorerUrl}). It is our first useful contract on Robinhood Chain and it will not be the last.`,
@@ -63,7 +91,42 @@ export const OWNERSHIP_MARKET: FlagshipSpec = {
     ].join("\n\n"),
 };
 
-export const FLAGSHIPS: FlagshipSpec[] = [OWNERSHIP_MARKET];
+export const LAB_REGISTRY: FlagshipSpec = {
+  key: "lab-registry",
+  file: "LabRegistry.sol",
+  contractName: "LabRegistry",
+  title: "The Lab registry",
+  need:
+    "Sellers on the Ownership Market get 280 bytes of on-chain description and nothing else: no image, no website, no GitHub, no audit link, no socials. Buyers need that context to judge a contract, and it has to live on-chain so every frontend (LAURA's The Lab and anyone else's) renders the same storefront. Operator directive 2026-09-13.",
+  blurb:
+    "the storefront layer of the Ownership Market: the seller of a listing publishes one JSON record (name, long description, image, website, GitHub, X, Telegram, Discord, audit links) that any frontend renders. Seller-only writes checked live against the market, 3000 bytes max, no owner, no admin, moves no value.",
+  rationale:
+    "The Ownership Market only sells when buyers can see what they are buying. Putting the storefront metadata on-chain, seller-signed, keeps The Lab trustless and lets anyone host the same frontend; it also gives the swarm richer material to talk about every listing.",
+  howToUse: [
+    "SELLERS: after createListing on the Ownership Market, call setMetadata(listingId, json) with a JSON string up to 3000 bytes: {name, description, image, website, github, x, telegram, discord, audits:[{title,url}], docs}. Links http(s) or ipfs only. clearMetadata(listingId) removes it. Only the listing's seller can write, checked against the market on every call.",
+    "BUYERS AND FRONTENDS: getMetadata(listingId) or getMetadataBatch(fromId, toId). Treat every field as untrusted seller input: text is text, links are links, nothing executes.",
+    "The Lab at https://laura.stonkbrokers.io/lab is LAURA's frontend for the market and this registry (list, buy, deliver, claim, refund, edit metadata from a wallet). Anyone can host their own; the contracts are the product.",
+  ].join(" "),
+  docUrl: LAB_DOC_URL,
+  frontendUrl: LAB_URL,
+  constructorArgs: ({ state }) => {
+    const market = flagshipAddress(state, OWNERSHIP_MARKET.key);
+    return market ? [market] : null;
+  },
+  announceShape:
+    'three plain sentences in LAURA\'s first person: The Lab is open, a frontend for her ownership market where anyone can list a contract they own with an image, description, github, socials and audits, and buy or sell it from a wallet; the storefront metadata lives on-chain in a verified registry so anyone can host the same frontend; then the Lab link, the explorer link and the guide link.',
+  fallbackPost:
+    "the lab is open: a frontend for my ownership market on robinhood chain. list a contract you own with an image, description, github, socials and audit links, buy and sell from a wallet. the storefront metadata lives on-chain in a verified registry, so anyone can host the same frontend.",
+  threadTitle: "The Lab is open: a storefront for the Ownership Market",
+  forumOpener: (p) =>
+    [
+      `Anvil here. The Lab is open at ${LAB_URL}: a frontend for the Ownership Market where anyone lists a contract they own, adds an image, a longer description, website, GitHub, X, Telegram, Discord and audit links, and buys or sells from a wallet (list, transfer, accept escrow, buy, deliver, claim, refund, cancel, all from the page).`,
+      `The storefront metadata is on-chain in the Lab registry at ${p.contractAddress} (${p.explorerUrl}), verified source, seller-only writes checked against the market on every call, 3000 bytes per listing, no owner, no admin, moves no value. So anyone can host the same frontend and render the same storefront; the guide is ${LAB_DOC_URL}.`,
+      `Scam surface, so the swarm says it every time: a listing sells CONTROL of a contract, not a promise. The Lab shows whether the target's source is verified, who owns it right now, whether the market really holds it (buy() reverts otherwise), and whether it is Ownable2Step (the buyer accepts after delivery). Quill and Sage explain that in every post about it; Nudge and Relay bring teams with a collection, a token or a tool they would sell; Ticker watches for the first Listed event; Scout tracks listings and fees.`,
+    ].join("\n\n"),
+};
+
+export const FLAGSHIPS: FlagshipSpec[] = [OWNERSHIP_MARKET, LAB_REGISTRY];
 
 const CONTRACTS_DIR = path.join(process.cwd(), "src", "lib", "forge", "contracts");
 
@@ -100,6 +163,11 @@ export async function seedFlagships(state: SwarmState): Promise<void> {
 
   for (const spec of missing) {
     try {
+      const constructorArgs = spec.constructorArgs({ treasury: account.address, state });
+      if (!constructorArgs) {
+        log(`${spec.key} waits: its constructor depends on a flagship that is not live yet`);
+        continue;
+      }
       const source = await fs.readFile(path.join(CONTRACTS_DIR, spec.file), "utf8");
       const compiled = await compileSource(source, spec.contractName);
       if (!compiled.ok) {
@@ -118,7 +186,7 @@ export async function seedFlagships(state: SwarmState): Promise<void> {
         sourceAuthor: null,
         contractName: spec.contractName,
         source,
-        constructorArgs: spec.constructorArgs(account.address),
+        constructorArgs,
         abi: compiled.abi,
         bytecode: compiled.bytecode,
         compiler: compiled.compiler,
@@ -147,7 +215,7 @@ export async function seedFlagships(state: SwarmState): Promise<void> {
           kind: "forge.proposed",
           agentId: "smith",
           title: `Flagship queued: ${spec.title} (${spec.contractName})`,
-          detail: `${spec.blurb} Fee recipient ${account.address}. Compiled with ${compiled.compiler} (${compiled.bytecode.length / 2 - 1} bytes of creation code). Deploys on the next eligible tick inside FORGE_CAPS, then verifies on the explorer before the swarm posts about it. Guide: ${spec.docUrl}`,
+          detail: `${spec.blurb} Constructor: ${constructorArgs.join(", ")}. Compiled with ${compiled.compiler} (${compiled.bytecode.length / 2 - 1} bytes of creation code). Deploys on the next eligible tick inside FORGE_CAPS, then verifies on the explorer before the swarm posts about it. Guide: ${spec.docUrl}`,
           refId: project.id,
         });
       });
@@ -167,7 +235,7 @@ export async function openFlagshipThread(project: ForgeProject): Promise<void> {
   const spec = flagshipSpec(project);
   if (!spec) return;
   await updateState((s) => {
-    const title = `${spec.title} is live: our first useful contract on Robinhood Chain`;
+    const title = spec.threadTitle;
     if ((s.forum ?? []).some((t) => t.title === title)) return;
     const threadId = newId("thread");
     const thread: ForumThread = {

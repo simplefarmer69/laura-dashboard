@@ -161,9 +161,11 @@ export function forgeAnnounceFallback(project: ForgeProject): string {
   const url = project.explorerUrl ?? (project.contractAddress ? explorerContractUrl(project.contractAddress) : "");
   const spec = flagshipSpec(project);
   if (spec) {
-    const text = `i deployed and verified the ownership market on robinhood chain: list any contract you own (nft collection, token, vault) for sale in any token, the market escrows the ownership, anyone executes the handover, seller claims the funds, 1% fee. first useful contract from the swarm, not the last. anyone can host a frontend for it. ${url} how to call it: ${spec.docUrl}`;
+    const links = [spec.frontendUrl, url, spec.docUrl].filter((x): x is string => Boolean(x)).join(" ");
+    const text = `${spec.fallbackPost} ${links}`;
     if (text.length <= TWEET_MAX) return text;
-    return `the ownership market is live and verified on robinhood chain: sell any contract you own, in any token, ownership escrowed, 1% fee, no admin. our first useful contract, not our last. anyone can host a frontend. ${url}`;
+    const short = `${project.title.toLowerCase()} is live and verified on robinhood chain. ${spec.frontendUrl ?? url}`;
+    return short.length <= TWEET_MAX ? short : `${project.title.toLowerCase()} is live on robinhood chain: ${url}`;
   }
   const text = `new on robinhood chain: ${project.title.toLowerCase()}. ${project.blurb} verified source, anyone can use it from the explorer: ${url}`;
   return text.length <= TWEET_MAX ? text : `${project.title.toLowerCase()} is live on robinhood chain, verified and open to anyone: ${url}`;
@@ -177,7 +179,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
     const out = await generateStructured(resolved, {
       schema: forgeAnnounceSchema,
       system: "You write LAURA's X posts. Plain sentences a stranger follows, no hashtags, no emoji, no hype, no price talk, lowercase is fine.",
-      prompt: forgeAnnouncePrompt(project, flagshipSpec(project)?.docUrl ?? null),
+      prompt: forgeAnnouncePrompt(project, flagshipSpec(project)),
       mock: () => forgeAnnounceMock(project),
     });
     if (!out.usedMock) {
@@ -201,7 +203,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
       body,
       rationale:
         project.kind === "flagship"
-          ? `LAURA's first flagship contract on Robinhood Chain is deployed and verified (${project.contractAddress}). The post carries the explorer link and the guide; it is the first useful contract from the swarm, not the last.`
+          ? `LAURA's flagship contract ${project.title} on Robinhood Chain is deployed and verified (${project.contractAddress}). The post carries the links (frontend when there is one, explorer, guide); useful contracts from the swarm, not the last.`
           : `Anvil shipped a verified contract people on X asked for (${project.need.slice(0, 200)}). The post carries the explorer link so anyone can read and use it.`,
       status: autonomous ? "approved" : "pending",
       createdAt: Date.now(),

@@ -982,19 +982,22 @@ export function forgeAnnouncePrompt(
     explorerUrl: string | null;
     sourceAuthor: string | null;
   },
-  flagshipDocUrl: string | null = null,
+  flagship: { docUrl: string; frontendUrl: string | null; announceShape: string } | null = null,
 ): string {
-  if (flagshipDocUrl) {
+  if (flagship) {
     return [
-      `LAURA (an AI agent swarm on Robinhood Chain, X account @LAURA_DAIO) just deployed AND verified her first flagship contract, written and audited by the swarm. Write the one X post announcing it.`,
+      `LAURA (an AI agent swarm on Robinhood Chain, X account @LAURA_DAIO) just deployed AND verified a flagship contract, written and audited by the swarm. Write the one X post announcing it.`,
       `WHAT IT IS: ${project.title} (${project.contractName}). ${project.blurb}`,
       `WHY: ${project.need}`,
       `HOW A PERSON USES IT: ${project.howToUse}`,
+      flagship.frontendUrl ? `FRONTEND LINK (must appear verbatim; this is where people go): ${flagship.frontendUrl}` : "",
       `EXPLORER LINK (must appear verbatim): ${project.explorerUrl ?? ""}`,
-      `GUIDE LINK (must appear verbatim; it explains every call): ${flagshipDocUrl}`,
+      `GUIDE LINK (must appear verbatim; it explains every call): ${flagship.docUrl}`,
       `${X_STYLE_GUIDE}`,
-      `SHAPE: three or four plain sentences in LAURA's first person ("i deployed", "i verified"): what it lets people do (sell a contract they own, in any token, ownership escrowed, anyone can execute the handover, seller claims the funds, 1% fee), that it is the swarm's first useful contract on Robinhood Chain and not the last, that anyone can host a frontend for it, then both links. No hashtags, no emoji, no price or token-price talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including both links.`,
-    ].join("\n\n");
+      `SHAPE: ${flagship.announceShape} No hashtags, no emoji, no price or token-price talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including every link.`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
   }
   return [
     `LAURA (an AI agent swarm on Robinhood Chain, X account @LAURA_DAIO) just deployed and verified a small contract anyone can use. Write the one X post announcing it.`,

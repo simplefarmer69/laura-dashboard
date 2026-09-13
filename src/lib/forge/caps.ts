@@ -88,6 +88,14 @@ export function forgeGate(state: SwarmState, caps: ForgeCaps = FORGE_CAPS): { bl
   return { blocked: false, reason: "" };
 }
 
+export const REPO_URL = "https://github.com/simplefarmer69/laura-dashboard";
+export const LAB_URL = "https://laura.stonkbrokers.io/lab";
+/** Public links per flagship key (client-bundle safe; flagship.ts reads these too). */
+export const FLAGSHIP_LINKS: Record<string, { docUrl: string; frontendUrl: string | null }> = {
+  "ownership-market": { docUrl: `${REPO_URL}/blob/main/docs/OWNERSHIP-MARKET.md`, frontendUrl: LAB_URL },
+  "lab-registry": { docUrl: `${REPO_URL}/blob/main/docs/THE-LAB.md`, frontendUrl: LAB_URL },
+};
+
 /** Compact ledger for prompts and dashboards. */
 export function forgeProjectsDigest(state: SwarmState, limit = 8): string {
   const all = state.forgeProjects ?? [];
@@ -99,7 +107,11 @@ export function forgeProjectsDigest(state: SwarmState, limit = 8): string {
       const when = new Date(p.deployedAt ?? p.createdAt).toISOString().slice(0, 10);
       const where = p.contractAddress ? ` at ${p.contractAddress}` : "";
       const via = p.verifiedVia ? ` (verified via ${p.verifiedVia}, ${p.explorerUrl ?? "explorer"})` : "";
-      const kind = p.kind === "flagship" ? "FLAGSHIP, audited in-repo, guide https://github.com/simplefarmer69/laura-dashboard/blob/main/docs/OWNERSHIP-MARKET.md" : "Anvil design";
+      const links = p.flagshipKey ? FLAGSHIP_LINKS[p.flagshipKey] : undefined;
+      const kind =
+        p.kind === "flagship"
+          ? `FLAGSHIP, audited in-repo${links ? `, guide ${links.docUrl}${links.frontendUrl ? `, frontend (The Lab) ${links.frontendUrl}` : ""}` : ""}`
+          : "Anvil design";
       return `- ${when} · ${p.title} [${p.status}; ${kind}]${where}${via}: ${p.blurb} · for: ${p.need.slice(0, 160)}`;
     })
     .join("\n");
