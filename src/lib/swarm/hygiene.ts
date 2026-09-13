@@ -258,7 +258,25 @@ export interface HygieneReport {
   loops: LoopFinding[];
 }
 
-const EVENT_REPEAT_IGNORE = new Set(["forum.post", "forum.thread", "draft.created", "draft.approved", "cycle.started", "cycle.finished", "onchain.observed", "grade.stamped"]);
+/** Event kinds that legitimately repeat: one record per cycle or per accrual is the ledger, not a loop. */
+const EVENT_REPEAT_IGNORE = new Set([
+  "forum.post",
+  "forum.thread",
+  "draft.created",
+  "draft.approved",
+  "draft.published",
+  "cycle.started",
+  "cycle.finished",
+  "onchain.observed",
+  "grade.stamped",
+  "earnings.accrued",
+  "fees.claimed",
+  "treasury.plan",
+  "x.watched",
+  "hygiene.swept",
+]);
+/** Authors that are not agents: nobody reads a notice addressed to them. */
+const NOT_AN_AGENT = new Set(["system", "operator", "grader", "barkeep"]);
 
 function pushLoop(loops: LoopFinding[], f: LoopFinding): void {
   const existing = loops.find((l) => l.agentId === f.agentId && l.kind === f.kind && l.where === f.where);
@@ -431,6 +449,7 @@ function noticeText(f: LoopFinding, agentName: string): string {
 export function codeNotices(report: HygieneReport, agentName: (id: string) => string, now = Date.now()): HygieneNotice[] {
   const out: HygieneNotice[] = [];
   for (const f of report.loops) {
+    if (NOT_AN_AGENT.has(f.agentId)) continue;
     if (f.kind === "forum-repeat" && f.count < 3) continue;
     if ((f.kind === "draft-repeat" || f.kind === "skip-record-repeat") && f.count < 3) continue;
     out.push({
