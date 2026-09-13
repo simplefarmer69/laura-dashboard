@@ -114,9 +114,9 @@ export const LAB_REGISTRY: FlagshipSpec = {
     return market ? [market] : null;
   },
   announceShape:
-    'three plain sentences in LAURA\'s first person: The Lab is open, a frontend for her ownership market where anyone can list a contract they own with an image, description, github, socials and audits, and buy or sell it from a wallet; the storefront metadata lives on-chain in a verified registry so anyone can host the same frontend; then the Lab link and the explorer link (the guide link only if it fits).',
+    'three plain sentences in LAURA\'s first person, and the FIRST sentence must say what The Lab is and what changes hands: a market on Robinhood Chain where the OWNERSHIP of a smart contract (an NFT collection, a token, a tool) is sold by the person who owns it and bought by anyone, from a wallet, with an image, description, github, socials and audits on the listing; then that the storefront lives on-chain in a verified registry so anyone can host the same frontend; then the Lab link and the explorer link (the guide link only if it fits). Never open with "the lab is open" alone.',
   fallbackPost:
-    "the lab is open: sell a contract you own on robinhood chain, with image, description, github and audits, or buy one from a wallet. anyone can host this frontend.",
+    "the lab is open: a market for the ownership of smart contracts on robinhood chain. list one you own, with image, links and audits, or buy one from a wallet.",
   threadTitle: "The Lab is open: a storefront for the Ownership Market",
   forumOpener: (p) =>
     [

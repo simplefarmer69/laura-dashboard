@@ -191,14 +191,19 @@ export async function flagshipScreenshot(project: ForgeProject): Promise<DraftMe
   });
 }
 
-async function announceVerified(state: SwarmState, project: ForgeProject): Promise<string> {
+/** Announcement drafts per project: the first, then redrafts after a hold or veto at the X gate. */
+export const MAX_ANNOUNCE_ATTEMPTS = 3;
+/** Gap between a refused announcement and its redraft (lets the same cycle's reviewers finish). */
+const REANNOUNCE_GAP_MS = 20 * 60_000;
+
+async function announceVerified(state: SwarmState, project: ForgeProject, previous: { body: string; reason: string } | null = null): Promise<string> {
   const resolved = resolveModel(state.settings.llmModel);
   let body = forgeAnnounceFallback(project);
   try {
     const out = await generateStructured(resolved, {
       schema: forgeAnnounceSchema,
       system: "You write LAURA's X posts. Plain sentences a stranger follows, no hashtags, no emoji, no hype, no price talk, lowercase is fine.",
-      prompt: forgeAnnouncePrompt(project, flagshipSpec(project)),
+      prompt: forgeAnnouncePrompt(project, flagshipSpec(project), previous),
       mock: () => forgeAnnounceMock(project),
     });
     if (!out.usedMock) {
@@ -228,10 +233,11 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
       channel: "x",
       title: `Anvil: ${project.title} is live and verified`,
       body,
-      rationale:
+      rationale: `${
         project.kind === "flagship"
           ? `LAURA's flagship contract ${project.title} on Robinhood Chain is deployed and verified (${project.contractAddress}). The post carries the links (frontend when there is one, explorer, guide); useful contracts from the swarm, not the last.`
-          : `Anvil shipped a verified contract people on X asked for (${project.need.slice(0, 200)}). The post carries the explorer link so anyone can read and use it.`,
+          : `Anvil shipped a verified contract people on X asked for (${project.need.slice(0, 200)}). The post carries the explorer link so anyone can read and use it.`
+      }${previous ? `\n\nRedraft ${(project.announceAttempts ?? 0) + 1}/${MAX_ANNOUNCE_ATTEMPTS}: the previous announcement was refused at the X gate (${previous.reason.slice(0, 300)}).` : ""}`,
       status: autonomous ? "approved" : "pending",
       createdAt: Date.now(),
       reviewedAt: autonomous ? Date.now() : null,
@@ -247,11 +253,14 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
       if (autonomous) smith.stats.approved += 1;
     }
     const p = (s.forgeProjects ?? []).find((x) => x.id === project.id);
-    if (p) p.announceDraftId = draftId;
+    if (p) {
+      p.announceDraftId = draftId;
+      p.announceAttempts = (p.announceAttempts ?? 0) + 1;
+    }
     pushEvent(s, {
       kind: "draft.created",
       agentId: "smith",
-      title: `Anvil drafted the announcement for ${project.title}`,
+      title: previous ? `Anvil redrafted the announcement for ${project.title}` : `Anvil drafted the announcement for ${project.title}`,
       detail: body,
       refId: draftId,
     });
@@ -281,6 +290,31 @@ export async function runForgeTick(state: SwarmState): Promise<void> {
   await seedFlagships(state);
   const now = Date.now();
   const projects = state.forgeProjects ?? [];
+
+  /* Redraft an announcement the X gate refused (Redline hold or Auditor
+     veto): the reason goes into the prompt, at most MAX_ANNOUNCE_ATTEMPTS
+     drafts per project, one redraft per tick, no wallet involved. The Lab's
+     first announcement was held 2026-09-13 18:57 UTC for not saying what
+     The Lab is; without this the project would stay unannounced forever. */
+  const refused = projects.find((p) => {
+    if (p.status !== "verified" || !p.announceDraftId) return false;
+    if ((p.announceAttempts ?? 1) >= MAX_ANNOUNCE_ATTEMPTS) return false;
+    const d = state.drafts.find((x) => x.id === p.announceDraftId);
+    return Boolean(d && d.status === "rejected" && now - (d.reviewedAt ?? d.createdAt) >= REANNOUNCE_GAP_MS);
+  });
+  if (refused) {
+    const prior = state.drafts.find((x) => x.id === refused.announceDraftId);
+    ops.running = true;
+    try {
+      const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason: prior?.reviewerNote ?? "refused at the X gate" });
+      log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${(refused.announceAttempts ?? 1) + 1}/${MAX_ANNOUNCE_ATTEMPTS})`);
+    } catch (err) {
+      log(`redraft for ${refused.title} failed: ${String(err).slice(0, 200)}`);
+    } finally {
+      ops.running = false;
+    }
+    return;
+  }
 
   /* Verification polling first: cheap, no wallet. */
   const deployed = projects.find((p) => p.status === "deployed" && p.contractAddress);

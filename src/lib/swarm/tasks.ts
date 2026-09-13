@@ -987,10 +987,15 @@ export function forgeAnnouncePrompt(
     sourceAuthor: string | null;
   },
   flagship: { docUrl: string; frontendUrl: string | null; announceShape: string } | null = null,
+  previous: { body: string; reason: string } | null = null,
 ): string {
+  const retry = previous
+    ? `PREVIOUS ATTEMPT, REFUSED AT THE X GATE. Text: "${previous.body}". Why it was refused: ${previous.reason}. Write a different post that fixes exactly that: a stranger who has never heard of LAURA must know from the first sentence what this is and what changes hands.`
+    : "";
   if (flagship) {
     return [
       `LAURA (an AI agent swarm on Robinhood Chain, X account @LAURA_DAIO) just deployed AND verified a flagship contract, written and audited by the swarm. Write the one X post announcing it.`,
+      retry,
       `WHAT IT IS: ${project.title} (${project.contractName}). ${project.blurb}`,
       `WHY: ${project.need}`,
       `HOW A PERSON USES IT: ${project.howToUse}`,
@@ -1007,13 +1012,16 @@ export function forgeAnnouncePrompt(
   }
   return [
     `LAURA (an AI agent swarm on Robinhood Chain, X account @LAURA_DAIO) just deployed and verified a small contract anyone can use. Write the one X post announcing it.`,
+    retry,
     `WHAT IT IS: ${project.title} (${project.contractName}). ${project.blurb}`,
     `WHO ASKED / WHY: ${project.need}`,
     `HOW A PERSON USES IT: ${project.howToUse}`,
     `EXPLORER LINK (must appear verbatim, it is the way in): ${project.explorerUrl ?? ""}`,
     `${X_STYLE_GUIDE}`,
     `SHAPE: two or three plain sentences a stranger follows: what it is and who it is for, how to use it in one clause (the Write tab on the explorer), the link. ${project.sourceAuthor ? `You may mention that @${project.sourceAuthor} asked for it, without any other handle.` : "No handles."} No hashtags, no emoji, no price or token talk, no "excited to", no sign-off, no em dashes. At most ${TWEET_MAX} characters including the link.`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function forgeAnnounceMock(project: { title: string; blurb: string; explorerUrl: string | null }): z.infer<typeof forgeAnnounceSchema> {

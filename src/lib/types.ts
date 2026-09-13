@@ -1086,8 +1086,10 @@ export interface ForgeProject {
   verifyAttempts: number;
   /** Explorer URL for the contract (code tab once verified) */
   explorerUrl: string | null;
-  /** Draft id of the X post announcing it, once created */
+  /** Draft id of the X post announcing it, once created (the latest attempt). */
   announceDraftId: string | null;
+  /** Announcement drafts written so far; a held or vetoed one is redrafted with the gate's reason, up to a cap. */
+  announceAttempts?: number;
   error: string | null;
 }
 
