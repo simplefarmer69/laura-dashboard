@@ -366,6 +366,22 @@ async function failProject(projectId: string, msg: string, title: string): Promi
 export async function runForgeAnnounceTick(state: SwarmState): Promise<boolean> {
   const now = Date.now();
   const projects = state.forgeProjects ?? [];
+  /* Announcements drafted before the usage reply existed get the
+     deterministic one, so no contract goes out without its how-to. */
+  const unreplied = projects.filter((p) => {
+    if (p.status !== "verified" || !p.announceDraftId) return false;
+    const d = state.drafts.find((x) => x.id === p.announceDraftId);
+    return Boolean(d && d.status === "approved" && d.followUp === undefined);
+  });
+  if (unreplied.length > 0) {
+    await updateState((s) => {
+      for (const p of unreplied) {
+        const d = s.drafts.find((x) => x.id === p.announceDraftId);
+        if (d && d.followUp === undefined) d.followUp = forgeUsageFallback(p);
+      }
+    });
+    log(`added the usage reply to ${unreplied.length} pending announcement(s): ${unreplied.map((p) => p.title).join(", ")}`);
+  }
   const refused = projects.find((p) => {
     if (p.status !== "verified" || !p.announceDraftId) return false;
     if ((p.announceAttempts ?? 1) >= MAX_ANNOUNCE_ATTEMPTS) return false;
