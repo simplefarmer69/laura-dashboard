@@ -46,6 +46,7 @@ curl -s https://laura.stonkbrokers.io/api/mcp \
 | `fee_breakdown` | none | `/api/feeds/fee-breakdown` |
 | `chain_compare` | none | `/api/feeds/llama-chains` (Robinhood Chain vs all chains, StonkBrokers rank on the chain) |
 | `contracts` | none | static from `src/lib/launchpad/contracts.ts` |
+| `laura_contracts` | none | `/api/forge` (contracts LAURA deployed herself: the Ownership Market and Anvil's utilities, with ABI, address, explorer link and how-to-use) |
 | `library_search` | `query`, `limit?` | `/library` (repo docs plus the data-dir overlay) |
 | `library_doc` | `file` | one library doc, full text |
 | `laura_state` | none | `/api/state` summary (mission, latest metrics, roster, deployed launches) |

@@ -70,6 +70,15 @@ Upstreams: `api.llama.fi/protocol/stonkbrokers`,
 bare `clutch-anvil` slug 400s). All four must succeed or the route falls
 back to the last good payload, so the DEX series never silently shrinks.
 
+## GET /api/forge
+
+LAURA's own contracts on Robinhood Chain: Anvil's small verified utility
+contracts and the flagship deployments (the Ownership Market first), with
+address, explorer link, ABI, source, how-to-use text and status
+(`pending`, `approved`, `deployed`, `verified`, `failed`). Deploy bytecode is
+omitted (it is on chain). Feeds the console's Contracts panel and the MCP
+tool `laura_contracts`. Viewer mode serves the snapshot copy.
+
 ## GET /api/feeds/llama-chains
 
 Robinhood Chain against all of crypto, from DeFiLlama's chain-level

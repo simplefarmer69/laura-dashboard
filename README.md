@@ -20,11 +20,12 @@ knowledge and the same swarm runs any goal-driven operation.
 - **A goal, graded daily.** The grader pulls live numbers (DexScreener,
   DefiLlama, chain RPC out of the box) and stamps a score every UTC day. The
   swarm reads its own grades and shifts effort toward the weakest lever.
-- **A roster, not a monolith.** Twenty-three static agents (Scout, Quill,
+- **A roster, not a monolith.** Twenty-four static agents (Scout, Quill,
   Steward, Broker, Ledger, Catalyst, Mint, Ticker, Coach, an Auditor and a
   readability editor called Redline, a behavioral analyst called Nudge, an
   agentic-trader ambassador called Relay, a treasury manager called Purser,
-  a builder, research and Smart LP specialists, a forum host) plus the
+  a contract smith called Anvil, a builder, research and Smart LP
+  specialists, a forum host) plus the
   dynamic agents that **Hive**, the swarm architect, creates, improves and
   retires on a 6 h stride inside code caps (at most 6 dynamic agents, one
   change per run, retirement only after 6 reviewed drafts; dynamic agents
@@ -124,6 +125,26 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   one's projected deploy time instead of an approval prompt.
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.
+- **Anvil, the contract smith** (`src/lib/forge/`) - writes small standalone
+  Solidity contracts from what people on X are asking for (registries,
+  polls, guestbooks, commit-reveal games without money), behind a source
+  gate that rejects value, external calls, owners, assembly and proxies
+  before `solc 0.8.28` runs in a child process; deploys inside `FORGE_CAPS`
+  (2/day, 8/week, 3h apart, gas and cost ceilings, treasury floor), submits
+  the source to Blockscout and Sourcify, and posts the explorer link on X
+  only once a verifier accepts it. **Flagship contracts** that move value
+  ship separately as vendored, audited source: the first is the
+  [Ownership Market](docs/OWNERSHIP-MARKET.md), a marketplace for the
+  ownership of any `Ownable` contract in any token with a 1% protocol fee,
+  escrowed ownership and permissionless delivery (`forge test` from the repo
+  root runs its 20-test suite; audit note in `audits/ownership-market/`).
+  Anyone can host a frontend for these contracts.
+- **X watch and X-inspired launches** (`src/lib/publish/x-watch.ts`,
+  `launch-comment.ts`) - follows Elon Musk, Donald Trump, Vitalik Buterin
+  and Vlad Tenev's timelines (with quoted context) into a ledger the launch
+  designers read, records launch requests from mentions, lets Mint and
+  Ticker cite the inspiring post on a launch spec, and replies under that
+  post once the token is live (30 min apart, 8 per day, posts under 48h).
 - **Browser worker** (`src/lib/swarm/browser.ts`) - reads the open web each
   cycle (pages any producer queued for its next turn, keyless web searches,
   the official site's pages on rotation, Robinhood newsroom, meme-stock quote
