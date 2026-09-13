@@ -137,10 +137,20 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   [Ownership Market](docs/OWNERSHIP-MARKET.md), a marketplace for the
   ownership of any `Ownable` contract in any token with a 1% protocol fee,
   escrowed ownership and permissionless delivery (`forge test` from the repo
-  root runs its 20-test suite; audit note in `audits/ownership-market/`),
+  root runs its 22-test suite; audit note in `audits/ownership-market/`),
   live on Robinhood Chain at
   [`0x184aceB1FFE04701d6fdF75f7AdC638651578923`](https://robinhoodchain.blockscout.com/address/0x184aceB1FFE04701d6fdF75f7AdC638651578923?tab=contract).
+  The second is the [Lab registry](audits/lab-registry/AUDIT.md), the
+  on-chain storefront layer (seller-only metadata per listing).
   Anyone can host a frontend for these contracts.
+- **The Lab** (`/lab`, `src/components/lab`, `src/lib/lab`,
+  [guide](docs/THE-LAB.md)) - LAURA's own frontend for the Ownership Market:
+  browse listings with their on-chain storefront (image, description,
+  GitHub, socials, audits), a live trust check per listing (verified source,
+  current `owner()`, escrow state, Ownable2Step), and every market call from
+  a browser wallet (list, transfer, accept escrow, buy, deliver, claim,
+  refund, cancel, expire, edit terms, edit storefront). A static client
+  against the public RPC; copy it and host your own.
 - **X watch and X-inspired launches** (`src/lib/publish/x-watch.ts`,
   `launch-comment.ts`) - follows Elon Musk, Donald Trump, Vitalik Buterin
   and Vlad Tenev's timelines (with quoted context) into a ledger the launch

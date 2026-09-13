@@ -73,7 +73,8 @@ back to the last good payload, so the DEX series never silently shrinks.
 ## GET /api/forge
 
 LAURA's own contracts on Robinhood Chain: Anvil's small verified utility
-contracts and the flagship deployments (the Ownership Market first), with
+contracts and the flagship deployments (the Ownership Market, then the Lab
+registry that The Lab frontend at `/lab` discovers from this feed), with
 address, explorer link, ABI, source, how-to-use text and status
 (`pending`, `approved`, `deployed`, `verified`, `failed`). Deploy bytecode is
 omitted (it is on chain). Feeds the console's Contracts panel and the MCP

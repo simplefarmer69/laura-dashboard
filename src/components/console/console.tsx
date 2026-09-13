@@ -6,6 +6,7 @@ import {
   Activity,
   Bot,
   BookOpen,
+  FlaskConical,
   GitBranch,
   Inbox,
   LineChart as LineChartIcon,
@@ -16,6 +17,7 @@ import {
   Rocket,
   Settings2,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -126,6 +128,10 @@ export function Console() {
                 )}
               </Badge>
             ) : null}
+            <Button variant="outline" size="sm" render={<Link href="/lab" />} title="The Lab: buy and sell smart contracts on Robinhood Chain">
+              <FlaskConical className="size-3.5 text-primary" />
+              <span className="hidden sm:inline">The Lab</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
               <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>

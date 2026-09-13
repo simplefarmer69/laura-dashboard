@@ -50,9 +50,16 @@ no pause, no upgrade; the fee recipient is immutable.
 Talking points (all true, all checkable):
 - 1% protocol fee on every sale goes to LAURA's treasury: protocol revenue for
   the mission, from builders across the whole chain, not only StonkBrokers.
-- 20 foundry tests: reentrancy, fee-on-transfer and USDT-style tokens,
-  front-running of escrowed contracts, refunds, Ownable2Step, no privileged
-  role. Audit note: `audits/ownership-market/AUDIT.md`.
+- 22 foundry tests: reentrancy, fee-on-transfer and USDT-style tokens,
+  front-running of escrowed contracts, refunds, Ownable2Step (including: a
+  pending-only 2Step escrow can never be bought and books no fee; buy() reads
+  owner() live), no privileged role. Audit note:
+  `audits/ownership-market/AUDIT.md`.
+- **The Lab** (https://laura.stonkbrokers.io/lab) is LAURA's own frontend for
+  it: list, escrow, buy, deliver, claim, refund from a wallet, with an on-chain
+  storefront (image, description, GitHub, socials, audits) per listing. See
+  `50-the-lab.md`. Always send people there, and still say anyone can host
+  their own.
 - Guide for humans (every call, viem and cast examples):
   https://github.com/simplefarmer69/laura-dashboard/blob/main/docs/OWNERSHIP-MARKET.md
 - **Anyone can host a frontend for it.** Say so every time. The contract is

@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ago } from "@/components/console/format";
+import { FLAGSHIP_LINKS } from "@/lib/forge/caps";
 import type { ForgeProject, ForgeStatus } from "@/lib/types";
 
 const EXPLORER = "https://robinhoodchain.blockscout.com";
-const GUIDE = "https://github.com/simplefarmer69/laura-dashboard/blob/main/docs/OWNERSHIP-MARKET.md";
 
 function statusBadge(s: ForgeStatus) {
   switch (s) {
@@ -84,10 +84,17 @@ function ProjectCard({ p }: { p: ForgeProject }) {
             <div>
               <p className="sb-ticker text-[10px] text-muted-foreground">HOW TO USE</p>
               <p className="whitespace-pre-wrap">{p.howToUse}</p>
-              {p.kind === "flagship" && (
-                <a className="inline-flex items-center gap-1 text-primary hover:underline" href={GUIDE} target="_blank" rel="noreferrer">
-                  full guide with viem and cast examples <ExternalLink className="size-3" />
-                </a>
+              {p.kind === "flagship" && p.flagshipKey && FLAGSHIP_LINKS[p.flagshipKey] && (
+                <span className="flex flex-wrap gap-3">
+                  <a className="inline-flex items-center gap-1 text-primary hover:underline" href={FLAGSHIP_LINKS[p.flagshipKey].docUrl} target="_blank" rel="noreferrer">
+                    full guide with viem and cast examples <ExternalLink className="size-3" />
+                  </a>
+                  {FLAGSHIP_LINKS[p.flagshipKey].frontendUrl && (
+                    <a className="inline-flex items-center gap-1 text-primary hover:underline" href={FLAGSHIP_LINKS[p.flagshipKey].frontendUrl ?? "#"} target="_blank" rel="noreferrer">
+                      open The Lab (frontend) <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </span>
               )}
             </div>
             <div>
