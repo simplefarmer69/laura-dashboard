@@ -1,6 +1,7 @@
 import { createPublicClient, createWalletClient, encodeDeployData, formatEther, http, isAddress, type Abi } from "viem";
 import { getAccount } from "@/lib/launchpad/service";
 import { ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
+import { flagshipSpec, openFlagshipThread, seedFlagships } from "@/lib/forge/flagship";
 import { FORGE_CAPS, type ForgeCaps, forgeDeployEligibility } from "@/lib/forge/caps";
 import { checkVerified, explorerContractUrl, submitVerification } from "@/lib/forge/verify";
 import { newId, pushEvent, updateState } from "@/lib/store";
@@ -158,6 +159,12 @@ async function deployProject(
 /** Deterministic announcement when the model is unavailable; still goes through every X gate. */
 export function forgeAnnounceFallback(project: ForgeProject): string {
   const url = project.explorerUrl ?? (project.contractAddress ? explorerContractUrl(project.contractAddress) : "");
+  const spec = flagshipSpec(project);
+  if (spec) {
+    const text = `i deployed and verified the ownership market on robinhood chain: list any contract you own (nft collection, token, vault) for sale in any token, the market escrows the ownership, anyone executes the handover, seller claims the funds, 1% fee. first useful contract from the swarm, not the last. anyone can host a frontend for it. ${url} how to call it: ${spec.docUrl}`;
+    if (text.length <= TWEET_MAX) return text;
+    return `the ownership market is live and verified on robinhood chain: sell any contract you own, in any token, ownership escrowed, 1% fee, no admin. our first useful contract, not our last. anyone can host a frontend. ${url}`;
+  }
   const text = `new on robinhood chain: ${project.title.toLowerCase()}. ${project.blurb} verified source, anyone can use it from the explorer: ${url}`;
   return text.length <= TWEET_MAX ? text : `${project.title.toLowerCase()} is live on robinhood chain, verified and open to anyone: ${url}`;
 }
@@ -170,7 +177,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
     const out = await generateStructured(resolved, {
       schema: forgeAnnounceSchema,
       system: "You write LAURA's X posts. Plain sentences a stranger follows, no hashtags, no emoji, no hype, no price talk, lowercase is fine.",
-      prompt: forgeAnnouncePrompt(project),
+      prompt: forgeAnnouncePrompt(project, flagshipSpec(project)?.docUrl ?? null),
       mock: () => forgeAnnounceMock(project),
     });
     if (!out.usedMock) {
@@ -192,7 +199,10 @@ async function announceVerified(state: SwarmState, project: ForgeProject): Promi
       channel: "x",
       title: `Anvil: ${project.title} is live and verified`,
       body,
-      rationale: `Anvil shipped a verified contract people on X asked for (${project.need.slice(0, 200)}). The post carries the explorer link so anyone can read and use it.`,
+      rationale:
+        project.kind === "flagship"
+          ? `LAURA's first flagship contract on Robinhood Chain is deployed and verified (${project.contractAddress}). The post carries the explorer link and the guide; it is the first useful contract from the swarm, not the last.`
+          : `Anvil shipped a verified contract people on X asked for (${project.need.slice(0, 200)}). The post carries the explorer link so anyone can read and use it.`,
       status: autonomous ? "approved" : "pending",
       createdAt: Date.now(),
       reviewedAt: autonomous ? Date.now() : null,
@@ -237,6 +247,8 @@ async function failProject(projectId: string, msg: string, title: string): Promi
 export async function runForgeTick(state: SwarmState): Promise<void> {
   const ops = opsState();
   if (ops.running) return;
+  /* Vendored flagship contracts (audited in-repo) queue themselves once. */
+  await seedFlagships(state);
   const now = Date.now();
   const projects = state.forgeProjects ?? [];
 
@@ -266,7 +278,9 @@ export async function runForgeTick(state: SwarmState): Promise<void> {
           });
         });
         log(`verified ${deployed.title} at ${deployed.contractAddress} via ${status.via}`);
-        await announceVerified(state, { ...deployed, status: "verified" });
+        const verifiedProject: ForgeProject = { ...deployed, status: "verified", verifiedVia: status.via, verifiedAt: Date.now() };
+        await announceVerified(state, verifiedProject);
+        if (verifiedProject.kind === "flagship") await openFlagshipThread(verifiedProject);
       } else {
         const attempts = deployed.verifyAttempts + 1;
         let note = status.detail;

@@ -98,8 +98,9 @@ export function forgeProjectsDigest(state: SwarmState, limit = 8): string {
     .map((p) => {
       const when = new Date(p.deployedAt ?? p.createdAt).toISOString().slice(0, 10);
       const where = p.contractAddress ? ` at ${p.contractAddress}` : "";
-      const via = p.verifiedVia ? ` (verified via ${p.verifiedVia})` : "";
-      return `- ${when} · ${p.title} [${p.status}]${where}${via}: ${p.blurb} · for: ${p.need.slice(0, 160)}`;
+      const via = p.verifiedVia ? ` (verified via ${p.verifiedVia}, ${p.explorerUrl ?? "explorer"})` : "";
+      const kind = p.kind === "flagship" ? "FLAGSHIP, audited in-repo, guide https://github.com/simplefarmer69/laura-dashboard/blob/main/docs/OWNERSHIP-MARKET.md" : "Anvil design";
+      return `- ${when} · ${p.title} [${p.status}; ${kind}]${where}${via}: ${p.blurb} · for: ${p.need.slice(0, 160)}`;
     })
     .join("\n");
 }

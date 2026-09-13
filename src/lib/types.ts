@@ -1005,6 +1005,12 @@ export interface ForgeProject {
   id: string;
   cycleId: string;
   createdAt: number;
+  /** anvil: designed by the Anvil agent behind the source gate. flagship:
+      a vendored, audited contract from src/lib/forge/contracts (may hold
+      value and call other contracts; reviewed by the operator in the repo). */
+  kind: "anvil" | "flagship";
+  /** Stable key for flagship contracts so they seed exactly once */
+  flagshipKey: string | null;
   title: string;
   /** Who needed this and where it was said (X handles and the need, in plain words) */
   need: string;
