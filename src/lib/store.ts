@@ -6,6 +6,7 @@ import { DEFAULT_AGENTS, DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { archiveState } from "@/lib/swarm/archive";
 import { maybeBackup } from "@/lib/swarm/backup";
 import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
+import { compactState } from "@/lib/swarm/hygiene";
 
 const DATA_DIR = process.env.SWARM_DATA_DIR ?? path.join(process.cwd(), "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -333,6 +334,13 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (o) => o.ts,
     ),
     forum: mergeForum(base.forum ?? [], work.forum ?? [], current.forum ?? []),
+    hygieneNotices: mergeById(
+      base.hygieneNotices ?? [],
+      work.hygieneNotices ?? [],
+      current.hygieneNotices ?? [],
+      (n) => n.id,
+      (n) => n.ts,
+    ),
     lastTuneDate: pick3(base.lastTuneDate, work.lastTuneDate, current.lastTuneDate),
   };
   return merged;
@@ -382,6 +390,10 @@ export async function saveState(state: SwarmState): Promise<void> {
        BEFORE the caps below evict anything, so nothing is ever lost. Additive
        and never-throws; a failure cannot block the hot save. */
     archiveState(toWrite);
+    /* Sweep's hot-store compaction (duplicate bar posts and filler, aged-out
+       unpublished drafts, duplicate events, old archived threads): after the
+       archive, before the caps, throttled inside. */
+    compactState(toWrite);
     toWrite.runs = toWrite.runs.slice(-MAX_RUNS);
     toWrite.metricsHistory = toWrite.metricsHistory.slice(-MAX_METRICS);
     toWrite.intelHistory = (toWrite.intelHistory ?? []).slice(-MAX_INTEL);

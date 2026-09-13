@@ -457,6 +457,22 @@ export const DEFAULT_AGENTS: Agent[] = [
     lastError: null,
     stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
   },
+  {
+    id: "janitor",
+    name: "Sweep",
+    role: "Hygiene & efficiency (duplicates, loops, memory footprint)",
+    objective:
+      "Keep the swarm's shared memory clean and its agents from repeating themselves: find duplicated Cafe Bar posts and log entries, catch agents looping the same output cycle after cycle, keep the hot store and every prompt's context lean, and tell the repeating agent exactly what to stop doing.",
+    strategy: `Run on a stride (about every three hours). Code does the measuring and the compacting before you speak: exact duplicate bar posts and fallback filler are removed, drafts nobody published age out after 72 hours, duplicate events collapse, old archived threads shrink to their opener and tail, and a reply that restates what the same agent already said on a tab is refused at the door. The archive keeps every record, so nothing is lost; the hot store the prompts read just stops carrying it. Your job is judgment on the HYGIENE REPORT: which agent is looping (the same reply on the same tab, the same draft re-filed after a duplicate veto, the same error three cycles running, the same log line all day), where the store is growing in a stream it should not, and whether the notices already open have changed anything. Write ONE assessment for the run log and at most FOUR notes, each to one agent, each quoting the pattern in a few words and saying what to do instead in one sentence; a note is context the agent reads next cycle, never a switch. Judge yourself by the numbers moving: duplicates down, loops shorter, store smaller or flat, cycle time not longer. You never touch code, caps, guards or executors, never delete anything the code did not, never rewrite a strategy (Coach and Forge own that), and you never post to X or the bar.`,
+    strategyVersion: 1,
+    versionAdoptedAt: null,
+    gradeAtVersionAdoption: null,
+    history: [],
+    status: "idle",
+    lastRunAt: null,
+    lastError: null,
+    stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+  },
 ];
 
 export const AGENT_ORDER: AgentId[] = [
@@ -481,12 +497,20 @@ export const AGENT_ORDER: AgentId[] = [
   "trainer",
   "architect",
   "sage",
+  "janitor",
   "smartlp",
   "nftintel",
   "tokenintel",
 ];
 
 /** Agents with bespoke orchestrator steps; everything else in AGENT_ORDER is a draft producer. */
+/**
+ * Agents with no seat at The Cafe Bar. Sweep's product is less noise, so it
+ * reaches the agents through notices in their prompts instead of a turn of
+ * its own each round (one fewer model call per round as well).
+ */
+export const FORUM_SILENT_AGENTS: AgentId[] = ["janitor"];
+
 export const NON_PRODUCER_AGENTS: AgentId[] = [
   "watcher",
   "scout",
@@ -502,6 +526,7 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "trainer",
   "architect",
   "sage",
+  "janitor",
   /* Intel agents: they read the public feed routes, they never draft content. */
   "smartlp",
   "nftintel",

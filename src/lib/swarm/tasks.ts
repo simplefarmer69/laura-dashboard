@@ -19,6 +19,7 @@ import { ART_PALETTES, launchSpecShape, RESERVED_LAUNCH_NEEDLES } from "@/lib/la
 import type { GridToken } from "@/lib/launchpad/service";
 import { ART_MOTIFS, ART_STYLES } from "@/lib/launchpad/art";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
+import { noticesFor } from "@/lib/swarm/hygiene";
 import { TWEET_MAX, X_STYLE_GUIDE } from "@/lib/publish/x-style";
 import { deniedPostsDigest } from "@/lib/publish/editor";
 import {
@@ -219,7 +220,10 @@ function lessonsDigest(lessons: Lesson[], limit = 12): string {
 
 /** System prompt for any agent: charter + identity + live strategy. */
 export function agentSystem(agent: Agent): string {
-  return `${SWARM_CHARTER}\n\nYour name is ${agent.name}. Role: ${agent.role}.\nObjective: ${agent.objective}\n\nCurrent strategy (v${agent.strategyVersion}):\n${agent.strategy}`;
+  const base = `${SWARM_CHARTER}\n\nYour name is ${agent.name}. Role: ${agent.role}.\nObjective: ${agent.objective}\n\nCurrent strategy (v${agent.strategyVersion}):\n${agent.strategy}`;
+  const notices = noticesFor(agent.id);
+  if (notices.length === 0) return base;
+  return `${base}\n\nHYGIENE NOTICES FROM SWEEP (you are repeating yourself; act on these this turn, they expire on their own)\n${notices.map((n) => `- ${n.text}`).join("\n")}`;
 }
 
 /* --------------------------------- Watcher --------------------------------- */

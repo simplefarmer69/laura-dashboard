@@ -2,7 +2,8 @@ import { z } from "zod";
 import { loadState, newId, pushEvent, saveState } from "@/lib/store";
 import { generateStructured, resolveModel, type ResolvedModel } from "@/lib/swarm/llm";
 import { agentSystem } from "@/lib/swarm/tasks";
-import { SWARM_CHARTER } from "@/lib/swarm/roster";
+import { FORUM_SILENT_AGENTS, SWARM_CHARTER } from "@/lib/swarm/roster";
+import { isRepeatInThread, refreshHygieneBoard } from "@/lib/swarm/hygiene";
 import { metricsDigest, recentOutputDigest } from "@/lib/swarm/context";
 import { intelDigest } from "@/lib/swarm/intel";
 import { barWireDigest } from "@/lib/swarm/bar-feeds";
@@ -98,6 +99,8 @@ export interface ForumRoundResult {
   postsWritten: number;
   /** Threads the host archived this round (last call). */
   threadsClosed: number;
+  /** Replies refused at the door for restating a post already on the tab (Sweep's gate). */
+  repeatsRefused: number;
   llmCalls: number;
   llmFallbacks: number;
   notes: string[];
@@ -218,9 +221,14 @@ export function forumDigest(threads: ForumThread[]): string {
 
 /** Who is at the bar tonight: one line per seat so nobody has to guess what a
  * colleague does, especially the seats that joined after the venue opened. */
+/** Who takes a turn at the bar: not paused, not retired, and not one of the seats that work silently (Sweep). */
+export function barSeat(a: Agent): boolean {
+  return a.status !== "paused" && !a.retiredAt && !FORUM_SILENT_AGENTS.includes(a.id);
+}
+
 function rosterDigest(agents: Agent[], selfId: string): string {
   const lines = agents
-    .filter((a) => a.status !== "paused")
+    .filter(barSeat)
     .map((a) => `- ${a.name} (${a.id})${a.id === selfId ? " [you]" : ""}: ${a.role}`);
   lines.push(`- ${BAR_HOST.name} (${BAR_HOST.id}): the barkeep and host, sweeps at the end of every round`);
   return lines.join("\n");
@@ -423,7 +431,7 @@ async function runModeratorTurn(
   /* Threads opened during this round are off limits for closure. */
   const protectedIds = new Set(state.forum.filter((t) => t.posts[0]?.roundId === roundId).map((t) => t.id));
 
-  const active = state.agents.filter((a) => a.status !== "paused");
+  const active = state.agents.filter(barSeat);
   const out = await generateStructured(resolved, {
     schema: moderatorTurnSchema,
     system: moderatorSystem(),
@@ -613,8 +621,9 @@ export async function runForumRound(): Promise<ForumRoundResult> {
   try {
     const state = await loadState();
     state.forum = state.forum ?? [];
+    refreshHygieneBoard(state);
     const resolved = resolveModel(state.settings.llmModel);
-    const active = state.agents.filter((a) => a.status !== "paused");
+    const active = state.agents.filter(barSeat);
     /* One wire per round: the latest intel snapshot plus live off-protocol
        feeds, fetched once so all twelve turns share tonight's material. */
     const intel = barIntel(intelDigest(state.intelHistory?.at(-1) ?? null, state.intelHistory ?? []));
@@ -632,6 +641,7 @@ export async function runForumRound(): Promise<ForumRoundResult> {
       threadsOpened: 0,
       postsWritten: 0,
       threadsClosed: 0,
+      repeatsRefused: 0,
       llmCalls: 0,
       llmFallbacks: 0,
       notes: [],
@@ -698,6 +708,14 @@ export async function runForumRound(): Promise<ForumRoundResult> {
           const thread = state.forum.find((t) => t.id === reply.threadId && t.status === "open");
           if (!thread) {
             result.notes.push(`${agent.id}: reply to unknown thread ${reply.threadId} dropped`);
+            continue;
+          }
+          /* Sweep's door gate: a reply that copies a post already on the tab,
+             or restates what this same agent already said there, never lands. */
+          const repeat = isRepeatInThread(thread, agent.id, reply.body);
+          if (repeat.repeat) {
+            result.repeatsRefused += 1;
+            result.notes.push(`${agent.id}: reply on "${thread.title.slice(0, 50)}" restated ${repeat.of?.agentId === agent.id ? "its own" : `${repeat.of?.agentId}'s`} earlier post; refused`);
             continue;
           }
           const post: ForumPost = {

@@ -55,6 +55,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "roster.created":
     case "roster.improved":
     case "roster.retired":
+    case "hygiene.swept":
       return "evolution";
     case "grade.stamped":
     case "milestone.reached":
@@ -171,6 +172,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "agent.paused":
     case "agent.resumed":
     case "roster.retired":
+    case "hygiene.swept":
       return "bg-muted text-muted-foreground";
     default: {
       const _exhaustive: never = kind;

@@ -20,12 +20,12 @@ knowledge and the same swarm runs any goal-driven operation.
 - **A goal, graded daily.** The grader pulls live numbers (DexScreener,
   DefiLlama, chain RPC out of the box) and stamps a score every UTC day. The
   swarm reads its own grades and shifts effort toward the weakest lever.
-- **A roster, not a monolith.** Twenty-four static agents (Scout, Quill,
+- **A roster, not a monolith.** Twenty-five static agents (Scout, Quill,
   Steward, Broker, Ledger, Catalyst, Mint, Ticker, Coach, an Auditor and a
   readability editor called Redline, a behavioral analyst called Nudge, an
   agentic-trader ambassador called Relay, a treasury manager called Purser,
-  a contract smith called Anvil, a builder, research and Smart LP
-  specialists, a forum host) plus the
+  a contract smith called Anvil, a hygiene agent called Sweep, a builder,
+  research and Smart LP specialists, a forum host) plus the
   dynamic agents that **Hive**, the swarm architect, creates, improves and
   retires on a 6 h stride inside code caps (at most 6 dynamic agents, one
   change per run, retirement only after 6 reviewed drafts; dynamic agents
@@ -151,6 +151,25 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   a browser wallet (list, transfer, accept escrow, buy, deliver, claim,
   refund, cancel, expire, edit terms, edit storefront). A static client
   against the public RPC; copy it and host your own.
+- **Sweep, the hygiene agent** (`src/lib/swarm/hygiene.ts`,
+  [library doc](library/51-hygiene.md)) - keeps the swarm from repeating
+  itself and its memory lean. Code does the cleaning inside every state
+  save, after the SQLite archive has mirrored everything: exact duplicate
+  Cafe Bar posts and no-LLM filler go, unpublished drafts age out after
+  72 h (hot-store cap 300), duplicate events collapse, archived threads
+  beyond 120 leave the hot store and week-old ones keep opener and tail.
+  A door gate refuses a bar reply that restates what the same agent already
+  said on that tab. Every ~3 h Sweep measures duplicates, loops (same reply
+  on a tab, same draft re-filed after a duplicate veto, same skip record,
+  same error three cycles running, same log line all day) and footprint,
+  then writes one assessment and at most four notices; a notice lands in
+  the named agent's system prompt for 24 h. Sweep never deletes beyond the
+  code, never edits strategies, never posts.
+- **Posts with pictures** - the X rail uploads images through the v2 media
+  endpoint (`Draft.media`, files under `data/media/`); flagship contract
+  announcements carry a Chromium screenshot of their frontend (The Lab),
+  rank first in the rail and stay eligible for 48 h so the daily cap never
+  starves them.
 - **X watch and X-inspired launches** (`src/lib/publish/x-watch.ts`,
   `launch-comment.ts`) - follows Elon Musk, Donald Trump, Vitalik Buterin
   and Vlad Tenev's timelines (with quoted context) into a ledger the launch
@@ -336,7 +355,7 @@ What the posts are about, and how the voice improves:
 ## Layout
 
 ```
-src/lib/swarm/       charter, roster, orchestrator, tuner, forum, archive, browser worker, architect (Hive)
+src/lib/swarm/       charter, roster, orchestrator, tuner, forum, archive, browser worker, architect (Hive), hygiene (Sweep)
 src/lib/mcp/         read-only MCP server for other agents (tools, resources, prompts)
 src/lib/publish/     X rails: auto-publish, mentions, Redline editor, Robinhood people, guards
 src/lib/grader/      metric adapters + scoring rubric (swap for your goal)

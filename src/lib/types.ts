@@ -318,7 +318,9 @@ export type KnownAgentId =
   | "tokenintel"
   | "treasurer"
   /** Anvil: contract smith; writes, compiles, deploys and verifies small contracts people on X asked for. */
-  | "smith";
+  | "smith"
+  /** Sweep: hygiene and efficiency; duplicate and loop detection, hot-store compaction, notices to repeating agents. */
+  | "janitor";
 
 /**
  * Agents the Architect creates at runtime carry a `dyn_` id. They live only
@@ -653,6 +655,8 @@ export type SwarmEventKind =
   /** The explorer accepted the source: Read/Write tabs are live for everyone. */
   | "forge.verified"
   | "forge.failed"
+  /** Sweep's hygiene pass: what was compacted, which loops were found, notices issued. */
+  | "hygiene.swept"
   | "swarm.health"
   | "error";
 
@@ -1139,6 +1143,8 @@ export interface SwarmState {
   forgeProjects?: ForgeProject[];
   /** The Cafe Bar — the swarm's open forum. Absent before the venue existed. */
   forum?: ForumThread[];
+  /** Sweep's open notices to agents that are repeating themselves (expire on their own). */
+  hygieneNotices?: HygieneNotice[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
 }
@@ -1192,6 +1198,24 @@ export interface ForumThread {
   /** Public reason the thread closed, one or two plain sentences. */
   closedReason?: string;
   closedAt?: number;
+  /** Posts Sweep removed from this archived thread's hot copy (the archive keeps them). */
+  compactedPosts?: number;
+}
+
+/**
+ * A hygiene notice: Sweep telling one agent, in its prompt, that it is
+ * repeating itself and what to do instead. Context, not a switch: it never
+ * pauses an agent, and it expires on its own.
+ */
+export interface HygieneNotice {
+  id: string;
+  agentId: string;
+  ts: number;
+  expiresAt: number;
+  /** Which pattern it answers (one open notice per agent and kind). */
+  kind: string;
+  text: string;
+  source: "code" | "model";
 }
 
 export interface ResearchBrief {

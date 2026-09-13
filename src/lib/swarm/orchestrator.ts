@@ -90,6 +90,18 @@ import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
 import { skillsForAgent, writeSkill } from "@/lib/swarm/skills";
 import { applyEditorReviews, editorMock, editorPrompt, editorSchema, isXPost } from "@/lib/publish/editor";
 import { ARCHITECT_STRIDE_MS, activeDynamicAgents, applyArchitectAction, architectMock, architectPrompt, architectSchema } from "@/lib/swarm/architect";
+import {
+  SWEEP_STRIDE_MS,
+  applyNotices,
+  codeNotices,
+  compactState,
+  hygieneDigest,
+  hygieneReport,
+  refreshHygieneBoard,
+  sweepMock,
+  sweepPrompt,
+  sweepSchema,
+} from "@/lib/swarm/hygiene";
 import { browseCandidates, browseDigest, browsePages, requestBrowse, requestSearch } from "@/lib/swarm/browser";
 import { fetchSiteContext, siteDigest } from "@/lib/swarm/site";
 import { coachProposalBudget, mintGate, mintQueueLimit, producerOrder, tuneSettings } from "@/lib/swarm/tuner";
@@ -229,6 +241,8 @@ export function runCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
 
 async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
   const state = await loadState();
+  /* Sweep's open notices reach every agentSystem() built this cycle. */
+  refreshHygieneBoard(state);
   const resolved = resolveModel(state.settings.llmModel);
   const run: CycleRun = {
     id: newId("run"),
@@ -1677,6 +1691,84 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         architect.lastError = String(err);
         step({ agentId: "architect", label: "Roster design", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "architect", title: "Hive failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 5c. Sweep: hygiene and efficiency. Strided (~3h). Code measures and
+       compacts first (the same compaction every save runs, forced here so
+       the numbers Sweep reads are post-clean), issues deterministic notices
+       for loops over threshold, then one model call turns the report into an
+       assessment and at most four pointed notes. Sweep never deletes beyond
+       what the code did and never touches strategies. */
+    const janitor = agentById(state, "janitor");
+    if (janitor.status === "paused") {
+      step({ agentId: "janitor", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (janitor.lastRunAt !== null && Date.now() - janitor.lastRunAt < SWEEP_STRIDE_MS) {
+      step({
+        agentId: "janitor",
+        label: "Hygiene",
+        status: "skipped",
+        summary: `Strided: next sweep in ~${Math.ceil((SWEEP_STRIDE_MS - (Date.now() - janitor.lastRunAt)) / 60_000)} min · ${(state.hygieneNotices ?? []).filter((n) => n.expiresAt > Date.now()).length} notice(s) open`,
+        durationMs: 0,
+      });
+      janitor.status = "idle";
+    } else {
+      try {
+        const out = await timed(async () => {
+          const compaction = compactState(state, Date.now(), true);
+          const report = hygieneReport(state);
+          const nameOf = (id: string) => state.agents.find((a) => a.id === id)?.name ?? id;
+          const fromCode = codeNotices(report, nameOf);
+          const openNotices = (state.hygieneNotices ?? []).filter((n) => n.expiresAt > Date.now());
+          const roster = state.agents.filter((a) => !a.retiredAt).map((a) => `- ${a.id} (${a.name}): ${a.role}`).join("\n");
+          const model = tally(
+            await generateStructured(resolved, {
+              schema: sweepSchema,
+              system: agentSystem(janitor),
+              prompt: sweepPrompt({
+                today: ctx.grade.date,
+                report: hygieneDigest(report, nameOf),
+                roster,
+                compaction,
+                openNotices: openNotices.length ? openNotices.map((n) => `- [${n.source}] ${n.text}`).join("\n") : "None.",
+              }),
+              mock: () => sweepMock(report),
+            }),
+          );
+          const known = new Set(state.agents.map((a) => a.id as string));
+          const fromModel = model.usedMock
+            ? []
+            : model.value.notes
+                .filter((n) => known.has(n.agentId) && n.agentId !== "janitor")
+                .map((n) => ({
+                  id: newId("hn"),
+                  agentId: n.agentId,
+                  ts: Date.now(),
+                  expiresAt: Date.now() + 24 * 3600_000,
+                  kind: "model",
+                  text: `Sweep: ${n.note}`,
+                  source: "model" as const,
+                }));
+          applyNotices(state, [...fromCode, ...fromModel]);
+          return { compaction, report, model, notices: fromCode.length + fromModel.length };
+        });
+        const { compaction: c, report: r, model, notices } = out.value;
+        markRan(janitor);
+        const summary = `${r.loops.length} loop pattern(s), ${notices} notice(s) issued · dropped ${c.forumPostsDropped} bar post(s), ${c.draftsDropped} draft(s), ${c.eventsDropped} event(s), ${c.forumThreadsDropped} archived thread(s) · store ${Math.round(r.footprint.totalBytes / 1024)} KB · ${model.value.assessment.slice(0, 220)}${model.usedMock ? " (fallback)" : ""}`;
+        step({ agentId: "janitor", label: "Hygiene", status: "ok", summary, durationMs: out.ms });
+        pushEvent(state, {
+          kind: "hygiene.swept",
+          agentId: "janitor",
+          title: `Sweep: ${r.loops.length} loop pattern(s), ${notices} notice(s), ${c.forumPostsDropped + c.draftsDropped + c.eventsDropped} record(s) left the hot store`,
+          detail: `${model.value.assessment}\n\n${hygieneDigest(r, (id) => state.agents.find((a) => a.id === id)?.name ?? id)}`.slice(0, 3000),
+          refId: run.id,
+        });
+      } catch (err) {
+        janitor.status = "error";
+        janitor.lastError = String(err);
+        step({ agentId: "janitor", label: "Hygiene", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "janitor", title: "Sweep failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }

@@ -408,7 +408,7 @@ async function tick(): Promise<void> {
         }
         s.lastCycleAt = Date.now();
         log(
-          `forum round ${round.roundId} done: ${round.threadsOpened} thread(s), ${round.postsWritten} post(s), ${round.llmCalls} LLM call(s)${round.notes.length ? `, notes: ${round.notes.slice(0, 2).join("; ")}` : ""}`,
+          `forum round ${round.roundId} done: ${round.threadsOpened} thread(s), ${round.postsWritten} post(s), ${round.repeatsRefused} repeat(s) refused, ${round.llmCalls} LLM call(s)${round.notes.length ? `, notes: ${round.notes.slice(0, 2).join("; ")}` : ""}`,
         );
         void maybePublishSnapshot({ force: true });
         return;
