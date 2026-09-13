@@ -24,7 +24,7 @@ const OVERLAY_DIR = process.env.SWARM_LIBRARY_OVERLAY_DIR ?? path.join(DATA_DIR,
 const CACHE_TTL_MS = 60_000;
 const SEP = "\n\n---\n\n";
 
-interface LibraryDoc {
+export interface LibraryDoc {
   file: string;
   text: string;
 }
@@ -42,7 +42,7 @@ async function readDocsDir(dir: string): Promise<LibraryDoc[]> {
   }
 }
 
-async function libraryDocs(): Promise<LibraryDoc[]> {
+export async function libraryDocs(): Promise<LibraryDoc[]> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.docs;
   const [repo, overlay] = await Promise.all([readDocsDir(LIBRARY_DIR), readDocsDir(OVERLAY_DIR)]);
   const byFile = new Map(repo.map((d) => [d.file, d]));
