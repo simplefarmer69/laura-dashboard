@@ -311,6 +311,13 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (u) => u.id,
       (u) => u.createdAt,
     ),
+    forgeProjects: mergeById(
+      base.forgeProjects ?? [],
+      work.forgeProjects ?? [],
+      current.forgeProjects ?? [],
+      (p) => p.id,
+      (p) => p.createdAt,
+    ),
     treasuryEcoTrades: mergeById(
       base.treasuryEcoTrades ?? [],
       work.treasuryEcoTrades ?? [],

@@ -296,7 +296,9 @@ export type KnownAgentId =
   | "smartlp"
   | "nftintel"
   | "tokenintel"
-  | "treasurer";
+  | "treasurer"
+  /** Anvil: contract smith; writes, compiles, deploys and verifies small contracts people on X asked for. */
+  | "smith";
 
 /**
  * Agents the Architect creates at runtime carry a `dyn_` id. They live only
@@ -513,6 +515,16 @@ export interface Settings {
    * approved drafts never auto-post. Kill switch: flip off for a manual gate.
    */
   autoPublishX: boolean;
+  /**
+   * Anvil execution (operator directive 2026-09-13): approved Forge projects
+   * deploy their compiled, gate-checked contract from the treasury wallet and
+   * submit the source for verification. ON by default; FORGE_CAPS (deploys
+   * per day/week, gap, gas ceiling, bytecode size, treasury floor) and the
+   * source gate (no payable, no external calls, no owner, no assembly) apply
+   * regardless of this flag. Kill switch: flip off to stop deploys while
+   * Anvil keeps designing.
+   */
+  autoExecuteForge: boolean;
 }
 
 export type SwarmEventKind =
@@ -595,6 +607,17 @@ export type SwarmEventKind =
   | "roster.retired"
   /** Scout recorded an upcoming official project from the operator's public comms. */
   | "pipeline.noted"
+  /** One of the closely watched X voices (Elon, Trump, Vitalik, Vlad) posted something the swarm noted. */
+  | "x.watched"
+  /** LAURA commented under the post (or the requester) a launch was built from, once the token was live. */
+  | "launch.commented"
+  /** Anvil designed and compiled a contract from what people on X asked for. */
+  | "forge.proposed"
+  /** Anvil's contract deployed on Robinhood Chain (source verification follows). */
+  | "forge.deployed"
+  /** The explorer accepted the source: Read/Write tabs are live for everyone. */
+  | "forge.verified"
+  | "forge.failed"
   | "swarm.health"
   | "error";
 
@@ -719,6 +742,28 @@ export interface LaunchProposal {
    *  read surface (the /api/safe-launch/floor rows the /launcher page renders).
    *  An armed launch without this has NOT been proven user-visible. */
   verifiedAt?: number | null;
+  /**
+   * The X post this launch answers (operator directive 2026-09-13: launches
+   * from X interactions). Either a closely watched voice's post (Elon, Trump,
+   * Vitalik, Vlad) or a mention asking LAURA to launch something. Once the
+   * token is live the comment rail replies under that post with the launch.
+   */
+  inspiredBy?: LaunchInspiration | null;
+  /** The comment LAURA left under the source post once the launch was live. */
+  inspiredReply?: { at: number; id: string; url: string; text: string } | null;
+  /** Comment attempts so a refused reply is retried a bounded number of times. */
+  inspiredReplyAttempts?: number;
+}
+
+/** The X post a launch was built from. */
+export interface LaunchInspiration {
+  /** "watched": one of the closely watched voices; "mention": someone tagged LAURA asking for it. */
+  source: "watched" | "mention";
+  tweetId: string;
+  /** Author handle without the @ */
+  author: string;
+  /** The post text as read (trimmed), kept so the comment can quote the fact it answers. */
+  text: string;
 }
 
 /** Creator-fee economics for one deployed launch (Smart Launch V2 pad). */
@@ -938,6 +983,69 @@ export interface UtilityProject {
   error: string | null;
 }
 
+/* --------------------------------- Anvil ---------------------------------- */
+
+/**
+ * Lifecycle of an Anvil contract: designed and compiled ("approved" under
+ * autonomy, "pending" otherwise) -> "deployed" (address on chain, source
+ * submitted for verification) -> "verified" (explorer shows source and the
+ * Read/Write tabs; the X post goes out) or "failed" / "rejected".
+ */
+export type ForgeStatus = "pending" | "approved" | "deployed" | "verified" | "failed" | "rejected";
+
+/**
+ * A small contract Anvil wrote because people on X needed it (operator
+ * directive 2026-09-13: "simple verified smart contracts onchain based on
+ * things people need based on x context"). The source is the whole contract;
+ * the gate in src/lib/forge/gate.ts refused anything outside the safe subset
+ * before it was compiled, and the executor deploys only the bytecode that
+ * compile produced from this exact source.
+ */
+export interface ForgeProject {
+  id: string;
+  cycleId: string;
+  createdAt: number;
+  title: string;
+  /** Who needed this and where it was said (X handles and the need, in plain words) */
+  need: string;
+  /** The X post that asked for it, when one did */
+  sourceTweetId: string | null;
+  sourceAuthor: string | null;
+  contractName: string;
+  /** Full Solidity source (single file, single contract, pragma 0.8.28) */
+  source: string;
+  /** Constructor arguments as strings, in ABI order (empty for no constructor) */
+  constructorArgs: string[];
+  abi: unknown[];
+  /** Creation bytecode from the compile; the executor deploys exactly this */
+  bytecode: string;
+  compiler: string;
+  /** Plain instructions: which function to call on the explorer, with what, and what happens */
+  howToUse: string;
+  /** One sentence for the X post (what it does, who it is for) */
+  blurb: string;
+  rationale: string;
+  /** Compile attempts it took (1 = first try) */
+  compileAttempts: number;
+  status: ForgeStatus;
+  reviewedAt: number | null;
+  reviewerNote: string | null;
+  contractAddress: string | null;
+  txHash: string | null;
+  deployedAt: number | null;
+  /** Gas paid for the deploy, in ETH */
+  deployCostEth: number | null;
+  /** Explorer verification: where it was accepted, when */
+  verifiedAt: number | null;
+  verifiedVia: "blockscout" | "sourcify" | null;
+  verifyAttempts: number;
+  /** Explorer URL for the contract (code tab once verified) */
+  explorerUrl: string | null;
+  /** Draft id of the X post announcing it, once created */
+  announceDraftId: string | null;
+  error: string | null;
+}
+
 /** Periodic on-chain snapshot of LAURA's treasury and launch earnings. */
 export interface TreasurySnapshot {
   updatedAt: number;
@@ -986,6 +1094,8 @@ export interface SwarmState {
   treasuryOps?: TreasuryOpRecord[];
   /** Builder utility projects for LAURA's launched tokens (caps computed from this). */
   utilityProjects?: UtilityProject[];
+  /** Anvil's contracts: written from X needs, compiled, deployed and verified (FORGE_CAPS computed from this). */
+  forgeProjects?: ForgeProject[];
   /** The Cafe Bar — the swarm's open forum. Absent before the venue existed. */
   forum?: ForumThread[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */

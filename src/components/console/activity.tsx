@@ -30,6 +30,9 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "forum.post":
     case "x.replied":
     case "x.followed":
+    case "x.watched":
+    case "launch.commented":
+    case "forge.proposed":
     case "pipeline.noted":
     case "treasury.proposed":
     case "cycle.started":
@@ -83,6 +86,9 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "utility.acquired":
     case "utility.shipped":
     case "utility.failed":
+    case "forge.deployed":
+    case "forge.verified":
+    case "forge.failed":
       return "operator";
     default: {
       const _exhaustive: never = kind;
@@ -130,8 +136,11 @@ export function kindTone(kind: SwarmEventKind): string {
     case "launch.deployed":
     case "launch.armed":
     case "launch.verified":
+    case "launch.commented":
     case "utility.approved":
     case "utility.shipped":
+    case "forge.deployed":
+    case "forge.verified":
       return "bg-[var(--sb-green)]/15 text-[var(--sb-green)]";
     case "draft.rejected":
     case "proposal.rejected":
@@ -139,6 +148,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "launch.failed":
     case "utility.rejected":
     case "utility.failed":
+    case "forge.failed":
     case "novelty.rejected":
     case "critic.vetoed":
     case "editor.held":
@@ -153,6 +163,8 @@ export function kindTone(kind: SwarmEventKind): string {
     case "proposal.created":
     case "launch.proposed":
     case "utility.proposed":
+    case "forge.proposed":
+    case "x.watched":
       return "bg-secondary text-foreground";
     case "cycle.started":
     case "cycle.finished":

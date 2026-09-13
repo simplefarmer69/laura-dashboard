@@ -27,6 +27,11 @@ import {
   criticPrompt,
   criticSchema,
   draftsSchema,
+  forgeMock,
+  forgePrompt,
+  forgeRepairPrompt,
+  forgeSchema,
+  type ForgeOut,
   launchSchema,
   mintMock,
   mintPrompt,
@@ -70,6 +75,11 @@ import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
 import { recentXPosts } from "@/lib/publish/x-guard";
 import { recentXPostsDigest } from "@/lib/publish/x-style";
 import { robinhoodPeopleDigest } from "@/lib/publish/x-people";
+import { findWatchedOrRequested, xInteractionsDigest } from "@/lib/publish/x-watch";
+import { FORGE_CAPS, forgeCapacityDigest, forgeGate, forgeProjectsDigest } from "@/lib/forge/caps";
+import { gateSource, SOLIDITY_RULES_FOR_PROMPT } from "@/lib/forge/gate";
+import { compileSource } from "@/lib/forge/compile";
+import { parseConstructorArgs } from "@/lib/forge/executor";
 import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { marketAlphaLinesLive, mergeAlpha } from "@/lib/swarm/market-alpha";
@@ -98,6 +108,7 @@ import type {
   DailyGrade,
   Draft,
   IntelSnapshot,
+  ForgeProject,
   LaunchProposal,
   MetricsSnapshot,
   RunStep,
@@ -119,6 +130,8 @@ const VAULT_STRIDE_MS = 2 * 60 * 60_000;
 const TREASURER_STRIDE_MS = VAULT_STRIDE_MS;
 const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
 const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
+/** Anvil designs at most one contract about every six hours (FORGE_CAPS allow 2 deploys a day). */
+const FORGE_STRIDE_MS = 6 * 60 * 60_000;
 /** Forge works the upgrade queue about every 90 minutes: two targets per run
  *  covers the full 17-seat roster roughly daily. */
 const TRAINER_STRIDE_MS = 1.5 * 60 * 60_000;
@@ -432,6 +445,7 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       llmProvider: resolved.provider,
       xPosted: recentXPostsDigest(await recentXPosts(10)),
       chainAlpha: mergeAlpha(chainAlphaDigest(intelSnap, state.intelHistory ?? []), await marketAlphaLinesLive()),
+      xVoices: await xInteractionsDigest().catch(() => "WATCHED VOICES unavailable this cycle."),
     };
 
     /* 1d. Watcher: interprets the on-chain digest into a headline + alerts
@@ -1249,6 +1263,145 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       await saveState(state);
     }
 
+    /* 4c. Anvil: a small verified contract from what people on X need
+       (operator directive 2026-09-13). Strided; the design is gated, compiled
+       and repaired here, so what reaches the queue is deployable bytecode
+       from an approved source. The executor deploys it on a later tick. */
+    const smith = agentById(state, "smith");
+    const smithDue = (smith.lastRunAt ?? 0) <= Date.now() - FORGE_STRIDE_MS;
+    const smithBlocked = forgeGate(state);
+    if (smith.status === "paused") {
+      step({ agentId: "smith", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (!smithDue) {
+      step({
+        agentId: "smith",
+        label: "Contract",
+        status: "skipped",
+        summary: `Strided: next contract design in ~${Math.ceil((FORGE_STRIDE_MS - (Date.now() - (smith.lastRunAt ?? 0))) / 60_000)} min`,
+        durationMs: 0,
+      });
+    } else if (smithBlocked.blocked) {
+      step({ agentId: "smith", label: "Contract", status: "skipped", summary: smithBlocked.reason, durationMs: 0 });
+    } else {
+      try {
+        const out = await timed(async () =>
+          tally(
+            await generateStructured(resolved, {
+              schema: forgeSchema,
+              system: agentSystem(smith),
+              prompt: forgePrompt(ctx, forgeProjectsDigest(state), forgeCapacityDigest(state), SOLIDITY_RULES_FOR_PROMPT),
+              mock: () => forgeMock(),
+            }),
+          ),
+        );
+        let design: ForgeOut["project"] = out.value.value.project;
+        let skipReason = out.value.value.skipReason ?? "No contract this stride";
+        let compiled: Awaited<ReturnType<typeof compileSource>> | null = null;
+        let attempts = 0;
+        let lastProblems: string[] = [];
+        while (design && attempts < FORGE_CAPS.maxCompileAttempts) {
+          attempts += 1;
+          const gate = gateSource(design.source, design.contractName);
+          lastProblems = [...gate.problems];
+          if (gate.ok) {
+            const result = await compileSource(design.source, design.contractName);
+            if (result.ok) {
+              try {
+                parseConstructorArgs(result.abi, design.constructorArgs);
+                compiled = result;
+                break;
+              } catch (err) {
+                lastProblems = [String(err instanceof Error ? err.message : err)];
+              }
+            } else {
+              lastProblems = result.errors.slice(0, 6);
+            }
+          }
+          if (attempts >= FORGE_CAPS.maxCompileAttempts) break;
+          const repair = await generateStructured(resolved, {
+            schema: forgeSchema,
+            system: agentSystem(smith),
+            prompt: forgeRepairPrompt(design, lastProblems, SOLIDITY_RULES_FOR_PROMPT),
+            mock: () => forgeMock(),
+          });
+          tally(repair);
+          if (repair.usedMock || !repair.value.project) {
+            skipReason = repair.value.skipReason ?? `Design dropped after ${attempts} attempt(s): ${lastProblems.join("; ").slice(0, 200)}`;
+            design = null;
+            break;
+          }
+          design = repair.value.project;
+        }
+        if (design && !compiled) {
+          skipReason = `Design dropped: ${attempts} compile attempts, last problems: ${lastProblems.join("; ").slice(0, 240)}`;
+          design = null;
+        }
+        if (design && compiled) {
+          const found = design.sourceTweetId ? await findWatchedOrRequested(design.sourceTweetId).catch(() => null) : null;
+          const autonomous = state.settings.autoApproveProposals;
+          const project: ForgeProject = {
+            id: newId("forge"),
+            cycleId: run.id,
+            createdAt: Date.now(),
+            title: design.title,
+            need: design.need,
+            sourceTweetId: found ? design.sourceTweetId : null,
+            sourceAuthor: found ? found.author : design.sourceAuthor,
+            contractName: design.contractName,
+            source: design.source,
+            constructorArgs: design.constructorArgs,
+            abi: compiled.abi,
+            bytecode: compiled.bytecode,
+            compiler: compiled.compiler,
+            howToUse: design.howToUse,
+            blurb: design.blurb,
+            rationale: design.rationale,
+            compileAttempts: attempts,
+            status: autonomous ? "approved" : "pending",
+            reviewedAt: autonomous ? Date.now() : null,
+            reviewerNote: autonomous ? AUTO_APPROVE_NOTE : null,
+            contractAddress: null,
+            txHash: null,
+            deployedAt: null,
+            deployCostEth: null,
+            verifiedAt: null,
+            verifiedVia: null,
+            verifyAttempts: 0,
+            explorerUrl: null,
+            announceDraftId: null,
+            error: null,
+          };
+          state.forgeProjects = [...(state.forgeProjects ?? []), project];
+          smith.stats.drafts += 1;
+          if (autonomous) smith.stats.approved += 1;
+          const bytes = (compiled.bytecode.length - 2) / 2;
+          pushEvent(state, {
+            kind: "forge.proposed",
+            agentId: "smith",
+            title: `Anvil wrote ${design.contractName}: ${design.title}`,
+            detail: `${design.blurb} For: ${design.need.slice(0, 240)}. Compiled on attempt ${attempts} (${bytes} bytes, ${compiled.warnings.length} warning(s)); gate passed. ${autonomous ? "Deploys on the next executor tick within FORGE_CAPS." : "Awaits review."}`,
+            refId: project.id,
+          });
+          step({
+            agentId: "smith",
+            label: "Contract",
+            status: "ok",
+            summary: `${design.contractName}: ${design.title} (${bytes} bytes, attempt ${attempts})`,
+            durationMs: out.ms,
+          });
+        } else {
+          step({ agentId: "smith", label: "Contract", status: "skipped", summary: skipReason, durationMs: out.ms });
+        }
+        markRan(smith);
+      } catch (err) {
+        smith.status = "error";
+        smith.lastError = String(err);
+        step({ agentId: "smith", label: "Contract", status: "error", summary: String(err), durationMs: 0 });
+        pushEvent(state, { kind: "error", agentId: "smith", title: "Anvil failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
     /* 5. Coach: lessons + proposals */
     const coach = agentById(state, "coach");
     if (coach.status !== "paused") {
@@ -1734,10 +1887,26 @@ async function enqueueLaunch(
   designSlot: Date,
 ): Promise<LaunchProposal> {
   const autonomous = state.settings.autoExecuteLaunches || state.settings.autoApproveProposals;
+  /* The X post behind the launch, verified against the watch ledger so a
+     designer cannot point the comment rail at an arbitrary tweet. */
+  let inspiredBy: LaunchProposal["inspiredBy"] = null;
+  let inspiredNote = "";
+  if (spec.inspiredBy) {
+    const found = await findWatchedOrRequested(spec.inspiredBy.tweetId).catch(() => null);
+    if (found) {
+      inspiredBy = { source: found.source, tweetId: spec.inspiredBy.tweetId, author: found.author, text: found.text.slice(0, 400) };
+      inspiredNote = ` · answers @${found.author}'s post ${spec.inspiredBy.tweetId} (${spec.inspiredBy.why})`;
+    } else {
+      inspiredNote = ` · inspiredBy ${spec.inspiredBy.tweetId} dropped: not in the watch or request ledger`;
+    }
+  }
   const launch: LaunchProposal = {
     id: newId("launch"),
     cycleId: run.id,
     createdAt: Date.now(),
+    inspiredBy,
+    inspiredReply: null,
+    inspiredReplyAttempts: 0,
     /* Stock picks whose lane is closed at the projected deploy slot resolve
        to an open crypto lane here; unknown lanes fall back to the rotation. */
     lane: resolveLane(spec.lane, designSlot, state.runs.length),
@@ -1782,7 +1951,7 @@ async function enqueueLaunch(
     kind: "launch.proposed",
     agentId: designer.id,
     title: `${designer.name} designed launch: ${spec.name} ($${spec.symbol})${spec.sellsEnabled === false ? " · buy-only requested" : ""}`,
-    detail: spec.message ? `LAURA says: "${spec.message}" · ${spec.concept}` : spec.concept,
+    detail: `${spec.message ? `LAURA says: "${spec.message}" · ${spec.concept}` : spec.concept}${inspiredNote}`,
     refId: launch.id,
   });
   if (autonomous) {

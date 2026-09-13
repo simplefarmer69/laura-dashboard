@@ -41,11 +41,12 @@ const SETTINGS_KEYS: (keyof Settings)[] = [
   "autoExecuteLaunches",
   "autoClaimEarnings",
   "autoExecuteUtility",
+  "autoExecuteForge",
 ];
 
 /** Optional state sections (newer work streams); all public-safe by content:
     X-read intel snapshots and on-chain treasury buys (tx hashes are public). */
-const OPTIONAL_STATE_KEYS = ["treasuryBuys", "intel", "influence", "utilityProjects"] as const;
+const OPTIONAL_STATE_KEYS = ["treasuryBuys", "intel", "influence", "utilityProjects", "forgeProjects"] as const;
 
 /**
  * Size budget. The viewer runs on Vercel, whose functions cap request AND
@@ -165,6 +166,14 @@ function assembleSnapshot(state: SwarmState, shared: SharedSections, limits: Win
   for (const key of OPTIONAL_STATE_KEYS) {
     const value = (state as SwarmState & Record<string, unknown>)[key];
     if (value !== undefined) optional[key] = value;
+  }
+  /* Deploy bytecode is on chain and in the repo build; not worth the bytes here. */
+  if (state.forgeProjects) {
+    optional.forgeProjects = state.forgeProjects.slice(-40).map((p) => {
+      const { bytecode, ...rest } = p;
+      void bytecode;
+      return rest;
+    });
   }
   const forum = forumWindow(state.forum, limits.archivedThreads);
 

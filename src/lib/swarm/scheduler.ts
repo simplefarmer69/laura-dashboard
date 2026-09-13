@@ -12,6 +12,9 @@ import { runBuilderTick } from "@/lib/builder/executor";
 import { runXPublishTick } from "@/lib/publish/auto";
 import { runXMentionsTick } from "@/lib/publish/mentions";
 import { runXPeopleTick } from "@/lib/publish/x-people";
+import { runXWatchTick } from "@/lib/publish/x-watch";
+import { runLaunchCommentTick } from "@/lib/publish/launch-comment";
+import { runForgeTick } from "@/lib/forge/executor";
 import { refreshXPostMetrics } from "@/lib/publish/x-metrics";
 import { maybePublishSnapshot, startLivePublishing } from "@/lib/viewer/publish";
 import { utcDate } from "@/lib/grader/score";
@@ -295,12 +298,33 @@ async function tick(): Promise<void> {
      autoExecuteUtility flag and stay inside BUILDER_CAPS. Never throws. */
   await withChainWork("builder", () => runBuilderTick(state));
 
+  /* Anvil: deploys gate-checked, compiled contracts one step per tick and
+     polls their verification; requires settings.autoExecuteForge and stays
+     inside FORGE_CAPS. Never throws. */
+  await withChainWork("forge", () => runForgeTick(state));
+
   /* Outbound: fresh approved X drafts post themselves inside the x-guard
      caps (one per tick); silent no-op until the access keys exist. */
   try {
     await runXPublishTick(state);
   } catch (err) {
     log(`x auto-publish tick failed: ${String(err)}`);
+  }
+
+  /* Watched voices (Elon, Trump, Vitalik, Vlad): one timeline per tick, each
+     about every 20 min, into the ledger the launch designers read. */
+  try {
+    await runXWatchTick();
+  } catch (err) {
+    log(`x watch tick failed: ${String(err)}`);
+  }
+
+  /* Launch comments: once a launch built from an X post is live, one reply
+     under that post with the token (own caps inside). */
+  try {
+    await runLaunchCommentTick(state);
+  } catch (err) {
+    log(`launch comment tick failed: ${String(err)}`);
   }
 
   /* Inbound: people who tag @LAURA_DAIO with a question get one answer,
