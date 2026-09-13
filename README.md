@@ -136,7 +136,7 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   page on this site (`/contracts/<address>`: every read and write function
   explained, the verified source, the ABI, how to call it from the explorer),
   plus one reply under it naming the functions people will use. A held or
-  vetoed announcement is redrafted with the gate's reason, up to four
+  vetoed announcement is redrafted with the gate's reason, up to five
   drafts. **Flagship contracts** that move value
   ship separately as vendored, audited source: the first is the
   [Ownership Market](docs/OWNERSHIP-MARKET.md), a marketplace for the

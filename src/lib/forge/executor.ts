@@ -250,7 +250,7 @@ export function forgeUsageFallback(project: ForgeProject): string {
 }
 
 /** Announcement drafts per project: the first, then redrafts after a hold or veto at the X gate. */
-export const MAX_ANNOUNCE_ATTEMPTS = 4;
+export const MAX_ANNOUNCE_ATTEMPTS = 5;
 /** Gap between a refused announcement and its redraft (lets the same cycle's reviewers finish). */
 const REANNOUNCE_GAP_MS = 20 * 60_000;
 

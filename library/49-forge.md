@@ -37,7 +37,7 @@ details on how the read and write functions work for users"):
   announcement time from the verified ABI (flagships ship theirs in the spec),
   stored on the project and rendered on the page.
 - A held or vetoed announcement is **redrafted** with the gate's reason and the
-  text of any post it collided with, up to four drafts per project.
+  text of any post it collided with, up to five drafts per project.
 
 Events: `forge.proposed`, `forge.deployed`, `forge.verified`, `forge.failed`.
 Ledger: `forgeProjects` in state, `/api/forge`, `/contracts` on the site, the

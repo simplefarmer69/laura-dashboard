@@ -95,7 +95,7 @@ Mechanisms now in force, each traceable to a published finding:
   Anvil's announcement redraft run on their own minute loop, one pass at a time.
 - **A refused announcement is redrafted, not abandoned.** When Redline holds or the
   Auditor vetoes a contract announcement, Anvil writes the next draft with the gate's
-  reason in the prompt, at most four drafts per project.
+  reason in the prompt, at most five drafts per project.
 - **Budget before dispatch.** Check the daily cycle budget and machine capacity before
   starting work, not after. A deferred cycle retries next tick; nothing is lost.
 - **More cycles only pay if each cycle is different.** Cadence increases must ship with
