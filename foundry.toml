@@ -1,0 +1,13 @@
+# Foundry harness for the contracts LAURA deploys herself (src/lib/forge/contracts).
+# Run: forge test -vv   (foundry >= 1.0; no external libraries required)
+[profile.default]
+src = "src/lib/forge/contracts"
+test = "audits/ownership-market/test"
+script = "audits/ownership-market/test"
+out = "audits/ownership-market/out"
+cache_path = "audits/ownership-market/cache"
+libs = []
+solc_version = "0.8.28"
+optimizer = true
+optimizer_runs = 200
+evm_version = "paris"

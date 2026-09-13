@@ -49,3 +49,7 @@ next-env.d.ts
 
 # swarm runtime state
 /data
+
+# foundry build output (audits/)
+audits/**/out/
+audits/**/cache/
