@@ -109,8 +109,14 @@ const DAY_S = 86_400;
  * reads ~$0 right after midnight and only fills in by evening, which is why
  * the console showed "$0 protocol volume" some mornings. Estimate a rolling
  * 24h instead: today's partial bucket plus yesterday's bucket scaled by the
- * part of today that has not elapsed. Falls back to total24h when the chart
- * is missing.
+ * part of today that has not elapsed.
+ *
+ * Right after midnight the chart has no bucket for today yet and total24h
+ * still holds YESTERDAY's bucket (DeFiLlama rolls it once today's point
+ * exists), so today's leg must read 0 then, not total24h: the old fallback
+ * counted yesterday twice and doubled fees, revenue and volume for the first
+ * hours of every day (seen 2026-09-14 01:05 UTC: revenue $20.7k vs $10.6k).
+ * total24h is only used when the chart is missing or has neither day.
  */
 export function rolling24h(summary: LlamaSummary, nowMs = Date.now()): number {
   const chart = summary.totalDataChart ?? [];
@@ -119,9 +125,10 @@ export function rolling24h(summary: LlamaSummary, nowMs = Date.now()): number {
   const todayStart = nowS - (nowS % DAY_S);
   const fractionElapsed = Math.min(1, Math.max(0, (nowS - todayStart) / DAY_S));
   const byDay = new Map(chart.map(([ts, v]) => [ts, v ?? 0]));
-  const today = byDay.get(todayStart) ?? summary.total24h ?? 0;
-  const yesterday = byDay.get(todayStart - DAY_S) ?? 0;
-  return today + yesterday * (1 - fractionElapsed);
+  const todayBucket = byDay.get(todayStart);
+  const yesterdayBucket = byDay.get(todayStart - DAY_S);
+  if (todayBucket === undefined && yesterdayBucket === undefined) return summary.total24h ?? 0;
+  return (todayBucket ?? 0) + (yesterdayBucket ?? 0) * (1 - fractionElapsed);
 }
 
 interface LlamaProtocol {
