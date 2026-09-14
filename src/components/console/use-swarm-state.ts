@@ -84,8 +84,13 @@ export function useSwarmState(pollMs = 15_000) {
     inflight.current = true;
     if (opts.force) setLoading(true);
     try {
-      // Timeout so a hung request can't wedge `inflight` and block every later poll.
-      const res = await fetch("/api/state", { cache: "no-store", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      /* Timeout so a hung request can't wedge `inflight` and block every later
+         poll. "no-cache" (not "no-store") lets the browser keep the last body
+         and revalidate with If-None-Match — the API answers 304 when nothing
+         changed, so a poll costs ~0 bytes instead of re-downloading the ~600 KB
+         snapshot every 15 s. That repeat download was what made the console
+         unreachable on mobile connections (2026-09-14). */
+      const res = await fetch("/api/state", { cache: "no-cache", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setState((await res.json()) as ConsoleState);
       failures.current = 0;

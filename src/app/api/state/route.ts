@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { hostInfo } from "@/lib/ops";
 import { isViewerMode } from "@/lib/viewer/mode";
@@ -13,7 +14,29 @@ import { loadSkills } from "@/lib/swarm/skills";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+/* The public snapshot is ~2 MB of JSON and the console polls it every 15 s.
+   Serving it uncacheable made every poll a full download, which on mobile
+   connections read as "the site never loads" (operator report 2026-09-14).
+   The viewer branch now serializes once, tags the body with a content ETag,
+   answers If-None-Match with an empty 304, and lets the Vercel edge hold the
+   body for 15 s so concurrent viewers share one function invocation. The
+   serialized body + ETag are memoized per snapshot object, which readSnapshot
+   already caches in-process for 10 s. */
+const viewerBodyCache = new WeakMap<object, { body: string; etag: string }>();
+
+function viewerBody(snapshot: object): { body: string; etag: string } {
+  const hit = viewerBodyCache.get(snapshot);
+  if (hit) return hit;
+  const body = JSON.stringify(snapshot);
+  const etag = `"${createHash("sha1").update(body).digest("hex")}"`;
+  const entry = { body, etag };
+  viewerBodyCache.set(snapshot, entry);
+  return entry;
+}
+
+const VIEWER_CACHE_CONTROL = "public, max-age=0, must-revalidate, s-maxage=15, stale-while-revalidate=60";
+
+export async function GET(request: Request) {
   /* Public viewer: serve the latest snapshot the VM published instead of the
      live store — the viewer deployment has no data dir and no swarm. */
   if (isViewerMode()) {
@@ -23,7 +46,17 @@ export async function GET() {
         { error: "No snapshot published yet. LAURA's host has not pushed one." },
         { status: 503 },
       );
-    return NextResponse.json(snapshot, { headers: { "cache-control": "no-store" } });
+    const { body, etag } = viewerBody(snapshot);
+    const headers = {
+      "cache-control": VIEWER_CACHE_CONTROL,
+      etag,
+    };
+    if (request.headers.get("if-none-match") === etag)
+      return new Response(null, { status: 304, headers });
+    return new Response(body, {
+      status: 200,
+      headers: { ...headers, "content-type": "application/json" },
+    });
   }
 
   /* Keep the autopilot on current code without a server restart: instrumentation
