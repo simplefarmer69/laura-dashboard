@@ -157,6 +157,7 @@ const TICKER_LAUNCH_STRIDE_MS = 3 * 60 * 60_000;
 declare global {
   var __lauraCycleInFlight: Promise<CycleRun> | null | undefined;
   var __lauraCycleStartedAt: number | undefined;
+  var __lauraCycleStartedMono: number | undefined;
 }
 
 /**
@@ -165,15 +166,25 @@ declare global {
  * 2026-09-12 froze one call for two hours; with the lock held, no cycle,
  * forum round or self-heal could run. Every model call now also carries its
  * own timeout, so the zombie unwinds on its own shortly after.
+ *
+ * Age is measured on the process clock (performance.now), not the wall
+ * clock: while the hypervisor freezes the VM the process runs for none of
+ * that time, and the wall clock jumps forward on resume. On 2026-09-14 a
+ * 31-minute cycle read as 110 minutes after a 75-minute freeze and lost its
+ * lock while still healthy, with the next cycle free to start on top of it.
+ * The process clock stops with the process (as /proc/uptime did), so the
+ * limit is the time the cycle actually ran.
  */
 const CYCLE_HARD_LIMIT_MS = 90 * 60_000;
 
 export function isCycleRunning(): boolean {
   const inFlight = globalThis.__lauraCycleInFlight ?? null;
   if (inFlight === null) return false;
-  const startedAt = globalThis.__lauraCycleStartedAt ?? Date.now();
-  if (Date.now() - startedAt > CYCLE_HARD_LIMIT_MS) {
-    console.warn(`[laura] cycle in flight for ${Math.round((Date.now() - startedAt) / 60_000)} min: treating as hung and releasing the lock`);
+  const startedMono = globalThis.__lauraCycleStartedMono;
+  const activeMs = startedMono === undefined ? Date.now() - (globalThis.__lauraCycleStartedAt ?? Date.now()) : performance.now() - startedMono;
+  if (activeMs > CYCLE_HARD_LIMIT_MS) {
+    const wallMin = Math.round((Date.now() - (globalThis.__lauraCycleStartedAt ?? Date.now())) / 60_000);
+    console.warn(`[laura] cycle in flight for ${Math.round(activeMs / 60_000)} min of process time (${wallMin} min wall clock): treating as hung and releasing the lock`);
     globalThis.__lauraCycleInFlight = null;
     return false;
   }
@@ -236,6 +247,7 @@ export function runCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
   });
   globalThis.__lauraCycleInFlight = p;
   globalThis.__lauraCycleStartedAt = Date.now();
+  globalThis.__lauraCycleStartedMono = performance.now();
   return p;
 }
 
