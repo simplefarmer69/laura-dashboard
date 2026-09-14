@@ -258,7 +258,10 @@ export function forgeUsageFallback(project: ForgeProject): string {
 export const MAX_ANNOUNCE_ATTEMPTS = 5;
 /** Gap between a refused announcement and its redraft (lets the same cycle's reviewers finish). */
 const REANNOUNCE_GAP_MS = 20 * 60_000;
-const REANNOUNCE_GAP_MAX_MS = 3 * 60 * 60_000;
+/* One hour at most: a redraft is one model call, and the X daily cap frees
+   slots the flagship should be ready for (the 13:22 slot on 2026-09-14 went
+   by with the redraft still two hours out). */
+const REANNOUNCE_GAP_MAX_MS = 60 * 60_000;
 
 function announceCap(project: ForgeProject): number {
   return project.kind === "flagship" ? Number.POSITIVE_INFINITY : MAX_ANNOUNCE_ATTEMPTS;
