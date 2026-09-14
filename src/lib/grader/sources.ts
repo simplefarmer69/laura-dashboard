@@ -218,16 +218,20 @@ export async function collectMetrics(
   let onchain: OnchainReads | undefined;
   let eco: EcosystemVolume | null = null;
   let sdb: SafetyDepositFlow | null = null;
-  const [onchainRes, ecoRes, sdbRes] = await Promise.allSettled([
+  const [onchainRes, ecoRes] = await Promise.allSettled([
     fetchOnchain(settings, ethUsd),
     fetchEcosystemVolume(settings.chainSlug, settings.tokenAddress, ethUsd, m?.volume24hUsd ?? prev?.tokenDexVolume24hUsd ?? 0),
+  ]);
+  /* After the reads above, not beside them: the public RPC's limiter answers
+   * 429 to bursts, and the box scan is the one caller that walks 7 days of logs. */
+  const sdbRes = await Promise.allSettled([
     fetchSafetyDepositFlow({
       chainSlug: settings.chainSlug,
       ethUsd,
       stonkAddress: settings.tokenAddress,
       stonkPriceUsd: m?.priceUsd ?? prev?.priceUsd ?? 0,
     }),
-  ]);
+  ]).then((r) => r[0]);
   if (onchainRes.status === "fulfilled") {
     onchain = onchainRes.value;
   } else {

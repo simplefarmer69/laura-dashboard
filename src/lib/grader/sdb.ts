@@ -42,7 +42,9 @@ const DAY_S = 86_400;
 const CHUNK = 400_000n;
 /** Head-distance after which a chunk is treated as final and cached. */
 const FINAL_LAG = 200n;
-const PAUSE_MS = 200;
+const PAUSE_MS = 250;
+/** Pause after each failed attempt; the last entry is followed by giving the chunk up for this pass. */
+const RETRY_WAITS_MS = [2_000, 5_000, 12_000, 0];
 
 /** SafetyDepositClockInV3: every locker desk pays its protocol cut here. */
 export const SDB_ROUTER: Address = "0x55642A3F10F1Af5145D3d59021B1D6b03BB8692c";
@@ -103,9 +105,17 @@ interface ChunkCache {
 const chunkCache = new Map<string, ChunkCache>();
 const decimalsCache = new Map<string, number>();
 
-const client = createPublicClient({ transport: http(RPC_URL, { timeout: TIMEOUT_MS, retryCount: 2, retryDelay: 800 }) });
+/* Retries are handled by retrying() with real backoff, not viem's quick ones. */
+const client = createPublicClient({ transport: http(RPC_URL, { timeout: TIMEOUT_MS, retryCount: 0 }) });
 
 const DESK_BY_ADDRESS = new Map<string, SdbDesk>(SDB_DESKS.map((d) => [d.address.toLowerCase(), d.key]));
+
+/** First line of a viem error plus its Details line, so a warning stays one readable sentence. */
+function briefError(err: unknown): string {
+  const lines = String(err).split("\n").map((l) => l.trim()).filter(Boolean);
+  const details = lines.find((l) => l.startsWith("Details:"));
+  return [lines[0] ?? "error", details].filter(Boolean).join(" ").slice(0, 160);
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -128,10 +138,10 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 async function fetchChunk(from: bigint, to: bigint): Promise<Inflow[]> {
-  const [transfers, flushes] = await Promise.all([
-    client.getLogs({ event: TRANSFER, args: { to: SDB_ROUTER }, fromBlock: from, toBlock: to }),
-    client.getLogs({ address: SDB_ROUTER, event: ETH_FLUSHED, fromBlock: from, toBlock: to }),
-  ]);
+  /* Sequential on purpose: the public RPC's limiter answers 429 to bursts. */
+  const transfers = await client.getLogs({ event: TRANSFER, args: { to: SDB_ROUTER }, fromBlock: from, toBlock: to });
+  await sleep(PAUSE_MS);
+  const flushes = await client.getLogs({ address: SDB_ROUTER, event: ETH_FLUSHED, fromBlock: from, toBlock: to });
   const out: Inflow[] = [];
   for (const l of transfers) {
     /* ERC-721 Transfer shares this topic0 with a third indexed topic; those
@@ -149,14 +159,18 @@ async function fetchChunk(from: bigint, to: bigint): Promise<Inflow[]> {
   return out;
 }
 
-/** One retry after a pause: the public RPC answers 429 under parallel load. */
-async function fetchChunkRetry(from: bigint, to: bigint): Promise<Inflow[]> {
-  try {
-    return await fetchChunk(from, to);
-  } catch {
-    await sleep(2_500);
-    return fetchChunk(from, to);
+/** Backoff retries: the public RPC answers 429 under load and recovers within seconds. */
+async function retrying<T>(fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (const wait of RETRY_WAITS_MS) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      await sleep(wait);
+    }
   }
+  throw lastErr;
 }
 
 /**
@@ -177,10 +191,10 @@ async function scanInflows(floor: bigint, head: bigint, warnings: string[]): Pro
       rows = cached.inflows;
     } else {
       try {
-        rows = await fetchChunkRetry(start, end < head ? end : head);
+        rows = await retrying(() => fetchChunk(start, end < head ? end : head));
       } catch (err) {
         complete = false;
-        warnings.push(`blocks ${start}-${end}: ${String(err).slice(0, 120)}`);
+        warnings.push(`blocks ${start}-${end}: ${briefError(err)}`);
         await sleep(PAUSE_MS);
         continue;
       }
@@ -197,11 +211,11 @@ async function scanInflows(floor: bigint, head: bigint, warnings: string[]): Pro
 async function readDecimals(tokens: string[]): Promise<Map<string, number>> {
   const missing = tokens.filter((t) => !decimalsCache.has(t));
   if (missing.length > 0) {
-    const results = await client.multicall({
+    const results = await retrying(() => client.multicall({
       allowFailure: true,
       multicallAddress: "0xcA11bde05977b3631167028862bE2a173976CA11",
       contracts: missing.map((t) => ({ address: t as Address, abi: erc20Abi, functionName: "decimals" as const })),
-    });
+    }));
     results.forEach((r, i) => {
       if (r.status === "success") decimalsCache.set(missing[i], Number(r.result));
     });
@@ -290,17 +304,17 @@ export async function fetchSafetyDepositFlow(inputs: SdbPriceInputs): Promise<Sa
   const warnings: string[] = [];
 
   const [routerBps, routerWeth] = await Promise.allSettled([
-    client.readContract({ address: SDB_ROUTER, abi: routerAbi, functionName: "PROTOCOL_BPS" }),
-    client.readContract({ address: SDB_ROUTER, abi: routerAbi, functionName: "weth" }),
+    retrying(() => client.readContract({ address: SDB_ROUTER, abi: routerAbi, functionName: "PROTOCOL_BPS" })),
+    retrying(() => client.readContract({ address: SDB_ROUTER, abi: routerAbi, functionName: "weth" })),
   ]);
   const protocolBps = routerBps.status === "fulfilled" ? Number(routerBps.value) : DEFAULT_PROTOCOL_BPS;
   const weth = routerWeth.status === "fulfilled" ? String(routerWeth.value).toLowerCase() : WETH_FALLBACK;
 
   /* Two-point anchor: blocks per second from the head and a block ~1 day back. */
-  const headBlock = await client.getBlock();
+  const headBlock = await retrying(() => client.getBlock());
   const head = headBlock.number;
   const probe = head - 800_000n > 0n ? head - 800_000n : 1n;
-  const probeBlock = await client.getBlock({ blockNumber: probe });
+  const probeBlock = await retrying(() => client.getBlock({ blockNumber: probe }));
   const dt = Number(headBlock.timestamp - probeBlock.timestamp);
   const rate = dt > 0 ? Number(head - probe) / dt : 10;
   const blocksFor = (seconds: number) => BigInt(Math.round(seconds * rate));
