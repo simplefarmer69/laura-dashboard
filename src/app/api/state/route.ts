@@ -51,8 +51,10 @@ export async function GET(request: Request) {
       "cache-control": VIEWER_CACHE_CONTROL,
       etag,
     };
-    if (request.headers.get("if-none-match") === etag)
-      return new Response(null, { status: 304, headers });
+    /* Vercel serves the body gzipped and weakens the ETag to W/"...", so
+       browsers echo the weak form back — compare without the W/ prefix. */
+    const inm = request.headers.get("if-none-match")?.replace(/^W\//, "");
+    if (inm === etag) return new Response(null, { status: 304, headers });
     return new Response(body, {
       status: 200,
       headers: { ...headers, "content-type": "application/json" },
