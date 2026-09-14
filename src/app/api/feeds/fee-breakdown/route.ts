@@ -14,11 +14,13 @@ import { cached, feedError, feedResponse, getJson } from "@/lib/feeds/util";
  *   activations   ActivationEthFeePaid on Anvil soft staking vaults
  *   anvil_swaps   RobinhoodSwapFeePaid on Anvil AMM vaults (flat ~$2 ETH)
  *   loans         LoanEthFeePaid on Anvil loan vaults (flat ~$2 ETH)
- *   launchpad_tax SafeBuy/SafeSell taxPaid across every Stonklauncher pad
+ *   launchpad_tax SafeBuy/SafeSell taxPaid across every Stonklauncher pad,
+ *                 plus PadTaxCollected on the Nightshades CivAntiSnipePad
+ *                 (Civilization faction launch, 99% -> 1% decaying WETH tax)
  *   smart_lp      FeesCollected on Smart LP vaults (plus the 10% skim)
  *   vesting       PositionLocked on the vesting locker (1 bps deposit fee)
  *
- * Scan shape: ONE chunked eth_getLogs walk with all six topic0 hashes OR'd,
+ * Scan shape: ONE chunked eth_getLogs walk with all seven topic0 hashes OR'd,
  * over a contiguous module window [low, high] - forward catch up to head
  * plus a bounded backward seed toward the 7d floor each request. Bounds only
  * move after a chunk fully succeeds, so a failed chunk replays next pass and
@@ -45,6 +47,8 @@ const LLAMA_ETH = "https://coins.llama.fi/prices/current/coingecko:ethereum";
 
 /** The V1 ETH pad - its rows carry no lane in the floor payload. */
 const ETH_PAD = "0xeca5726dae1e53365c37ffc02369d947a91d71f9";
+// Nightshades faction launch pad (Civilization CivAntiSnipePad, WETH quoted).
+const CIV_PAD = "0xca389585c4940b107d49af4a37ad259c5fb69081";
 /** Smart LP registry + lens (same pair the smartlp feed reads). */
 const REGISTRY = "0xE8749183Fbf6A657EB58B3a4D3E4B9Cc09560146" as const;
 const LENS = "0x754Bf8479630bbC22aA7b5E9742156ce89dD3D4d" as const;
@@ -62,6 +66,7 @@ const client = createPublicClient({ transport: http(RPC_URL, { timeout: 12_000 }
  *   SafeSell             0x2de6d6d1573ee69658d3daae2e752379e6eb0676622a5ade2812088d7cb56581
  *   FeesCollected        0xf5d590414d56d256b8c16b850d0b57f2f5d2ed90686166e150b48a96f0dbdd61
  *   PositionLocked       0x77176a3032a52a944a7d0b11796c888e6914bd6628c6671bc8b5e56d34a54066
+ *   PadTaxCollected      Nightshades CivAntiSnipePad (WETH tax; address-gated to CIV_PAD)
  */
 const EVENTS = [
   parseAbiItem("event ActivationEthFeePaid(uint256 indexed tokenId, address indexed payer, uint256 amount)"),
@@ -74,6 +79,9 @@ const EVENTS = [
     "event SafeSell(uint256 indexed id, address indexed seller, uint256 tokensIn, uint256 taxPaid, uint256 taxBps, uint256 ethOut, uint256 mcapUsd8)",
   ),
   parseAbiItem("event FeesCollected(uint256 fees0, uint256 fees1, uint256 skim0, uint256 skim1)"),
+  parseAbiItem(
+    "event PadTaxCollected(uint256 indexed launchId, uint256 tax, uint256 boost, uint256 lp, uint256 booster, uint256 protocol, uint256 creator)",
+  ),
   parseAbiItem(
     "event PositionLocked(address indexed token, uint256 indexed lockTokenId, address indexed owner, address vault, uint64 startUnlock, uint64 finishUnlock, uint256 initialAmount, uint256 feeAmount)",
   ),
@@ -368,6 +376,15 @@ function applyLog(
       const tax = arg("taxPaid") / Math.pow(10, pad.decimals);
       if (pad.sym === "ETH" || pad.sym === "WETH") s.feeEth += tax;
       else s.native[pad.sym] = (s.native[pad.sym] ?? 0) + tax;
+      return;
+    }
+    case "PadTaxCollected": {
+      // Nightshades anti snipe tax, denominated in WETH. Address-gated so a
+      // copycat emitting the same topic never books into our ledger.
+      if (addr !== CIV_PAD) return;
+      const s = slotFor(block, "launchpad_tax");
+      s.events += 1;
+      s.feeEth += arg("tax") / 1e18;
       return;
     }
     case "FeesCollected": {
