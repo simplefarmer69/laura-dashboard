@@ -1018,7 +1018,7 @@ export function forgeAnnouncePrompt(
   }`;
   const notesAsk = `FUNCTION NOTES: one plain line per function (what it does, who calls it, what to pass), for the page at ${project.pageUrl ?? "LAURA's site"} where every function is explained. Skip ALL_CAPS constants.`;
   const retry = previous
-    ? `PREVIOUS ATTEMPT, REFUSED AT THE X GATE. Text: "${previous.body}". Why it was refused: ${previous.reason}. Write a different post that fixes exactly that: a stranger who has never heard of LAURA must know from the first sentence what this is and what changes hands.`
+    ? `PREVIOUS ATTEMPT, REFUSED AT THE X GATE. Text: "${previous.body}". Why it was refused: ${previous.reason}. Write a different post that fixes ALL of that at once. Two gates read it and both must pass: Redline (a stranger who has never heard of LAURA must know from the first sentence what this is, in plain product words such as market, registry, ownership, for sale, and what changes hands) and the Auditor (no reuse of an earlier post's opening, clauses or sentence shape, and at least one fact the earlier posts did not carry). Naming the product this contract extends is allowed and expected; copying how the earlier post described it is not. Never fix one gate's objection by giving the other gate a new one.`
     : "";
   if (flagship) {
     return [

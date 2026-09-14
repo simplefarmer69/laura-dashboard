@@ -249,10 +249,47 @@ export function forgeUsageFallback(project: ForgeProject): string {
   return `how to use it: the Read tab answers for free, the Write tab takes a transaction from your wallet. every function explained: ${link}`.slice(0, TWEET_MAX);
 }
 
-/** Announcement drafts per project: the first, then redrafts after a hold or veto at the X gate. */
+/**
+ * Announcement drafts per project: the first, then redrafts after a hold or
+ * veto at the X gate. Anvil's X-sourced contracts stop here; a flagship never
+ * does (an unannounced flagship is the worse outcome), its redrafts just
+ * space out further each time, see reannounceGapMs.
+ */
 export const MAX_ANNOUNCE_ATTEMPTS = 5;
 /** Gap between a refused announcement and its redraft (lets the same cycle's reviewers finish). */
 const REANNOUNCE_GAP_MS = 20 * 60_000;
+const REANNOUNCE_GAP_MAX_MS = 3 * 60 * 60_000;
+
+function announceCap(project: ForgeProject): number {
+  return project.kind === "flagship" ? Number.POSITIVE_INFINITY : MAX_ANNOUNCE_ATTEMPTS;
+}
+
+function reannounceGapMs(project: ForgeProject): number {
+  const attempts = Math.max(1, project.announceAttempts ?? 1);
+  return project.kind === "flagship" ? Math.min(REANNOUNCE_GAP_MS * attempts, REANNOUNCE_GAP_MAX_MS) : REANNOUNCE_GAP_MS;
+}
+
+function attemptLabel(project: ForgeProject): string {
+  const next = (project.announceAttempts ?? 1) + 1;
+  const cap = announceCap(project);
+  return Number.isFinite(cap) ? `${next}/${cap}` : `${next}`;
+}
+
+/**
+ * Every reason the X gate gave for this project's earlier announcements,
+ * newest first. The redraft has to satisfy all of them at once: attempts 2-5
+ * of The Lab registry (2026-09-13/14) each fixed only the latest objection,
+ * dropping the product name after an Auditor duplication veto, then being
+ * held by Redline for not naming the product, and so on.
+ */
+function priorRefusals(state: SwarmState, project: ForgeProject, limit = 3): string[] {
+  const title = `Anvil: ${project.title} is live and verified`;
+  return state.drafts
+    .filter((d) => d.agentId === "smith" && d.title === title && d.status === "rejected" && d.reviewerNote)
+    .sort((a, b) => (b.reviewedAt ?? b.createdAt) - (a.reviewedAt ?? a.createdAt))
+    .slice(0, limit)
+    .map((d) => `"${d.body.replace(/\s+/g, " ").slice(0, 200)}" was refused: ${(d.reviewerNote ?? "").replace(/\s+/g, " ").slice(0, 320)}`);
+}
 
 async function announceVerified(state: SwarmState, project: ForgeProject, previous: { body: string; reason: string } | null = null): Promise<string> {
   const resolved = resolveModel(state.settings.llmModel);
@@ -312,7 +349,7 @@ async function announceVerified(state: SwarmState, project: ForgeProject, previo
         project.kind === "flagship"
           ? `LAURA's flagship contract ${project.title} on Robinhood Chain is deployed and verified (${project.contractAddress}). The post carries the links (frontend when there is one, explorer, guide); useful contracts from the swarm, not the last.`
           : `Anvil shipped a verified contract people on X asked for (${project.need.slice(0, 200)}). The post carries the explorer link so anyone can read and use it.`
-      }${previous ? `\n\nRedraft ${(project.announceAttempts ?? 0) + 1}/${MAX_ANNOUNCE_ATTEMPTS}: the previous announcement was refused at the X gate (${previous.reason.slice(0, 300)}).` : ""}`,
+      }${previous ? `\n\nRedraft ${attemptLabel(project)}: the previous announcement was refused at the X gate (${previous.reason.slice(0, 300)}).` : ""}`,
       status: autonomous ? "approved" : "pending",
       createdAt: Date.now(),
       reviewedAt: autonomous ? Date.now() : null,
@@ -384,9 +421,9 @@ export async function runForgeAnnounceTick(state: SwarmState): Promise<boolean> 
   }
   const refused = projects.find((p) => {
     if (p.status !== "verified" || !p.announceDraftId) return false;
-    if ((p.announceAttempts ?? 1) >= MAX_ANNOUNCE_ATTEMPTS) return false;
+    if ((p.announceAttempts ?? 1) >= announceCap(p)) return false;
     const d = state.drafts.find((x) => x.id === p.announceDraftId);
-    return Boolean(d && d.status === "rejected" && now - (d.reviewedAt ?? d.createdAt) >= REANNOUNCE_GAP_MS);
+    return Boolean(d && d.status === "rejected" && now - (d.reviewedAt ?? d.createdAt) >= reannounceGapMs(p));
   });
   if (!refused) return false;
   const prior = state.drafts.find((x) => x.id === refused.announceDraftId);
@@ -401,9 +438,13 @@ export async function runForgeAnnounceTick(state: SwarmState): Promise<boolean> 
       if (cited.has(e.url)) reason += ` That earlier post read: "${e.text.replace(/\s+/g, " ").trim()}". Do not reuse its opening, its verbs or its phrasing; say something that post did not.`;
     }
   }
+  const earlier = priorRefusals(state, refused).filter((r) => !prior || !r.startsWith(`"${prior.body.replace(/\s+/g, " ").slice(0, 200)}"`));
+  if (earlier.length > 0) {
+    reason += ` EARLIER ATTEMPTS AND WHY EACH WAS REFUSED (the new post must answer every one of these at once, not only the latest): ${earlier.join(" || ")}`;
+  }
   try {
     const id = await announceVerified(state, refused, { body: prior?.body ?? "", reason });
-    log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${(refused.announceAttempts ?? 1) + 1}/${MAX_ANNOUNCE_ATTEMPTS})`);
+    log(`redrafted the announcement for ${refused.title} after the X gate refused ${refused.announceDraftId}: ${id} (attempt ${attemptLabel(refused)})`);
     return true;
   } catch (err) {
     log(`redraft for ${refused.title} failed: ${String(err).slice(0, 200)}`);

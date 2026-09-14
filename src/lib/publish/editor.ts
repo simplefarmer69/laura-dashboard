@@ -75,15 +75,31 @@ export function isXPost(d: Draft): boolean {
   return d.kind === "post" && /^(x|twitter)$/i.test(d.channel.trim());
 }
 
+/** Anvil announcing one of the swarm's own verified contracts (the flagship queue or an X-sourced tool). */
+export function isContractAnnouncement(d: Draft): boolean {
+  return d.agentId === "smith" && /^Anvil: .* is live and verified$/.test(d.title);
+}
+
+/**
+ * Redline's brief for a contract announcement. Without it the reader test
+ * holds every one: test (4) asks for a number or a view, and a new contract
+ * has neither; the model then refuses to rewrite because "the words that
+ * would fix it are not in the post" although they sit in the draft's title
+ * and rationale (The Lab registry, 2026-09-14 02:54 UTC, attempt 5/5 held).
+ */
+const CONTRACT_ANNOUNCEMENT_BRIEF = `CONTRACT ANNOUNCEMENTS (drafts marked as such below, written by Anvil): the news IS the contract. Test (4) is met when the post says what the contract is, what a person does with it and where; no number, window or opinion is required and none should be invented. Test (1) still rules: the first sentence must name the product in plain words (a market, a registry, a vault, a tool) and what changes hands. When the post fails only because it does not say what the thing is, REWRITE it rather than hold it: the draft's title and rationale carry the producer's own plain description of the contract (its name, what it is, what it extends) and you may use those words; they are the producer's facts, not new claims. The links are the way in and must stay verbatim. Hold only when even the title and rationale do not tell you what the contract is.`;
+
 export function editorPrompt(input: { drafts: Draft[]; recent: XPostLogEntry[]; today: string }): string {
   const recent = input.recent
     .slice(0, 6)
     .map((e) => `- ${sanitizeXPost(e.text).text.replace(/\s+/g, " ").slice(0, 240)}`)
     .join("\n");
+  const hasAnnouncement = input.drafts.some(isContractAnnouncement);
   const drafts = input.drafts
     .map((d) => {
       const flags = readabilityProblems(d.body);
-      return `DRAFT ${d.id} (by ${d.agentId}, ${d.body.length} chars)${flags.length ? `\nCODE FLAGS: ${flags.join("; ")}` : ""}\n${d.body}\n(producer's private rationale, the reader never sees it: ${d.rationale.replace(/\s+/g, " ").slice(0, 320)})`;
+      const tag = isContractAnnouncement(d) ? ` CONTRACT ANNOUNCEMENT: "${d.title.replace(/^Anvil: /, "")}"` : "";
+      return `DRAFT ${d.id} (by ${d.agentId}, ${d.body.length} chars)${tag}${flags.length ? `\nCODE FLAGS: ${flags.join("; ")}` : ""}\n${d.body}\n(producer's private rationale, the reader never sees it: ${d.rationale.replace(/\s+/g, " ").slice(0, 320)})`;
     })
     .join("\n\n");
   return [
@@ -91,12 +107,15 @@ export function editorPrompt(input: { drafts: Draft[]; recent: XPostLogEntry[]; 
     `You are Redline, the readability editor for the @LAURA_DAIO X account. The posts below were written by agents who read a dense internal briefing and then wrote for that briefing instead of for a person. You read each post COLD, as a stranger on X who follows crypto and maybe Robinhood Chain, has never seen the rationale, and gives the post three seconds.`,
     `THE READER TEST, apply it literally to every post: (1) After the first sentence, can the reader say in plain words what this post is about? (2) Does every number carry a unit and a referent a human uses (dollars, ETH, holders, launches, percent, a date), never a bare counter like "1089 to 1113" or a pipeline label like "Experiment 56"? (3) Is there any word that only the pipeline understands: "third call", "sale clock", "proxy", "lever", "lane", "resubmitted", "the spine", "this cycle", "vetoed"? (4) Does the reader walk away with one concrete thing about StonkBrokers, Robinhood Chain, a launch, a market or LAURA's own onchain moves that they did not know, or one clear view they can agree or disagree with? (5) Would a human read it and think a person who knows the chain wrote it, in complete thoughts?`,
     `VERDICTS. "pass": all five hold; say in one clause what lands. "rewrite": the facts are good but the post fails 1, 2, 3 or 5; return the post rewritten in plain language that a newcomer follows, keeping the voice (lowercase aixbt style or a plain declarative both fine), at most ${TWEET_MAX} characters, using ONLY facts, numbers, names and links already in the post. You may add ordinary words that explain what a number is ("launches on the Stonk Launcher", "a token that finished its curve") and you may delete anything. You may NOT add a new number, a new claim, a link or a handle; code checks every statistic against the original and drops the rewrite if one is new. "hold": the post cannot be understood without facts it does not contain, or it carries no takeaway at all; explain exactly what a stranger cannot follow. Holds are common and correct; a silent account beats a confusing one.`,
+    hasAnnouncement ? CONTRACT_ANNOUNCEMENT_BRIEF : "",
     `For every rewrite or hold also write ONE lesson for the producer as an instruction it can follow next time (e.g. "Name the product in the first six words before any number", "A count of launches needs the word launches after it and the venue it happened on").`,
     X_STYLE_GUIDE,
     `RECENTLY POSTED FROM THE ACCOUNT (context for voice; do not rewrite anything into an echo of these)\n${recent || "Nothing posted yet."}`,
     `POSTS TO EDIT\n\n${drafts}`,
     `Return one review per draft id, in the same order.`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** Fallback with no live model: never pass unread; a code-flagged post is held, the rest wait. */
