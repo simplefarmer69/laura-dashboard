@@ -160,9 +160,17 @@ refresh_kit() {
   fi
 }
 
+# The release this very script file lives in (the kit apps run from one).
+self_release() {
+  local p; p="$(readlink -f "$0" 2>/dev/null || echo "")"
+  case "$p" in "$RELEASES"/*) p="${p#"$RELEASES"/}"; echo "${p%%/*}" ;; *) echo "" ;; esac
+}
+
 prune_releases() {
+  local self; self="$(self_release)"
   ls -1t "$RELEASES" | tail -n +$((KEEP_RELEASES + 1)) | while read -r old; do
     [ "$old" = "$(current_sha)" ] && continue
+    [ -n "$self" ] && [ "$old" = "$self" ] && continue
     rm -rf "$RELEASES/$old"; log "pruned release $old"
   done
 }
@@ -202,7 +210,15 @@ cmd_update() {
   switch_to "$sha" && prune_releases && refresh_kit
 }
 
+# The kit apps start with cwd = current/, which the kernel resolves to the
+# release directory of that moment. If that release is later pruned the
+# process keeps a deleted cwd and every npx call dies with ENOENT uv_cwd (seen
+# 2026-09-14 after two pre-warmed builds pushed the updater's own release out
+# of the keep window). Loops therefore leave release directories at once.
+leave_release_dir() { cd "$LAURA_HOME"; }
+
 cmd_updater() {
+  leave_release_dir
   log "updater loop online (every ${UPDATE_EVERY_SEC}s, or on data/ops/update.requested)"
   local slept=0
   while true; do
@@ -217,6 +233,7 @@ cmd_updater() {
 
 # ---------------------------------------------------------------- watchdog
 cmd_watchdog() {
+  leave_release_dir
   log "watchdog online (probing $HEALTH every 60s)"
   local misses=0
   while true; do
