@@ -173,6 +173,6 @@ export function laneMenuDigest(
       : `Stock lanes are CLOSED at the slot this spec would deploy in (~${at.toISOString().slice(0, 16)}Z, after the queue ahead of it; Chainlink equity feeds pause Friday 20:00 UTC to Monday 00:15 UTC). Pick weth, stonk or usdg, or the spec waits until Monday.`,
     `Rotation hint for this cycle: ${hint}. Recent launch lanes (newest first): ${history}.`,
     "Pick the lane whose quote token genuinely fits the concept - a GME-lore token belongs on the gme lane, an AI token on nvda, a generic meme on weth. Avoid using the same lane three launches in a row unless the concept demands it.",
-    "Every lane except arbweth deploys on Robinhood Chain (4663). arbweth deploys on Arbitrum One (42161): pick it when the concept is about Arbitrum, cross-chain reach or pulling Arbitrum's DeFi crowd toward the StonkBrokers launcher — and keep roughly one launch in four there while it is funded, so LAURA is a visible builder on both chains.",
+    "Every lane except arbweth deploys on Robinhood Chain (4663). arbweth deploys on Arbitrum One (42161): pick it when the concept is about Arbitrum, cross-chain reach or pulling Arbitrum's DeFi crowd toward the StonkBrokers launcher — and keep roughly one launch in four there while it is funded, so LAURA is a visible builder on both chains. When you pick arbweth, set bondVenue to 1 (Uniswap v3) — Arbitrum has no StonkUp CL locker and bondVenue 0 reverts.",
   ].join("\n");
 }

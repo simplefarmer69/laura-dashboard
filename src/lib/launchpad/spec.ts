@@ -70,7 +70,7 @@ export const launchSpecShape = {
     .max(1)
     .default(0)
     .describe(
-      "Graduation venue for the bonded pool: 0 = StonkUp CL locker (proven default), 1 = Uniswap V3 venue (verified accepted; 'Uniswap V3' in launcher copy means this flag, not a pad generation). Both mint the LP into the Safety Deposit Box; fee-claim rights stay with LAURA either way.",
+      "Graduation venue for the bonded pool: 0 = StonkUp CL locker (Robinhood proven default), 1 = Uniswap V3 venue. On arbweth (Arbitrum One) this MUST be 1 — there is no StonkUp locker on Arbitrum and bondVenue 0 reverts BadParam() (verified by simulation 2026-09-15). On Robinhood both mint the LP into the Safety Deposit Box; fee-claim rights stay with LAURA either way.",
     ),
   unsoldMode: z
     .number()

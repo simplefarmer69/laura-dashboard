@@ -67,6 +67,14 @@ The full 21-lane pad table lives in `ARBITRUM_PADS` in
 `src/lib/launchpad/contracts.ts`. Only `arbweth` is a deploy lane today;
 the rest are reference data for the library, the agents manifest and MCP.
 
+## Bond venue on Arbitrum
+
+Arbitrum pads accept **only** `bondVenue = 1` (Uniswap v3 1% locked pool).
+`bondVenue = 0` (StonkUp CL / Slipstream) reverts `BadParam()` — there is no
+StonkUp locker on Arbitrum. The executor coerces arbweth specs to venue 1
+before `createLaunch` (verified by simulation 2026-09-15 after Postcard's
+first attempt failed on venue 0).
+
 ## Smart LP on Arbitrum
 
 The Robinhood Smart LP registry / lens (`0xE874…`, `0x754B…`) have no code

@@ -350,6 +350,12 @@ export function validateAgainstBounds(p: LaunchProposal, pad: PadState): string[
   if (p.openEnded === false) problems.push("Closed-window sales revert BadParam() on every V2 pad; openEnded must be true");
   if (p.maxBuyPpm !== undefined && (p.maxBuyPpm < 0 || p.maxBuyPpm > 1_000_000)) problems.push("maxBuyPpm must be 0-1000000");
   if (p.bondVenue !== undefined && ![0, 1].includes(p.bondVenue)) problems.push("bondVenue must be 0 or 1");
+  /* Arbitrum pads have no StonkUp CL locker — bondVenue 0 reverts BadParam()
+     (verified by createLaunch simulation on arbweth 2026-09-15). Only Uniswap
+     v3 (bondVenue 1) is accepted there. */
+  if (laneChainKey(p.lane) === "arbitrum" && (p.bondVenue ?? 0) !== 1) {
+    problems.push("Arbitrum pads only accept bondVenue 1 (Uniswap v3); StonkUp CL (0) reverts BadParam()");
+  }
   if (p.unsoldMode !== undefined && ![0, 1].includes(p.unsoldMode)) problems.push("unsoldMode must be 0 or 1 (2+ reverts BadParam())");
   return problems;
 }
@@ -363,6 +369,7 @@ export async function probeBuyOnly(p: LaunchProposal): Promise<{ accepted: boole
   const account = getAccount();
   if (!account) return { accepted: false, detail: "no wallet configured" };
   const pad = await padState(p.lane);
+  const bondVenue = laneChainKey(p.lane) === "arbitrum" ? 1 : (p.bondVenue ?? 0);
   const params = {
     token: "0x0000000000000000000000000000000000000000" as `0x${string}`,
     name: p.name,
@@ -379,7 +386,7 @@ export async function probeBuyOnly(p: LaunchProposal): Promise<{ accepted: boole
     eoaOnly: p.eoaOnly ?? false,
     openEnded: p.openEnded ?? true,
     postTaxBps: p.postTaxBps,
-    bondVenue: p.bondVenue ?? 0,
+    bondVenue,
     maxBuyPpm: p.maxBuyPpm ?? 0,
   };
   try {
@@ -414,12 +421,18 @@ export interface DeployResult {
 export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
   const account = getAccount();
   if (!account) throw new Error("No wallet configured (set SWARM_WALLET_PRIVATE_KEY)");
+  /* Arbitrum has no StonkUp locker — coerce before bounds check so a queued
+     spec that still carries bondVenue 0 (e.g. POSTCARD) deploys clean. */
+  if (laneChainKey(p.lane) === "arbitrum" && (p.bondVenue ?? 0) !== 1) {
+    p = { ...p, bondVenue: 1 };
+  }
   const pad = await padState(p.lane);
   const problems = validateAgainstBounds(p, pad);
   if (problems.length) throw new Error(`Spec fails live pad bounds: ${problems.join("; ")}`);
 
   const address = pad.address as `0x${string}`;
   const fee = BigInt(pad.launchFeeWei);
+  const bondVenue = p.bondVenue ?? (laneChainKey(p.lane) === "arbitrum" ? 1 : 0);
   const params = {
     token: "0x0000000000000000000000000000000000000000" as `0x${string}`,
     name: p.name,
@@ -439,7 +452,7 @@ export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
     eoaOnly: p.eoaOnly ?? false,
     openEnded: p.openEnded ?? true,
     postTaxBps: p.postTaxBps,
-    bondVenue: p.bondVenue ?? 0,
+    bondVenue,
     maxBuyPpm: p.maxBuyPpm ?? 0,
   };
 

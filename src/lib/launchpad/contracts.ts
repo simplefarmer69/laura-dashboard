@@ -244,7 +244,7 @@ export function explainPadError(err: unknown): string {
   if (/BadEconomics|0x89f17dee/.test(text))
     return "Pad rejected the curve economics (BadEconomics): the start tax must be an exact multiple of the per-minute decay and the decay window must be 10-99 minutes. The executor snaps the spec onto the rule before the next attempt.";
   if (/BadParam/.test(text))
-    return "Pad rejected a launch parameter (BadParam): closed-window sales (openEnded=false) and unsoldMode above 1 revert on every V2 pad.";
+    return "Pad rejected a launch parameter (BadParam): closed-window sales (openEnded=false), unsoldMode above 1, or (on Arbitrum) bondVenue 0 / StonkUp — Arbitrum pads only accept bondVenue 1 (Uniswap v3).";
   if (/insufficient funds/i.test(text)) return "Wallet has insufficient ETH for the deploy fee plus gas.";
   const firstLine = text
     .split("\n")
