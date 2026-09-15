@@ -45,6 +45,12 @@ export const ECOSYSTEM_TOKENS: ReadonlyArray<{ symbol: string; address: string }
   { symbol: "MANCER", address: "0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A" },
   { symbol: "DERP", address: "0x6543b7746Ca744C4bb2198191E71F40fF04C41B9" },
   { symbol: "STRIKE", address: "0x5aeD379A72BD2533371d153135c47d5EB61BaBc8" },
+  // Nightshades faction tokens (Meebco x Clutch Markets, launched through the
+  // StonkLauncher 2026-09-14; hooked v4 pools that DexScreener indexes).
+  { symbol: "GHST", address: "0xd6b619A75667Cfcc827A3b9B75D807D98b5456d2" },
+  { symbol: "WATCH", address: "0x4FfefDfEfC16daAC253140125f50D8be9bAfFa52" },
+  { symbol: "KNGHT", address: "0xB6062468073a43c79cD7fd07Fbe496dA9ef544c3" },
+  { symbol: "ZMBI", address: "0xE4BEF9d0845a13bD39C57C7ee4463ff5D0cc20B6" },
 ];
 
 const lensAbi = [
