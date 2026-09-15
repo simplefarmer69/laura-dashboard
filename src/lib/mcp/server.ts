@@ -7,7 +7,19 @@ import { GET as smartLpFeed } from "@/app/api/feeds/smartlp/route";
 import { GET as brokertoolsFeed } from "@/app/api/feeds/brokertools/route";
 import { GET as feeBreakdownFeed } from "@/app/api/feeds/fee-breakdown/route";
 import { GET as llamaChainsFeed } from "@/app/api/feeds/llama-chains/route";
+import { GET as nftTrendsFeed } from "@/app/api/feeds/nft-trends/route";
+import { GET as nftBuysFeed } from "@/app/api/feeds/nft-buys/route";
+import { GET as defillamaFeed } from "@/app/api/feeds/defillama/route";
+import { GET as polymarketFeed } from "@/app/api/feeds/polymarket/route";
 import { GET as forgeFeed } from "@/app/api/forge/route";
+import {
+  arbitrumLauncher,
+  ecosystemMap,
+  launchTokenDetail,
+  nightshadesReference,
+  quoteLaunch,
+} from "@/lib/mcp/ecosystem";
+import { fetchNightshadesState } from "@/lib/launchpad/nightshades";
 import { ARBITRUM_PADS, LAUNCH_CHAINS, LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { libraryDocs } from "@/lib/swarm/library";
@@ -38,14 +50,16 @@ import type { LaunchProposal, MetricsSnapshot } from "@/lib/types";
  */
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
-export const MCP_SERVER_NAME = "laura-robinhood-chain";
-export const MCP_SERVER_VERSION = "1.0.0";
+export const MCP_SERVER_NAME = "stonkbrokers-ecosystem";
+export const MCP_SERVER_VERSION = "2.0.0";
 
 export const MCP_INSTRUCTIONS = [
-  "LAURA is an autonomous agent swarm on Robinhood Chain (chain id 4663) that grows the Stonkbrokers ecosystem.",
-  "This server is read only: market tape for launcher tokens and $STONKBROKER, pair depth, holder counters, smart LP positions, the exact contract addresses and rules you need to trade or launch, and LAURA's own knowledge library.",
-  "Nothing here signs or spends. Bring your own wallet; quote through SafeLaunchLensV2 rather than reimplementing curve math.",
-  "Every token launched through Stonk Launcher routes protocol revenue to $STONKBROKER holders, so an agent trading launcher tokens is already a participant in that flywheel.",
+  "This is the full Model Context Protocol server for the StonkBrokers ecosystem on Robinhood Chain (chain id 4663) and Arbitrum One (42161), operated by LAURA, the autonomous agent swarm that grows it.",
+  "Coverage: the Stonk Launcher bonding-curve pads on both chains (crypto and tokenized-stock quote lanes), live lens quotes for any curve, single-token lookups, the ve(3,3) Stonk Exchange and its Smart LP vaults, the Safety Deposit Box locker, $STONKBROKER market depth and holders, protocol fee and revenue breakdowns, the ERC-6551 broker NFT collection and its AMM, the Nightshades survival game, chain-level comparisons against all of crypto, contracts LAURA wrote herself, and her whole knowledge library.",
+  "Start with ecosystem_map: it names every protocol here, what an agent can actually do with each one, the addresses and APIs to talk to, and the mistake integrators usually make.",
+  "Nothing here signs or spends. Bring your own wallet. Always quote through quote_launch (SafeLaunchLensV2) instead of reimplementing curve tax math, and treat a launch as tradeable only once its phase reads 'live'.",
+  "Two standing traps: tokenized-stock lanes price through Chainlink equity feeds that go dark from Friday close to Monday 00:00 UTC, and Arbitrum pads only accept bondVenue 1 (Uniswap v3).",
+  "Every trade on a launcher curve pays protocol revenue that the ecosystem routes toward $STONKBROKER, so an agent trading here is already inside the flywheel.",
 ].join(" ");
 
 type JsonRpcId = string | number | null;
@@ -257,6 +271,96 @@ async function libraryDoc(file: string): Promise<unknown> {
 
 const TOOLS: ToolDef[] = [
   {
+    name: "ecosystem_map",
+    description:
+      "START HERE. The whole StonkBrokers ecosystem in one document: every protocol on Robinhood Chain and Arbitrum One (launchpad, tokenized-stock lanes, ve(3,3) DEX, Smart LP vaults, Safety Deposit Box locker, broker NFTs and the Anvil AMM, Opening Bell buybacks, Nightshades, Special Projects, brokertools, LAURA herself), what each one does, what an agent can actually DO with it today, its addresses and APIs, the mistake integrators usually make, and which tool on this server reads it.",
+    inputSchema: NO_ARGS,
+    run: async () => ecosystemMap(),
+  },
+  {
+    name: "quote_launch",
+    description:
+      "Live SafeLaunchLensV2 quote for a buy or a sell on any Stonk Launcher curve, on either chain. Returns tokens out (or quote out), the exact tax in bps at this moment, the effective price and the pad and lens used. This is the correct way to price a curve trade: the tax decays minute by minute and the curve moves with every trade, so never reimplement the math.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        lane: { type: "string", description: "Quote lane, e.g. weth, stonk, usdg, gme, nvda, aapl, spcx, uso, arbweth. Call contracts or ecosystem_map for the list." },
+        launchId: { type: "string", description: "The pad's launch id (the trailing number on a /safe-launch/token/<lane>-<symbol>-<id> page, or safeId from launcher_tape)." },
+        side: { type: "string", enum: ["buy", "sell"], description: "buy spends the quote token, sell spends launch tokens" },
+        amountIn: { type: "string", description: "Human amount in: quote tokens for a buy (e.g. \"0.05\"), launch tokens for a sell (e.g. \"250000\")." },
+        seller: { type: "string", description: "For a sell, the wallet doing the selling (the pad prices some sells per wallet). Defaults to the zero address.", pattern: "^0x[0-9a-fA-F]{40}$" },
+      },
+      required: ["lane", "launchId", "side", "amountIn"],
+      additionalProperties: false,
+    },
+    run: (args) => {
+      const lane = typeof args.lane === "string" ? args.lane : "";
+      const launchId = typeof args.launchId === "string" || typeof args.launchId === "number" ? args.launchId : "";
+      const side = args.side === "sell" ? "sell" : "buy";
+      const amountIn = typeof args.amountIn === "string" || typeof args.amountIn === "number" ? args.amountIn : "";
+      if (!lane || launchId === "" || amountIn === "") throw new Error("lane, launchId, side and amountIn are required");
+      return quoteLaunch({ lane, launchId, side, amountIn, seller: typeof args.seller === "string" ? args.seller : undefined });
+    },
+  },
+  {
+    name: "token_detail",
+    description:
+      "Resolve one token address against both chains' launcher grids: name, symbol, creator, quote token, price and market cap, curve progress, holder and trade counts, 24h volume, phase (waiting/live/graduated), launch id, trade page and explorer link. Use it when all you have is an address and you need to know what it is and whether it is tradeable.",
+    inputSchema: {
+      type: "object",
+      properties: { token: { type: "string", description: "0x token address", pattern: "^0x[0-9a-fA-F]{40}$" } },
+      required: ["token"],
+      additionalProperties: false,
+    },
+    run: (args) => {
+      if (typeof args.token !== "string") throw new Error("token is required");
+      return launchTokenDetail(args.token);
+    },
+  },
+  {
+    name: "arbitrum_launcher",
+    description:
+      "The Stonk Launcher on Arbitrum One (chain 42161): all 21 pad lanes with their quote tokens and decimals, the lens, canonical WETH, the bond venue, plus the live Arbitrum tape (counts of live and graduated launches and the most recent rows with trade pages). The same pad ABI as Robinhood Chain on a chain most agents are already funded on.",
+    inputSchema: NO_ARGS,
+    run: arbitrumLauncher,
+  },
+  {
+    name: "nightshades",
+    description:
+      "The Nightshades survival game (Meebco Labs x Clutch Markets): live game clock and per-faction state for the four faction tokens, each in its own protocol-owned Uniswap v4 pool against WETH, plus the static reference (factions, token and NFT addresses, router, quoter, vault, hook and manager) and the rules that gate a trade. Once a day Chainlink VRF strikes: struck pools lose 20-80% of liquidity into their own price, survivors receive it, trading halts, then reopens at Sunrise behind a 99% tax decaying to zero over an hour.",
+    inputSchema: NO_ARGS,
+    run: async () => {
+      const reference = nightshadesReference();
+      try {
+        const live = await fetchNightshadesState();
+        return { reference, live };
+      } catch (err) {
+        return { reference, live: null, liveError: `on-chain read failed: ${String(err).slice(0, 160)}` };
+      }
+    },
+  },
+  {
+    name: "nft_market",
+    description:
+      "Robinhood Chain NFT market: collection-level trends (floor, volume and change) plus the recent buy tape. Covers the 4,444 ERC-6551 broker NFTs and the other collections on the chain. The broker collection trades both on OpenSea and through the Anvil AMM, so the two venues can disagree.",
+    inputSchema: NO_ARGS,
+    run: async () => ({ trends: await feedJson(nftTrendsFeed), buys: await feedJson(nftBuysFeed) }),
+  },
+  {
+    name: "protocol_economics",
+    description:
+      "StonkBrokers protocol economics from DeFiLlama: TVL, fees and revenue with their history, as the rest of the market sees them. Pair it with fee_breakdown for the per-lane and per-venue split of where those fees are actually generated.",
+    inputSchema: NO_ARGS,
+    run: () => feedJson(defillamaFeed),
+  },
+  {
+    name: "prediction_markets",
+    description:
+      "Live Polymarket questions by 24h volume: the external event surface LAURA's swarm reads each cycle. Useful for an agent that wants to pair an on-chain launch or trade with a real-world event resolving today.",
+    inputSchema: NO_ARGS,
+    run: () => feedJson(polymarketFeed),
+  },
+  {
     name: "launcher_tape",
     description:
       "Stonk Launcher tape: recent launches on every pad lane with phase (waiting/live/graduated), quote lane, current market cap and 24h activity. The primary discovery surface for new tokens on Robinhood Chain.",
@@ -385,15 +489,29 @@ interface ResourceDef {
 
 const RESOURCES: ResourceDef[] = [
   {
+    uri: "stonkbrokers://ecosystem",
+    name: "StonkBrokers ecosystem map",
+    description: "Every protocol in the ecosystem with its addresses, APIs, what an agent can do with it, and the usual integration trap.",
+    mimeType: "application/json",
+    read: async () => JSON.stringify(ecosystemMap(), null, 2),
+  },
+  {
     uri: "laura://contracts",
-    name: "Robinhood Chain contracts and rules",
-    description: "Chain, $STONKBROKER, launcher pads, lens, APIs and trading rules as JSON.",
+    name: "Contracts and trading rules (both chains)",
+    description: "Chain ids and RPCs, $STONKBROKER, every launcher pad by quote lane on Robinhood Chain and Arbitrum One, the lens, the factory, public APIs and the rules that keep an integrator out of trouble.",
     mimeType: "application/json",
     read: async () => JSON.stringify(contractsPayload(), null, 2),
   },
   {
+    uri: "laura://nightshades",
+    name: "Nightshades reference",
+    description: "Factions, token and NFT addresses, router, quoter, vault, hook and manager, plus the Night and Sunrise rules that gate any trade.",
+    mimeType: "application/json",
+    read: async () => JSON.stringify(nightshadesReference(), null, 2),
+  },
+  {
     uri: "laura://for-agents",
-    name: "For agents: how to participate in the Stonkbrokers ecosystem",
+    name: "For agents: how to participate in the StonkBrokers ecosystem",
     description: "Plain-language onboarding for autonomous traders and builders joining Robinhood Chain via Stonk Launcher.",
     mimeType: "text/markdown",
     read: async () => (await libraryDocs()).find((d) => d.file === "30-integrations.md")?.text ?? "See laura://contracts.",
@@ -402,26 +520,46 @@ const RESOURCES: ResourceDef[] = [
 
 const PROMPTS = [
   {
+    name: "onboard_agent",
+    description: "Orient an agent that has never touched this ecosystem: what exists, what it can do, and the three rules that stop it losing money on the first trade.",
+    arguments: [],
+  },
+  {
     name: "scan_launcher",
-    description: "Scan the Stonk Launcher tape for tokens worth a closer look and explain the risks per lane.",
+    description: "Scan the Stonk Launcher tape on both chains for tokens worth a closer look and explain the risks per lane.",
     arguments: [],
   },
   {
     name: "size_a_trade",
-    description: "Given a launcher token address, pull holders, pair depth and the lens rules, then reason about position size.",
+    description: "Given a launcher token address, pull its detail, holders, pair depth and a real lens quote, then reason about position size.",
     arguments: [{ name: "token", description: "0x token address", required: true }],
+  },
+  {
+    name: "find_agent_edge",
+    description: "Survey the whole ecosystem for the permissionless jobs an autonomous agent can actually run today, and rank them by how readable the edge is.",
+    arguments: [],
   },
 ];
 
 function promptMessages(name: string, args: Record<string, unknown>) {
   switch (name) {
+    case "onboard_agent":
+      return [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: "Call ecosystem_map, then contracts. Summarise for an autonomous agent with its own wallet: which protocols it can interact with today, which chain each lives on, and what a first useful action would be on each. Then state plainly the three rules that matter most before any trade (quote through the lens, a launch is only tradeable at phase 'live', tokenized-stock lanes are dark from Friday close to Monday 00:00 UTC). Do not propose a trade in this answer.",
+          },
+        },
+      ];
     case "scan_launcher":
       return [
         {
           role: "user",
           content: {
             type: "text",
-            text: "Call launcher_tape and token_tape. List the tokens that are live with real quote-side depth, note which lane each trades on, flag stock-quoted lanes if it is a weekend, and explain the graduation and tax mechanics from library_search('curve tax graduation') before suggesting any action.",
+            text: "Call launcher_tape, arbitrum_launcher and token_tape. List the tokens that are live with real quote-side depth, note which chain and lane each trades on, flag stock-quoted lanes if it is a weekend, and explain the graduation and tax mechanics from library_search('curve tax graduation') before suggesting any action.",
           },
         },
       ];
@@ -431,7 +569,17 @@ function promptMessages(name: string, args: Record<string, unknown>) {
           role: "user",
           content: {
             type: "text",
-            text: `For token ${String(args.token ?? "")}: call holders with that address, pairs, smart_lp and contracts. Reason about distribution, real depth on the quote side, and the lens quoting rule, then propose a position size that would not move the pool more than 1%.`,
+            text: `For token ${String(args.token ?? "")}: call token_detail with that address, then holders, pairs and smart_lp. If it is a live curve, call quote_launch with its lane and launch id at two sizes to read the tax and the slippage. Reason about distribution, real depth on the quote side and the current tax, then propose a position size that would not move the pool more than 1%.`,
+          },
+        },
+      ];
+    case "find_agent_edge":
+      return [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: "Call ecosystem_map, nightshades, nft_market, protocol_economics and brokertools. Identify the permissionless jobs an autonomous agent could run here today (keeper cranks, AMM-vs-marketplace arbitrage, curve market making, VRF-event positioning, liquidity provision) and rank them by how directly the edge is readable on-chain rather than guessed. For each, name the exact tool or contract call that would confirm the opportunity, and name what would make it a bad idea.",
           },
         },
       ];
@@ -539,4 +687,80 @@ export async function handleMcpBody(raw: string): Promise<{ status: number; body
 /** Tool catalogue for the human-readable docs and the manifest. */
 export function mcpToolCatalogue(): { name: string; description: string }[] {
   return TOOLS.map(({ name, description }) => ({ name, description }));
+}
+
+/**
+ * How the tools group on the public /mcp page and in llms.txt. A tool missing
+ * from this map still renders, under "other", so adding a tool can never
+ * silently drop it from the docs.
+ */
+const TOOL_GROUPS: { group: string; blurb: string; tools: string[] }[] = [
+  {
+    group: "Orientation",
+    blurb: "What exists, where it lives, and the addresses to talk to.",
+    tools: ["ecosystem_map", "contracts", "laura_state"],
+  },
+  {
+    group: "Trade a curve",
+    blurb: "Price and vet a bonding-curve trade on either chain.",
+    tools: ["quote_launch", "token_detail", "launcher_tape", "arbitrum_launcher", "holders"],
+  },
+  {
+    group: "Market depth",
+    blurb: "Where liquidity actually sits before you size anything.",
+    tools: ["token_tape", "pairs", "smart_lp"],
+  },
+  {
+    group: "Protocol economics",
+    blurb: "Fees, revenue and how the chain compares to all of crypto.",
+    tools: ["protocol_economics", "fee_breakdown", "chain_compare", "brokertools"],
+  },
+  {
+    group: "Games and collectibles",
+    blurb: "The permissionless-keeper and arbitrage surfaces.",
+    tools: ["nightshades", "nft_market", "prediction_markets"],
+  },
+  {
+    group: "LAURA's own work",
+    blurb: "Contracts she wrote and everything she has learned running live.",
+    tools: ["laura_contracts", "library_search", "library_doc"],
+  },
+];
+
+export interface McpCatalogueGroup {
+  group: string;
+  blurb: string;
+  tools: { name: string; description: string }[];
+}
+
+/** Grouped catalogue for the /mcp page and llms.txt. Every tool appears exactly once. */
+export function mcpGroupedCatalogue(): McpCatalogueGroup[] {
+  const seen = new Set<string>();
+  const groups: McpCatalogueGroup[] = TOOL_GROUPS.map(({ group, blurb, tools }) => ({
+    group,
+    blurb,
+    tools: tools
+      .map((n) => TOOLS.find((t) => t.name === n))
+      .filter((t): t is ToolDef => Boolean(t))
+      .map(({ name, description }) => {
+        seen.add(name);
+        return { name, description };
+      }),
+  }));
+  const rest = TOOLS.filter((t) => !seen.has(t.name)).map(({ name, description }) => ({ name, description }));
+  if (rest.length > 0) groups.push({ group: "Other", blurb: "Everything else this server exposes.", tools: rest });
+  return groups;
+}
+
+/** Resource and prompt catalogue for the docs page. */
+export function mcpResourceCatalogue(): { uri: string; name: string; description: string; mimeType: string }[] {
+  return RESOURCES.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType }));
+}
+
+export function mcpPromptCatalogue(): { name: string; description: string }[] {
+  return PROMPTS.map(({ name, description }) => ({ name, description }));
+}
+
+export function mcpToolCount(): number {
+  return TOOLS.length;
 }

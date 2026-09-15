@@ -13,6 +13,7 @@ import {
   LineChart as LineChartIcon,
   MessageCircle,
   Play,
+  Plug,
   Radio,
   RefreshCw,
   Rocket,
@@ -136,6 +137,10 @@ export function Console() {
             <Button variant="outline" size="sm" render={<Link href="/contracts" />} title="Contracts LAURA deployed, every function explained">
               <Hammer className="size-3.5 text-primary" />
               <span className="hidden sm:inline">Contracts</span>
+            </Button>
+            <Button variant="outline" size="sm" render={<Link href="/mcp" />} title="MCP server: the whole StonkBrokers ecosystem for AI agents">
+              <Plug className="size-3.5 text-primary" />
+              <span className="hidden sm:inline">MCP</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
               <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />

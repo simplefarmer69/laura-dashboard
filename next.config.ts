@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   // node_modules at runtime instead of bundling. playwright (browser worker,
   // optional) drives a real Chromium and must never be bundled either.
   serverExternalPackages: ["discord.js", "better-sqlite3", "playwright"],
+  /* Next ignores app-router folders whose name starts with a dot, so the MCP
+     discovery card lives at a normal route and is served from the conventional
+     well-known path through this rewrite. */
+  async rewrites() {
+    return [{ source: "/.well-known/mcp.json", destination: "/api/well-known/mcp" }];
+  },
 };
 
 export default nextConfig;
