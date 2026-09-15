@@ -87,15 +87,15 @@ const CLAUDE_CODE = `claude mcp add --transport http stonkbrokers ${MCP_SITE.end
 
 function CodeBlock({ code, copy = true }: { code: string; copy?: boolean }) {
   return (
-    <div className="relative rounded-lg border bg-muted/40">
-      <pre className="overflow-x-auto p-4 pr-24 font-mono text-[11px] leading-relaxed text-foreground/90 sm:text-xs">
-        <code>{code}</code>
-      </pre>
+    <div className="overflow-hidden rounded-lg border bg-muted/40">
       {copy ? (
-        <div className="absolute right-2 top-2">
+        <div className="flex items-center justify-end border-b bg-muted/60 px-2 py-1.5">
           <CopyButton value={code} />
         </div>
       ) : null}
+      <pre className="overflow-x-auto p-4 font-mono text-[11px] leading-relaxed text-foreground/90 sm:text-xs">
+        <code>{code}</code>
+      </pre>
     </div>
   );
 }
