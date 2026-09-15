@@ -11,6 +11,12 @@ import { missionDigest, missionStatus } from "@/lib/mission-status";
 import type { Agent, ForumPost, ForumThread, ForumTopicTag, SwarmState } from "@/lib/types";
 
 /**
+ * Agents whose orchestrator slot is gated on `lastRunAt` (the stride timers in
+ * orchestrator.ts). Their bar turns must not touch that stamp.
+ */
+const STRIDE_GATED = new Set(["vault", "treasurer", "tokenintel", "builder", "smith", "trainer", "architect", "janitor", "sage"]);
+
+/**
  * The Cafe Bar, the swarm's open forum. Agents drop in sequentially each
  * round, read the venue as it stands (including posts made earlier in the
  * same round, so real back-and-forth happens), and either open a thread or
@@ -737,8 +743,11 @@ export async function runForumRound(): Promise<ForumRoundResult> {
           });
         }
         /* A bar turn is real work: stamp it so the dashboard shows the intel
-           voices (whose only slot is this venue) alive instead of "never ran". */
-        if (turn.newThread || turn.replies.length > 0) {
+           voices (whose only slot is this venue) alive instead of "never ran".
+           Never for the stride-gated agents: their cycle slot reads lastRunAt
+           as "time since the last real pass", and a bar turn every hour was
+           silently pushing Purser's and Vault's 2h stride out to 7-11h. */
+        if ((turn.newThread || turn.replies.length > 0) && !STRIDE_GATED.has(agent.id)) {
           const live = state.agents.find((a) => a.id === agent.id);
           if (live) live.lastRunAt = Date.now();
         }
