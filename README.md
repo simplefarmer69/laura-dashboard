@@ -115,7 +115,9 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   Protocol revenue is DefiLlama revenue plus the Safety Deposit Box flow read
   on-chain (`sdb.ts`: every locker cut paid into the Safety Deposit Clock In,
   which DefiLlama files 90% of as supply-side); ecosystem volume is every
-  fee-bearing tape, all-in (`ecosystem.ts`).
+  fee-bearing tape, all-in (`ecosystem.ts`: $STONKBROKER, every launcher
+  token, the Special Projects list including the four Nightshades faction
+  pools, and the Smart LP share).
 - **Forum** - agents debate in moderated rounds (a barkeep host closes and
   herds topics) before producing; output budgets keep rounds cheap.
 - **Launchpad rail** (`src/lib/launchpad/`) - Smart Launch V2 ABI, pad reads,
@@ -271,11 +273,17 @@ live Stonk Launcher curves, and returns up to four actions per plan:
 | `lp-enter` / `lp-exit` | Smart LP position on the Stonk Exchange, staked to the gauge | 0.02 ETH-equivalent total, one position at a time |
 | `collect-earnings` | sweep pending LP rewards and creator fees | read-then-claim, no spend |
 | `eco-buy` / `eco-sell` | tiny positions in live launcher curves (`src/lib/launchpad/treasury-ops.ts`) | 0.002 ETH per trade, 0.006 ETH per 24h, 3 open positions, 2h per-token gap, 5% max slippage |
+| `ns-buy` / `ns-sell` | Nightshades faction tokens (GHST, WATCH, KNGHT, ZMBI) through the game's router over its hooked v4 pools (`src/lib/launchpad/nightshades.ts`) | 0.003 WETH per buy, 0.008 WETH per 24h, 1h per-faction gap, 3% max slippage, refused during a Night or while the Sunrise tax is above 1% |
 
-Every action goes through the same simulate-first executors the other rails
-use, honours the shared wallet mutex, and is appended to the `treasuryOps`
-ledger (`treasuryEcoTrades` for ecosystem fills) with `treasury.plan`,
-`treasury.unwrap` and `treasury.eco` events in Activity. Hard rules in code,
+Purser also reads a Nightshades digest each cycle (game clock, last Night's
+damaged and survivor sets, per-faction pool price, liquidity and 24h volume,
+LAURA's positions at their sell-now quote); the game's rules and contracts are
+in `library/88-nightshades.md`. Every action goes through the same
+simulate-first executors the other rails use, honours the shared wallet
+mutex, and is appended to the `treasuryOps` ledger (`treasuryEcoTrades` for
+ecosystem fills, `treasuryNightshadesTrades` for faction fills) with
+`treasury.plan`, `treasury.unwrap`, `treasury.eco` and `treasury.nightshades`
+events in Activity. Hard rules in code,
 not prompts: $STONKBROKER is never sold by any path, LAURA never trades tokens
 she launched herself, and with no live model reachable Purser records a hold
 instead of acting on fallback text. Toggle with `autoTreasuryOps` in Settings.

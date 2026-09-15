@@ -650,6 +650,8 @@ export type SwarmEventKind =
   | "treasury.unwrap"
   /** Purser bought or sold another builder's curve token on the launcher (capped ecosystem participation). */
   | "treasury.eco"
+  /** Purser bought or sold a Nightshades faction token through the game router (capped). */
+  | "treasury.nightshades"
   /** Purser's executed action plan for the cycle (what it did and why). */
   | "treasury.plan"
   /** Builder designed a utility project for one of LAURA's launched tokens. */
@@ -959,6 +961,34 @@ export interface TreasuryEcoTrade {
   reason: string;
 }
 
+/** The four Nightshades factions (Meebco Labs x Clutch Markets, Robinhood Chain). */
+export type NightshadesFactionId = "ghosts" | "watchers" | "knights" | "zombies";
+
+/**
+ * One capped trade of a Nightshades faction token through the game's own
+ * router (WETH quoted Uniswap v4 hooked pool). Operator grant 2026-09-15:
+ * "allow laura to also trade on the nightshades faction tokens".
+ */
+export interface NightshadesTrade {
+  id: string;
+  ts: number;
+  side: "buy" | "sell";
+  faction: NightshadesFactionId;
+  token: string;
+  symbol: string;
+  /** WETH spent (buy) or received (sell); excludes gas */
+  ethAmount: number;
+  /** Faction tokens received (buy) or sold (sell) */
+  tokenAmount: number;
+  /** Pool price at execution, ETH per token (from the fill) */
+  priceEth: number;
+  /** Nights that had resolved when the trade went through (0 before the first Night) */
+  nightRound: number;
+  txHash: string;
+  /** Purser's stated reason, kept so the next plan can judge it */
+  reason: string;
+}
+
 export type TreasuryOpAction =
   | "hold"
   | "unwrap-weth"
@@ -967,7 +997,9 @@ export type TreasuryOpAction =
   | "lp-exit"
   | "collect-earnings"
   | "eco-buy"
-  | "eco-sell";
+  | "eco-sell"
+  | "ns-buy"
+  | "ns-sell";
 
 /** One line of Purser's execution ledger: what it decided, what happened. */
 export interface TreasuryOpRecord {
@@ -1176,6 +1208,8 @@ export interface SwarmState {
   treasuryLp?: TreasuryLpPosition[];
   /** Purser's launcher trades in other builders' tokens (eco caps computed from this). */
   treasuryEcoTrades?: TreasuryEcoTrade[];
+  /** Purser's Nightshades faction-token trades (NIGHTSHADES_CAPS computed from this). */
+  treasuryNightshadesTrades?: NightshadesTrade[];
   /** Purser's execution ledger: every decision and its outcome, newest last. */
   treasuryOps?: TreasuryOpRecord[];
   /** Builder utility projects for LAURA's launched tokens (caps computed from this). */

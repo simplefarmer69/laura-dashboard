@@ -3,12 +3,14 @@ import { enterLpPosition, exitLpPosition, stakeLpPosition } from "@/lib/launchpa
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import {
   ECO_CAPS,
+  NIGHTSHADES_CAPS,
   TREASURY_CAPS,
   buyEligibility,
   ecoBuyEligibility,
   lpDeployedEthEquiv,
 } from "@/lib/launchpad/treasury-caps";
 import { ecoBuy, ecoCandidates, ecoSell, unwrapWeth, valueEcoPositions, walletBusy, type EcoCandidate } from "@/lib/launchpad/treasury-ops";
+import { nightshadesBuy, nightshadesDigest, nightshadesSell } from "@/lib/launchpad/nightshades";
 import { generateStructured, type ResolvedModel } from "@/lib/swarm/llm";
 import { agentSystem, treasurerMock, treasurerPrompt, treasurerSchema, type CycleContext, type TreasurerOut } from "@/lib/swarm/tasks";
 import { newId, pushEvent } from "@/lib/store";
@@ -17,8 +19,8 @@ import type { Agent, SwarmState, TreasuryOpAction, TreasuryOpRecord } from "@/li
 /**
  * Purser: the treasury agent that decides and executes (operator grant
  * 2026-09-12). One structured call reads the sleeves, the live curves, Vault's
- * memo and its own ledger, then each action runs through the existing
- * simulate-first, hard-capped executors. Nothing executes on a fallback
+ * memo, the Nightshades game clock and its own ledger, then each action runs
+ * through the existing simulate-first, hard-capped executors. Nothing executes on a fallback
  * plan, and nothing executes while another rail holds the wallet.
  */
 
@@ -163,6 +165,20 @@ async function execute(action: TreasurerOut["actions"][number], state: SwarmStat
       if (r.ok && r.sent) return { outcome: "executed", detail: `sold ${r.trade.tokenAmount.toFixed(2)} $${r.trade.symbol} for ${r.trade.ethAmount.toFixed(4)} ETH`, txHash: r.trade.txHash };
       return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
     }
+    case "ns-buy": {
+      const faction = (action.faction ?? "").trim().toLowerCase();
+      if (!faction) return { outcome: "skipped", detail: "ns-buy needs a faction (ghosts, watchers, knights or zombies)" };
+      const r = await nightshadesBuy({ faction, amountEth: action.amountEth ?? NIGHTSHADES_CAPS.maxEthPerTrade, reason: action.reason, runId });
+      if (r.ok && r.sent) return { outcome: "executed", detail: `bought ${r.trade.tokenAmount.toFixed(0)} $${r.trade.symbol} (Nightshades ${r.trade.faction}) for ${r.trade.ethAmount.toFixed(4)} WETH`, txHash: r.trade.txHash };
+      return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
+    }
+    case "ns-sell": {
+      const faction = (action.faction ?? "").trim().toLowerCase();
+      if (!faction) return { outcome: "skipped", detail: "ns-sell needs a held faction (ghosts, watchers, knights or zombies)" };
+      const r = await nightshadesSell({ faction, fraction: action.fraction ?? 1, reason: action.reason, runId });
+      if (r.ok && r.sent) return { outcome: "executed", detail: `sold ${r.trade.tokenAmount.toFixed(0)} $${r.trade.symbol} (Nightshades ${r.trade.faction}) for ${r.trade.ethAmount.toFixed(4)} WETH`, txHash: r.trade.txHash };
+      return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
+    }
     default: {
       const never: never = a;
       return { outcome: "skipped", detail: `unknown action ${String(never)}` };
@@ -177,11 +193,11 @@ export async function runTreasurer(input: { state: SwarmState; resolved: Resolve
     log(`candidate read failed (non-fatal): ${String(err).slice(0, 160)}`);
     return [] as EcoCandidate[];
   });
-  const sleeves = await treasurySleeves(state);
+  const [sleeves, nightshades] = await Promise.all([treasurySleeves(state), nightshadesDigest(state)]);
   const out = await generateStructured(resolved, {
     schema: treasurerSchema,
     system: agentSystem(agent),
-    prompt: treasurerPrompt(ctx, { sleeves, candidates: candidatesDigest(cands), vaultMemo: vaultMemoDigest(state), ledger: ledgerDigest(state) }),
+    prompt: treasurerPrompt(ctx, { sleeves, candidates: candidatesDigest(cands), nightshades, vaultMemo: vaultMemoDigest(state), ledger: ledgerDigest(state) }),
     mock: treasurerMock,
   });
   const plan = out.value;

@@ -56,6 +56,87 @@ export const ECO_CAPS = {
   perTokenGapHours: 2,
 } as const;
 
+/**
+ * Nightshades caps: Purser trading the four faction tokens of the Meebco x
+ * Clutch Markets survival game through the game's own router (operator grant
+ * 2026-09-15). The game moves 20-80% of a struck faction's pool liquidity
+ * every Night, so every position is sized as a wager the treasury can lose
+ * outright: the whole book at once costs about one day of the accumulation
+ * budget. Trading is refused in code while a Night is resolving and while the
+ * Sunrise anti-snipe tax is above `maxSnipeTaxBps`.
+ */
+export const NIGHTSHADES_CAPS = {
+  /** Max WETH per single buy */
+  maxEthPerTrade: 0.003,
+  /** Max WETH spent on faction buys per rolling 24h */
+  maxEthPer24h: 0.008,
+  /** Skip dust trades under this */
+  minEthPerTrade: 0.0005,
+  /** Tolerance on the quoted output (the hooked pools carry a 1% fee on top) */
+  slippageBps: 300,
+  /** One trade per faction per this many hours (no churning a pool) */
+  perFactionGapHours: 1,
+  /** Never trade while the Sunrise anti-snipe tax is above this (it starts at 99%) */
+  maxSnipeTaxBps: 100,
+} as const;
+
+export interface NightshadesHolding {
+  faction: string;
+  symbol: string;
+  token: string;
+  tokens: number;
+  ethIn: number;
+  ethOut: number;
+  lastTs: number;
+}
+
+/** Net faction-token balance Purser still holds per faction, from the Nightshades ledger. */
+export function nightshadesHoldings(state: SwarmState): Map<string, NightshadesHolding> {
+  const out = new Map<string, NightshadesHolding>();
+  for (const t of state.treasuryNightshadesTrades ?? []) {
+    const h = out.get(t.faction) ?? { faction: t.faction, symbol: t.symbol, token: t.token.toLowerCase(), tokens: 0, ethIn: 0, ethOut: 0, lastTs: 0 };
+    if (t.side === "buy") {
+      h.tokens += t.tokenAmount;
+      h.ethIn += t.ethAmount;
+    } else {
+      h.tokens -= t.tokenAmount;
+      h.ethOut += t.ethAmount;
+    }
+    h.lastTs = Math.max(h.lastTs, t.ts);
+    out.set(t.faction, h);
+  }
+  return out;
+}
+
+/** Factions with a positive remaining balance (dust below 1e-9 counts as closed). */
+export function openNightshadesPositions(state: SwarmState): NightshadesHolding[] {
+  return [...nightshadesHoldings(state).values()].filter((h) => h.tokens > 1e-9);
+}
+
+export interface NightshadesEligibility {
+  eligible: boolean;
+  reason: string;
+  /** WETH the caps allow for the next buy right now */
+  amountEth: number;
+  spent24hEth: number;
+}
+
+/** Pure caps math over the Nightshades ledger for a prospective trade on `faction` (the Night/Sunrise guards are read on-chain at send time). */
+export function nightshadesEligibility(state: SwarmState, faction: string, side: "buy" | "sell", now = Date.now()): NightshadesEligibility {
+  const trades = state.treasuryNightshadesTrades ?? [];
+  const spent24h = trades.filter((t) => t.side === "buy" && t.ts > now - DAY_MS).reduce((s, t) => s + t.ethAmount, 0);
+  const lastOnFaction = trades.filter((t) => t.faction === faction).reduce((m, t) => Math.max(m, t.ts), 0);
+  if (lastOnFaction && now - lastOnFaction < NIGHTSHADES_CAPS.perFactionGapHours * 3600_000) {
+    return { eligible: false, reason: `last trade on ${faction} ${((now - lastOnFaction) / 60_000).toFixed(0)}m ago; min gap ${NIGHTSHADES_CAPS.perFactionGapHours}h`, amountEth: 0, spent24hEth: spent24h };
+  }
+  if (side === "sell") return { eligible: true, reason: "", amountEth: 0, spent24hEth: spent24h };
+  const remaining = NIGHTSHADES_CAPS.maxEthPer24h - spent24h;
+  if (remaining < NIGHTSHADES_CAPS.minEthPerTrade) {
+    return { eligible: false, reason: `Nightshades 24h spend ${spent24h.toFixed(4)} WETH leaves under ${NIGHTSHADES_CAPS.minEthPerTrade} of the ${NIGHTSHADES_CAPS.maxEthPer24h} WETH cap`, amountEth: 0, spent24hEth: spent24h };
+  }
+  return { eligible: true, reason: "", amountEth: Math.min(NIGHTSHADES_CAPS.maxEthPerTrade, remaining), spent24hEth: spent24h };
+}
+
 /** Net token balance Purser still holds per token address, from the eco ledger. */
 export function ecoHoldings(state: SwarmState): Map<string, { symbol: string; launchId: number; tokens: number; ethIn: number; ethOut: number; lastTs: number }> {
   const out = new Map<string, { symbol: string; launchId: number; tokens: number; ethIn: number; ethOut: number; lastTs: number }>();

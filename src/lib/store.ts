@@ -326,6 +326,13 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (t) => t.id,
       (t) => t.ts,
     ),
+    treasuryNightshadesTrades: mergeById(
+      base.treasuryNightshadesTrades ?? [],
+      work.treasuryNightshadesTrades ?? [],
+      current.treasuryNightshadesTrades ?? [],
+      (t) => t.id,
+      (t) => t.ts,
+    ),
     treasuryOps: mergeById(
       base.treasuryOps ?? [],
       work.treasuryOps ?? [],
