@@ -24,11 +24,21 @@ interface LanePadInfo extends PadInfo {
   lane: string;
   quoteSymbol: string;
   kind: "crypto" | "stock";
+  /** Absent on snapshots published before the Arbitrum One lane (2026-09-15). */
+  chain?: "robinhood" | "arbitrum";
+  chainLabel?: string;
   closedReason: string | null;
 }
 
 interface LaunchpadInfo {
-  wallet: { configured: boolean; address: string | null; balanceEth: number | null; funded: boolean };
+  wallet: {
+    configured: boolean;
+    address: string | null;
+    balanceEth: number | null;
+    funded: boolean;
+    /** Native balance per launch chain (Arbitrum One lane added 2026-09-15). */
+    chains?: { robinhood?: number | null; arbitrum?: number | null };
+  };
   /** WETH lane only — kept for older published snapshots. */
   pad: PadInfo | null;
   /** Every quote-lane pad (weth, stonk, usdg + weekday stock lanes). */
@@ -138,6 +148,15 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
                 {!info.wallet.funded && (
                   <p className="text-xs text-[var(--sb-gold)]">Not funded yet; deploys stay locked.</p>
                 )}
+                {info.wallet.chains && info.wallet.chains.arbitrum !== undefined && (
+                  <p className="text-xs">
+                    <span className="text-muted-foreground">Arbitrum One </span>
+                    <span className={(info.wallet.chains.arbitrum ?? 0) >= 0.003 ? "text-[var(--sb-green)]" : "text-[var(--sb-gold)]"}>
+                      {info.wallet.chains.arbitrum === null ? "unreadable" : `${(info.wallet.chains.arbitrum ?? 0).toFixed(5)} ETH`}
+                    </span>
+                    <span className="text-muted-foreground"> · same address, funds the arbweth lane</span>
+                  </p>
+                )}
               </>
             )}
           </CardContent>
@@ -156,12 +175,15 @@ export function Launchpad({ state, refresh }: { state: ConsoleState; refresh: ()
                     <a
                       key={p.lane}
                       className="flex items-baseline justify-between gap-2 hover:underline"
-                      href={`${info.explorer}/address/${p.address}`}
+                      href={`${p.chain === "arbitrum" ? "https://arbiscan.io" : info.explorer}/address/${p.address}`}
                       target="_blank"
                       rel="noreferrer"
-                      title={p.closedReason ?? `${p.quoteSymbol}-quoted lane · ${p.address}`}
+                      title={p.closedReason ?? `${p.quoteSymbol}-quoted lane on ${p.chainLabel ?? "Robinhood Chain"} · ${p.address}`}
                     >
-                      <span className="font-mono uppercase">{p.lane}</span>
+                      <span className="font-mono uppercase">
+                        {p.lane}
+                        {p.chain === "arbitrum" ? <span className="ml-1 rounded bg-[var(--sb-blue,#28a0f0)]/20 px-1 text-[9px] normal-case text-[var(--sb-blue,#28a0f0)]">ARB</span> : null}
+                      </span>
                       <span className={p.closedReason ? "text-[var(--sb-gold)]" : "text-muted-foreground"}>
                         {p.launchCount} · {p.closedReason ? "closed" : "open"}
                       </span>
@@ -379,7 +401,7 @@ function LaunchCard({
                 {l.name} <span className="font-mono text-sm text-primary">${l.symbol}</span>
               </CardTitle>
               <CardDescription className="truncate text-[11px]">
-                {ago(l.createdAt)} · {l.lane.toUpperCase()} lane · {usd(l.startMcapUsd)}→{usd(l.gradMcapUsd)} · tax {taxLine}
+                {ago(l.createdAt)} · {l.lane.toUpperCase()} lane{l.lane === "arbweth" ? " · Arbitrum One" : ""} · {usd(l.startMcapUsd)}→{usd(l.gradMcapUsd)} · tax {taxLine}
                 {l.designer === "tokenintel" ? " · by Ticker" : ""}
                 {l.buyOnlyFallback ? " · buy-only refused by pad, sells enabled" : l.buyOnlyRequested ? " · buy-only requested" : ""}
                 {open && l.artMotif ? ` · ${l.artMotif}/${l.artPalette ?? "emerald"}` : ""}
@@ -429,11 +451,11 @@ function LaunchCard({
           {l.status === "deployed" && l.txHash && (
             <div className="space-y-1 text-xs">
               {l.tokenAddress && (
-                <a className="flex items-center gap-1 text-primary hover:underline" href={`${explorer}/address/${l.tokenAddress}`} target="_blank" rel="noreferrer">
+                <a className="flex items-center gap-1 text-primary hover:underline" href={`${l.lane === "arbweth" ? "https://arbiscan.io" : explorer}/address/${l.tokenAddress}`} target="_blank" rel="noreferrer">
                   token {l.tokenAddress.slice(0, 12)}… <ExternalLink className="size-3" />
                 </a>
               )}
-              <a className="flex items-center gap-1 text-primary hover:underline" href={txUrl(l.txHash)} target="_blank" rel="noreferrer">
+              <a className="flex items-center gap-1 text-primary hover:underline" href={l.lane === "arbweth" ? `https://arbiscan.io/tx/${l.txHash}` : txUrl(l.txHash)} target="_blank" rel="noreferrer">
                 tx {l.txHash.slice(0, 14)}… <ExternalLink className="size-3" />
               </a>
               {l.imageHash && <p className="text-muted-foreground">logo live on launcher · {l.imageHash.slice(0, 14)}…</p>}

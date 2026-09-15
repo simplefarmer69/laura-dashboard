@@ -652,6 +652,7 @@ export type SwarmEventKind =
   | "treasury.eco"
   /** Purser bought or sold a Nightshades faction token through the game router (capped). */
   | "treasury.nightshades"
+  | "treasury.bridge"
   /** Purser's executed action plan for the cycle (what it did and why). */
   | "treasury.plan"
   /** Builder designed a utility project for one of LAURA's launched tokens. */
@@ -989,6 +990,37 @@ export interface NightshadesTrade {
   reason: string;
 }
 
+/**
+ * One ETH bridge between the treasury's chains through Relay (relay.link),
+ * the intent bridge that serves Robinhood Chain ↔ Arbitrum One in seconds.
+ * Operator directive 2026-09-15: "bridge 1 eth of funds over to arbitrum one
+ * and allow her to begin deploying tokens there". Caps live in BRIDGE_CAPS.
+ */
+export interface TreasuryBridge {
+  id: string;
+  ts: number;
+  fromChainId: number;
+  toChainId: number;
+  /** ETH sent on the origin chain (excludes origin gas). */
+  amountEth: number;
+  /** ETH the quote promised on the destination chain. */
+  expectedOutEth: number;
+  /** ETH actually observed on the destination (null until confirmed). */
+  receivedEth: number | null;
+  /** Relay + gas fees in ETH, as quoted. */
+  feeEth: number;
+  /** Relay request id (their status key). */
+  requestId: string;
+  /** Origin deposit tx hash. */
+  txHash: string;
+  /** Destination fill tx hash once Relay reports it. */
+  fillTxHash: string | null;
+  status: "pending" | "success" | "failed" | "refund";
+  /** "operator" for directed bridges, "treasurer" for Purser's capped top-ups. */
+  by: "operator" | "treasurer";
+  reason: string;
+}
+
 export type TreasuryOpAction =
   | "hold"
   | "unwrap-weth"
@@ -999,7 +1031,8 @@ export type TreasuryOpAction =
   | "eco-buy"
   | "eco-sell"
   | "ns-buy"
-  | "ns-sell";
+  | "ns-sell"
+  | "bridge-arb";
 
 /** One line of Purser's execution ledger: what it decided, what happened. */
 export interface TreasuryOpRecord {
@@ -1210,6 +1243,8 @@ export interface SwarmState {
   treasuryEcoTrades?: TreasuryEcoTrade[];
   /** Purser's Nightshades faction-token trades (NIGHTSHADES_CAPS computed from this). */
   treasuryNightshadesTrades?: NightshadesTrade[];
+  /** ETH bridges between Robinhood Chain and Arbitrum One (BRIDGE_CAPS computed from this). */
+  treasuryBridges?: TreasuryBridge[];
   /** Purser's execution ledger: every decision and its outcome, newest last. */
   treasuryOps?: TreasuryOpRecord[];
   /** Builder utility projects for LAURA's launched tokens (caps computed from this). */

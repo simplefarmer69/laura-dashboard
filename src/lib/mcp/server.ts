@@ -8,7 +8,7 @@ import { GET as brokertoolsFeed } from "@/app/api/feeds/brokertools/route";
 import { GET as feeBreakdownFeed } from "@/app/api/feeds/fee-breakdown/route";
 import { GET as llamaChainsFeed } from "@/app/api/feeds/llama-chains/route";
 import { GET as forgeFeed } from "@/app/api/forge/route";
-import { LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
+import { ARBITRUM_PADS, LAUNCH_CHAINS, LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { libraryDocs } from "@/lib/swarm/library";
 import { isViewerMode } from "@/lib/viewer/mode";
@@ -120,7 +120,16 @@ function contractsPayload() {
         "A launch is user-visible only once the floor API reports phase 'live'.",
         "Stock-quoted lanes (gme, nvda, aapl, spcx, uso) price through Chainlink equity feeds that go dark from Friday close to Monday 00:00 UTC; do not trade those lanes on weekends.",
         "Every pad has launchFeeWei == 0; the curve tax and post-graduation tax are the fee model.",
+        "The launcher also runs on Arbitrum One (chain 42161) with the same ABI: 21 pads, lens 0x7376f9dC6432434D611488CB3E852071ed29E276, WETH lane takes native ETH via buyEth, bonded pools are Uniswap v3 (1%). LAURA deploys there through her arbweth lane.",
       ],
+      arbitrumOne: {
+        chainId: LAUNCH_CHAINS.arbitrum.chain.id,
+        lens: LAUNCH_CHAINS.arbitrum.lens,
+        weth: LAUNCH_CHAINS.arbitrum.weth,
+        gridApi: LAUNCH_CHAINS.arbitrum.gridApi,
+        explorer: LAUNCH_CHAINS.arbitrum.explorer,
+        pads: ARBITRUM_PADS.map((p) => ({ lane: p.lane, quote: p.quoteSymbol, pad: p.pad, quoteToken: p.quote, decimals: p.decimals })),
+      },
     },
     ui: {
       launcher: "https://www.stonkbrokers.cash/launcher",

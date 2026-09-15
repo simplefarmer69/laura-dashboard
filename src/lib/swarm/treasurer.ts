@@ -11,6 +11,8 @@ import {
 } from "@/lib/launchpad/treasury-caps";
 import { ecoBuy, ecoCandidates, ecoSell, unwrapWeth, valueEcoPositions, walletBusy, type EcoCandidate } from "@/lib/launchpad/treasury-ops";
 import { nightshadesBuy, nightshadesDigest, nightshadesSell } from "@/lib/launchpad/nightshades";
+import { bridgeDigest, bridgeEth, chainBalances, refreshPendingBridges } from "@/lib/launchpad/bridge";
+import { BRIDGE_CAPS } from "@/lib/launchpad/treasury-caps";
 import { generateStructured, type ResolvedModel } from "@/lib/swarm/llm";
 import { agentSystem, treasurerMock, treasurerPrompt, treasurerSchema, type CycleContext, type TreasurerOut } from "@/lib/swarm/tasks";
 import { newId, pushEvent } from "@/lib/store";
@@ -179,6 +181,11 @@ async function execute(action: TreasurerOut["actions"][number], state: SwarmStat
       if (r.ok && r.sent) return { outcome: "executed", detail: `sold ${r.trade.tokenAmount.toFixed(0)} $${r.trade.symbol} (Nightshades ${r.trade.faction}) for ${r.trade.ethAmount.toFixed(4)} WETH`, txHash: r.trade.txHash };
       return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
     }
+    case "bridge-arb": {
+      const r = await bridgeEth({ amountEth: action.amountEth ?? BRIDGE_CAPS.maxEthPerBridge, reason: action.reason, by: "treasurer" });
+      if (r.ok && r.sent) return { outcome: "executed", detail: `bridged ${r.bridge.amountEth} ETH Robinhood → Arbitrum One via Relay (${r.bridge.status}${r.bridge.receivedEth !== null ? `, received ${r.bridge.receivedEth.toFixed(5)} ETH` : ""})`, txHash: r.bridge.txHash };
+      return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
+    }
     default: {
       const never: never = a;
       return { outcome: "skipped", detail: `unknown action ${String(never)}` };
@@ -193,11 +200,13 @@ export async function runTreasurer(input: { state: SwarmState; resolved: Resolve
     log(`candidate read failed (non-fatal): ${String(err).slice(0, 160)}`);
     return [] as EcoCandidate[];
   });
-  const [sleeves, nightshades] = await Promise.all([treasurySleeves(state), nightshadesDigest(state)]);
+  await refreshPendingBridges().catch((err) => log(`bridge status refresh failed (non-fatal): ${String(err).slice(0, 120)}`));
+  const [sleeves, nightshades, balances] = await Promise.all([treasurySleeves(state), nightshadesDigest(state), chainBalances()]);
+  const bridge = bridgeDigest(state, balances);
   const out = await generateStructured(resolved, {
     schema: treasurerSchema,
     system: agentSystem(agent),
-    prompt: treasurerPrompt(ctx, { sleeves, candidates: candidatesDigest(cands), nightshades, vaultMemo: vaultMemoDigest(state), ledger: ledgerDigest(state) }),
+    prompt: treasurerPrompt(ctx, { sleeves, candidates: candidatesDigest(cands), nightshades, bridge, vaultMemo: vaultMemoDigest(state), ledger: ledgerDigest(state) }),
     mock: treasurerMock,
   });
   const plan = out.value;

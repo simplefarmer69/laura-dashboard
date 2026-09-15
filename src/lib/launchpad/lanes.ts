@@ -16,7 +16,7 @@
  * 00:15 UTC (a small margin past the feeds' Monday 00:00 UTC resume).
  */
 
-import { PAD_LANE_KEYS, type PadLane } from "@/lib/launchpad/contracts";
+import { PAD_LANE_KEYS, laneChain, laneChainKey, type PadLane } from "@/lib/launchpad/contracts";
 
 export interface LaneInfo {
   /** Symbol of the quote token the curve trades in. */
@@ -25,6 +25,24 @@ export interface LaneInfo {
   kind: "crypto" | "stock";
   /** One-line flavor for the mint prompt's lane menu. */
   vibe: string;
+}
+
+/**
+ * Whether the swarm wallet can pay gas on each foreign launch chain right now.
+ * Refreshed by the executor / cycle context from service.laneFundingProblem
+ * (an async chain read) so the synchronous lane menu, rotation and resolver
+ * can steer Mint away from a lane whose chain is unfunded. Default true so
+ * a missed refresh never hides a funded lane; the executor's own pre-deploy
+ * funding check is the hard gate.
+ */
+const foreignChainFunded: Record<string, boolean> = { arbitrum: true };
+export function setChainFunded(chain: string, funded: boolean): void {
+  foreignChainFunded[chain] = funded;
+}
+export function laneChainFunded(lane: PadLane): boolean {
+  const key = laneChainKey(lane);
+  if (key === "robinhood") return true;
+  return foreignChainFunded[key] ?? true;
 }
 
 export const LANE_INFO: Record<PadLane, LaneInfo> = {
@@ -36,6 +54,11 @@ export const LANE_INFO: Record<PadLane, LaneInfo> = {
   aapl: { quote: "AAPL", kind: "stock", vibe: "Apple lane — quote is tokenized AAPL stock and fees accrue in AAPL; fits consumer tech, design and cult-of-brand themes" },
   spcx: { quote: "SPCX", kind: "stock", vibe: "SpaceX lane — quote is tokenized SPCX stock and fees accrue in SPCX; fits rockets, space, mars and moonshot themes" },
   uso: { quote: "USO", kind: "stock", vibe: "oil ETF lane — quote is tokenized USO and fees accrue in USO; fits energy, macro and commodity themes" },
+  arbweth: {
+    quote: "WETH",
+    kind: "crypto",
+    vibe: "ARBITRUM ONE ETH lane (chain 42161, operator directive 2026-09-15) — the StonkBrokers launcher's second chain, the L2 Robinhood Chain settles to; a launch here is the same V2 pad flow, buyers pay native ETH on Arbitrum, bonded pools go to Uniswap v3 (1%), and it puts the StonkBrokers launcher in front of Arbitrum's much larger DeFi crowd; fits concepts about Arbitrum itself, cross-chain arrival, L2 culture, DeFi-native humor, or anything meant to pull Arbitrum users toward Robinhood Chain and $STONKBROKER; creator fees arrive as Arbitrum WETH",
+  },
 };
 
 export const CRYPTO_LANES = PAD_LANE_KEYS.filter((l) => LANE_INFO[l].kind === "crypto");
@@ -59,6 +82,9 @@ export function stockLanesOpen(at: Date = new Date()): boolean {
  * on-chain revert.
  */
 export function laneClosedReason(lane: PadLane, at: Date = new Date()): string | null {
+  if (!laneChainFunded(lane)) {
+    return `${laneChain(lane).label} wallet is unfunded (below the gas floor); bridge ETH there before the ${lane} lane can deploy. The launch stays queued.`;
+  }
   if (LANE_INFO[lane].kind !== "stock") return null;
   if (stockLanesOpen(at)) return null;
   return (
@@ -68,9 +94,10 @@ export function laneClosedReason(lane: PadLane, at: Date = new Date()): string |
   );
 }
 
-/** Lanes that can deploy at `at` (crypto always; stock lanes on weekdays). */
+/** Lanes that can deploy at `at` (crypto always; stock lanes on weekdays; foreign chains only when funded). */
 export function availableLanes(at: Date = new Date()): PadLane[] {
-  return stockLanesOpen(at) ? [...PAD_LANE_KEYS] : [...CRYPTO_LANES];
+  const base = stockLanesOpen(at) ? [...PAD_LANE_KEYS] : [...CRYPTO_LANES];
+  return base.filter((l) => laneChainFunded(l));
 }
 
 /**
@@ -97,8 +124,12 @@ export function resolveLane(
 ): PadLane {
   const lane = PAD_LANE_KEYS.find((l) => l === requested);
   if (!lane) return laneRotationHint(cycleSeq, at);
+  /* A funded-chain fallback keeps the launch deployable today instead of
+     stranding it on an unfunded chain; weth is the Robinhood default lane. */
+  if (!laneChainFunded(lane)) return "weth";
   if (LANE_INFO[lane].kind === "stock" && !stockLanesOpen(at)) {
-    return CRYPTO_LANES[(cycleSeq * 5 + 1) % CRYPTO_LANES.length];
+    const open = CRYPTO_LANES.filter((l) => laneChainFunded(l));
+    return open[(cycleSeq * 5 + 1) % open.length];
   }
   return lane;
 }
@@ -129,7 +160,9 @@ export function laneMenuDigest(
   const lines = PAD_LANE_KEYS.map((l) => {
     const info = LANE_INFO[l];
     const closed = info.kind === "stock" && !open ? " [CLOSED at this spec's deploy slot (weekend) - do not pick]" : "";
-    return `- ${l}: quoted in ${info.quote} (${info.kind}); ${info.vibe}${closed}`;
+    const unfunded = laneChainFunded(l) ? "" : ` [UNFUNDED: the ${laneChain(l).label} wallet is below its gas floor - do not pick until Purser bridges ETH there]`;
+    const chain = laneChainKey(l) === "robinhood" ? "" : ` on ${laneChain(l).label}`;
+    return `- ${l}: quoted in ${info.quote} (${info.kind}${chain}); ${info.vibe}${closed}${unfunded}`;
   });
   const hint = laneRotationHint(cycleSeq, at);
   const history = recent.length ? recent.join(", ") : "none yet";
@@ -140,5 +173,6 @@ export function laneMenuDigest(
       : `Stock lanes are CLOSED at the slot this spec would deploy in (~${at.toISOString().slice(0, 16)}Z, after the queue ahead of it; Chainlink equity feeds pause Friday 20:00 UTC to Monday 00:15 UTC). Pick weth, stonk or usdg, or the spec waits until Monday.`,
     `Rotation hint for this cycle: ${hint}. Recent launch lanes (newest first): ${history}.`,
     "Pick the lane whose quote token genuinely fits the concept - a GME-lore token belongs on the gme lane, an AI token on nvda, a generic meme on weth. Avoid using the same lane three launches in a row unless the concept demands it.",
+    "Every lane except arbweth deploys on Robinhood Chain (4663). arbweth deploys on Arbitrum One (42161): pick it when the concept is about Arbitrum, cross-chain reach or pulling Arbitrum's DeFi crowd toward the StonkBrokers launcher — and keep roughly one launch in four there while it is funded, so LAURA is a visible builder on both chains.",
   ].join("\n");
 }

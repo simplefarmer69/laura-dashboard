@@ -8,7 +8,7 @@ import {
   zeroAddress,
 } from "viem";
 import type { Abi } from "viem";
-import { LAUNCHPAD, ROBINHOOD_CHAIN, type PadLane } from "@/lib/launchpad/contracts";
+import { LAUNCH_CHAINS, LAUNCHPAD, ROBINHOOD_CHAIN, laneChain, laneChainKey, type PadLane } from "@/lib/launchpad/contracts";
 import PAD_FULL_ABI_JSON from "@/lib/launchpad/StonkSafeLaunchpadV2.abi.json";
 import { getAccount } from "@/lib/launchpad/service";
 import { loadState, pushEvent, updateState } from "@/lib/store";
@@ -56,6 +56,14 @@ const publicClient = createPublicClient({
   chain: ROBINHOOD_CHAIN,
   transport: http(undefined, { batch: true, retryCount: 4, retryDelay: 800 }),
 });
+const arbitrumClient = createPublicClient({
+  chain: LAUNCH_CHAINS.arbitrum.chain,
+  transport: http(undefined, { batch: true, retryCount: 4, retryDelay: 800 }),
+});
+/** The client for a launch's own chain (2026-09-15: Arbitrum One lanes read and claim there). */
+function clientFor(lane: PadLane) {
+  return laneChainKey(lane) === "arbitrum" ? arbitrumClient : publicClient;
+}
 
 /** Quote token per lane (pad.quote(), verified on-chain 2026-09-10).
  * NOTE: USDG is 6 decimals — always format quote amounts with formatQuote,
@@ -69,6 +77,8 @@ export const QUOTE_TOKENS: Record<PadLane, { address: `0x${string}`; symbol: str
   aapl: { address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", symbol: "AAPL", decimals: 18 },
   spcx: { address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa", symbol: "SPCX", decimals: 18 },
   uso: { address: "0xa30FA36Db767ad9eD3f7a60fC79526fB4d56D344", symbol: "USO", decimals: 18 },
+  /** Arbitrum One canonical WETH (pad.quote() on the arbweth pad, verified 2026-09-15). */
+  arbweth: { address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", symbol: "WETH", decimals: 18 },
 };
 
 /** Format a quote-token wei amount using the lane's real decimals. */
@@ -257,13 +267,14 @@ function trackedLaunches(state: SwarmState): LaunchProposal[] {
  * claim on an unpriced lane, so gas is never wasted on mispriced dust).
  */
 async function quoteEthRate(lane: PadLane): Promise<number | null> {
-  if (lane === "weth") return 1;
+  if (lane === "weth" || lane === "arbweth") return 1;
   try {
     const pad = padAddress(lane);
-    const lens = LAUNCHPAD.lens as `0x${string}`;
+    const lens = laneChain(lane).lens;
+    const client = clientFor(lane);
     const [ethUsd, quoteUsd] = await Promise.all([
-      publicClient.readContract({ address: lens, abi: LENS_USD_ABI, functionName: "ethUsdView", args: [pad] }),
-      publicClient.readContract({ address: lens, abi: LENS_USD_ABI, functionName: "quoteUsdView", args: [pad] }),
+      client.readContract({ address: lens, abi: LENS_USD_ABI, functionName: "ethUsdView", args: [pad] }),
+      client.readContract({ address: lens, abi: LENS_USD_ABI, functionName: "quoteUsdView", args: [pad] }),
     ]);
     const eth = Number(ethUsd[0]);
     const quote = Number(quoteUsd[0]);
@@ -294,6 +305,10 @@ interface LockRead {
  * exact user amounts a real send would pay right now).
  */
 async function readLpLocks(launch: LaunchProposal, wallet: `0x${string}`): Promise<LockRead[]> {
+  /* Arbitrum bonds into a Uniswap v3 (1%) locked pool (guide rev 8 §1.2); the
+     StonkUp locker fee-collect path below is Robinhood-only until that locker
+     is read and verified. Curve-phase creator fees still push-pay there. */
+  if (laneChainKey(launch.lane) !== "robinhood") return [];
   const pad = padAddress(launch.lane);
   const id = BigInt(launch.launchId as string);
   const [poolsRes, modes] = await Promise.all([
@@ -375,6 +390,7 @@ async function readLpLocks(launch: LaunchProposal, wallet: `0x${string}`): Promi
 
 /** Sum of tax paid on curve trades for one launch over a block range. */
 async function sumTradeTax(
+  lane: PadLane,
   pad: `0x${string}`,
   launchId: bigint,
   fromBlock: bigint,
@@ -382,11 +398,15 @@ async function sumTradeTax(
 ): Promise<{ taxWei: bigint; trades: number }> {
   let taxWei = 0n;
   let trades = 0;
-  for (let start = fromBlock; start <= toBlock; start += EARNINGS_POLICY.logChunkBlocks + 1n) {
-    const end = start + EARNINGS_POLICY.logChunkBlocks > toBlock ? toBlock : start + EARNINGS_POLICY.logChunkBlocks;
+  const client = clientFor(lane);
+  /* The public Arbitrum RPC caps eth_getLogs ranges far below the Robinhood
+     chunk; Arbitrum blocks every ~0.25s, so 9,000 blocks is ~40 minutes. */
+  const chunk = laneChainKey(lane) === "arbitrum" ? 9_000n : EARNINGS_POLICY.logChunkBlocks;
+  for (let start = fromBlock; start <= toBlock; start += chunk + 1n) {
+    const end = start + chunk > toBlock ? toBlock : start + chunk;
     const [buys, sells] = await Promise.all([
-      publicClient.getLogs({ address: pad, event: SAFE_BUY_EVENT, args: { id: launchId }, fromBlock: start, toBlock: end }),
-      publicClient.getLogs({ address: pad, event: SAFE_SELL_EVENT, args: { id: launchId }, fromBlock: start, toBlock: end }),
+      client.getLogs({ address: pad, event: SAFE_BUY_EVENT, args: { id: launchId }, fromBlock: start, toBlock: end }),
+      client.getLogs({ address: pad, event: SAFE_SELL_EVENT, args: { id: launchId }, fromBlock: start, toBlock: end }),
     ]);
     for (const l of buys) taxWei += l.args.taxPaid ?? 0n;
     for (const l of sells) taxWei += l.args.taxPaid ?? 0n;
@@ -428,21 +448,31 @@ export async function refreshEarnings(): Promise<TreasurySnapshot | null> {
       publicClient.getBlockNumber(),
     ]);
 
+    /* Block cursors are per chain: an Arbitrum launch's scan window must be
+       measured on Arbitrum's block height, not Robinhood's. */
+    const latestByChain = new Map<string, bigint>([["robinhood", latestBlock]]);
     const entries: LaunchEarnings[] = [];
     for (const launch of launches) {
       const pad = padAddress(launch.lane);
       const id = BigInt(launch.launchId as string);
       const prev = prevByProposal.get(launch.id);
+      const chainKey = laneChainKey(launch.lane);
+      const client = clientFor(launch.lane);
+      let latestBlock = latestByChain.get(chainKey);
+      if (latestBlock === undefined) {
+        latestBlock = await client.getBlockNumber();
+        latestByChain.set(chainKey, latestBlock);
+      }
 
       let deployBlock = prev?.deployBlock ?? 0;
       if (!deployBlock && launch.txHash) {
-        const receipt = await publicClient.getTransactionReceipt({ hash: launch.txHash as `0x${string}` });
+        const receipt = await client.getTransactionReceipt({ hash: launch.txHash as `0x${string}` });
         deployBlock = Number(receipt.blockNumber);
       }
 
       const [owedWei, core] = await Promise.all([
-        publicClient.readContract({ address: pad, abi: PAD_ABI, functionName: "creatorQuoteOwed", args: [id] }) as Promise<bigint>,
-        publicClient.readContract({ address: pad, abi: PAD_ABI, functionName: "getLaunch", args: [id] }) as Promise<{
+        client.readContract({ address: pad, abi: PAD_ABI, functionName: "creatorQuoteOwed", args: [id] }) as Promise<bigint>,
+        client.readContract({ address: pad, abi: PAD_ABI, functionName: "getLaunch", args: [id] }) as Promise<{
           creatorFeeBpsSnap: number;
           graduated: boolean;
           bonded: boolean;
@@ -454,7 +484,7 @@ export async function refreshEarnings(): Promise<TreasurySnapshot | null> {
       let earnedQuote = prev?.earnedQuote ?? 0;
       let tradeCount = prev?.tradeCount ?? 0;
       if (fromBlock <= latestBlock) {
-        const { taxWei, trades } = await sumTradeTax(pad, id, fromBlock, latestBlock);
+        const { taxWei, trades } = await sumTradeTax(launch.lane, pad, id, fromBlock, latestBlock);
         earnedQuote += formatQuote(launch.lane, (taxWei * BigInt(core.creatorFeeBpsSnap)) / 10_000n);
         tradeCount += trades;
       }
@@ -549,6 +579,7 @@ export async function claimEarnings(proposalId: string): Promise<ClaimResult> {
 
   const pad = padAddress(launch.lane);
   const id = BigInt(launch.launchId);
+  const publicClient = clientFor(launch.lane);
   const owedWei = (await publicClient.readContract({
     address: pad,
     abi: PAD_ABI,
@@ -586,7 +617,7 @@ export async function claimEarnings(proposalId: string): Promise<ClaimResult> {
     };
   }
 
-  const walletClient = createWalletClient({ account, chain: ROBINHOOD_CHAIN, transport: http() });
+  const walletClient = createWalletClient({ account, chain: laneChain(launch.lane).chain, transport: http() });
   const txHash = await walletClient.writeContract(request);
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
   if (receipt.status !== "success") return { ok: false, reason: `flushCreatorQuote reverted: ${txHash}` };

@@ -274,15 +274,20 @@ live Stonk Launcher curves, and returns up to four actions per plan:
 | `collect-earnings` | sweep pending LP rewards and creator fees | read-then-claim, no spend |
 | `eco-buy` / `eco-sell` | tiny positions in live launcher curves (`src/lib/launchpad/treasury-ops.ts`) | 0.002 ETH per trade, 0.006 ETH per 24h, 3 open positions, 2h per-token gap, 5% max slippage |
 | `ns-buy` / `ns-sell` | Nightshades faction tokens (GHST, WATCH, KNGHT, ZMBI) through the game's router over its hooked v4 pools (`src/lib/launchpad/nightshades.ts`) | 0.003 WETH per buy, 0.008 WETH per 24h, 1h per-faction gap, 3% max slippage, refused during a Night or while the Sunrise tax is above 1% |
+| `bridge-arb` | Relay intent bridge of ETH from Robinhood Chain to Arbitrum One (`src/lib/launchpad/bridge.ts`) | Purser top-up only while Arbitrum holds under 0.02 ETH; ≤0.05 ETH/bridge, ≤0.1 ETH/7d, fee ≤50 bps, Robinhood floor 0.35 ETH kept. Operator-directed bridges (the 1 ETH seed) use a separate 1 ETH cap |
 
 Purser also reads a Nightshades digest each cycle (game clock, last Night's
 damaged and survivor sets, per-faction pool price, liquidity and 24h volume,
 LAURA's positions at their sell-now quote); the game's rules and contracts are
-in `library/88-nightshades.md`. Every action goes through the same
+in `library/88-nightshades.md`. The Arbitrum One digest covers the second-chain
+wallet balance, recent bridges and the `arbweth` launch lane (full pad table
+and Relay notes in `library/89-arbitrum-one.md`). Every action goes through the same
 simulate-first executors the other rails use, honours the shared wallet
 mutex, and is appended to the `treasuryOps` ledger (`treasuryEcoTrades` for
-ecosystem fills, `treasuryNightshadesTrades` for faction fills) with
-`treasury.plan`, `treasury.unwrap`, `treasury.eco` and `treasury.nightshades`
+ecosystem fills, `treasuryNightshadesTrades` for faction fills, `treasuryBridges`
+for Relay transfers) with
+`treasury.plan`, `treasury.unwrap`, `treasury.eco`, `treasury.nightshades` and
+`treasury.bridge`
 events in Activity. Hard rules in code,
 not prompts: $STONKBROKER is never sold by any path, LAURA never trades tokens
 she launched herself, and with no live model reachable Purser records a hold

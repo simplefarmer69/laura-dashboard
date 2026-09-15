@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
+import { ARBITRUM_PADS, LAUNCH_CHAINS, LAUNCHPAD, PAD_LANE_KEYS, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { DEFAULT_SETTINGS } from "@/lib/swarm/roster";
 import { MCP_PROTOCOL_VERSION, mcpToolCatalogue } from "@/lib/mcp/server";
 
@@ -41,6 +41,18 @@ export async function GET(req: NextRequest) {
         factory: LAUNCHPAD.factory,
         gridApi: LAUNCHPAD.gridApi,
         floorApi: LAUNCHPAD.floorApi,
+        /* Same StonkSafeLaunchpadV2 ABI on both chains (guide rev 8). */
+        arbitrumOne: {
+          chainId: LAUNCH_CHAINS.arbitrum.chain.id,
+          rpc: "https://arb1.arbitrum.io/rpc",
+          explorer: LAUNCH_CHAINS.arbitrum.explorer,
+          lens: LAUNCH_CHAINS.arbitrum.lens,
+          weth: LAUNCH_CHAINS.arbitrum.weth,
+          gridApi: LAUNCH_CHAINS.arbitrum.gridApi,
+          bondVenue: LAUNCH_CHAINS.arbitrum.bondVenue,
+          lauraLane: "arbweth",
+          pads: ARBITRUM_PADS,
+        },
       },
       feeds: Object.fromEntries(feeds.map((f) => [f, `${origin}/api/feeds/${f}`])),
       mcp: {

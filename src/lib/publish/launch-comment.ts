@@ -7,6 +7,7 @@ import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { SWARM_CHARTER } from "@/lib/swarm/roster";
 import { launchCommentPrompt, launchCommentSchema } from "@/lib/swarm/tasks";
 import { PUBLIC_PERSONA } from "@/lib/chat/laura";
+import { explorerTokenUrl, laneChainKey, launcherTokenUrl } from "@/lib/launchpad/contracts";
 import type { LaunchProposal, SwarmState } from "@/lib/types";
 
 /**
@@ -45,7 +46,16 @@ function log(msg: string): void {
   console.log(`[launch-comment ${new Date().toISOString()}] ${msg}`);
 }
 
-export function tokenPageUrl(address: string): string {
+/**
+ * The page a human should open for a launch. Robinhood Chain launches use
+ * BrokerTools (the house explorer, indexes every Stonklauncher token);
+ * Arbitrum One launches use the launcher's own trade page (BrokerTools is
+ * Robinhood-only), falling back to Arbiscan when the launch id is unknown.
+ */
+export function tokenPageUrl(address: string, launch?: Pick<LaunchProposal, "lane" | "symbol" | "launchId"> | null): string {
+  if (launch && laneChainKey(launch.lane) !== "robinhood") {
+    return launch.launchId ? launcherTokenUrl(launch.lane, launch.symbol, launch.launchId) : explorerTokenUrl(launch.lane, address);
+  }
   return `https://brokertools.info/token/${address.toLowerCase()}`;
 }
 
@@ -108,7 +118,7 @@ export async function runLaunchCommentTick(state: SwarmState): Promise<void> {
   }
 
   const resolved = resolveModel(state.settings.llmModel);
-  const tokenUrl = tokenPageUrl(launch.tokenAddress!);
+  const tokenUrl = tokenPageUrl(launch.tokenAddress!, launch);
   const recent = commented
     .slice(-5)
     .map((c) => `- ${c.text}`)

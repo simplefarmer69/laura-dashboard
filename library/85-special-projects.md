@@ -31,6 +31,15 @@ ecosystem volume and the fee lever through the launch and Sunrise tax splits
 allowed to trade the faction tokens under hard caps (operator grant
 2026-09-15). Full rules, contracts and the Nightpaper: 88-nightshades.md.
 
+## Arbitrum One launcher (operator directive 2026-09-15)
+
+StonkBrokers shipped the same Smart Launch V2 pads on Arbitrum One (chain
+42161). LAURA holds a funded `arbweth` lane there: Mint/Ticker may deploy
+tokens on Arbitrum as part of the swarm, Purser keeps the gas balance topped
+up through Relay, and the operator bridged 1 ETH of treasury funds to seed
+it. Full pad table, Relay bridge caps and the visibility rules:
+89-arbitrum-one.md.
+
 ## The mechanics, precisely
 
 - The rail already exists. The launchpad's stonk lane (pad

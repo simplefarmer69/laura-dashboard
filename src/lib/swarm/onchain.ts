@@ -1,5 +1,5 @@
 import { createPublicClient, formatEther, http } from "viem";
-import { LAUNCHPAD, ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
+import { LAUNCH_CHAINS, LAUNCHPAD, ROBINHOOD_CHAIN, laneChainKey } from "@/lib/launchpad/contracts";
 import { QUOTE_TOKENS } from "@/lib/launchpad/earnings";
 import {
   TREASURY_CAPS,
@@ -115,8 +115,23 @@ async function fetchOwnTokenStats(state: SwarmState): Promise<string[]> {
     launcherGrid("new", 60).catch(() => []),
   ]);
 
+  /* Arbitrum launches live in the Arbitrum grid, not the Robinhood floor. */
+  const arbGrid = own.some((l) => laneChainKey(l.lane) === "arbitrum")
+    ? await fetch(`${LAUNCH_CHAINS.arbitrum.gridApi}&sort=new`, { headers: { accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(12_000) })
+        .then(async (r) => ((await r.json()) as { tokens?: Array<{ token: string; mcapUsd?: number; curvePct?: number; holderCount?: number; graduated?: boolean; safePhase?: string }> }).tokens ?? [])
+        .catch(() => [])
+    : [];
+
   const lines: string[] = [];
   for (const [token, launch] of ownByToken) {
+    if (laneChainKey(launch.lane) === "arbitrum") {
+      const a = arbGrid.find((t) => t.token.toLowerCase() === token);
+      const stats = a
+        ? `mcap $${Math.round(a.mcapUsd ?? 0).toLocaleString()}, curve ${(a.curvePct ?? 0).toFixed(1)}%, ${a.holderCount ?? 0} holders${a.graduated ? ", graduated" : ""}`
+        : "not in the Arbitrum grid yet";
+      lines.push(`- ${launch.name} ($${launch.symbol}) on Arbitrum One: phase ${a?.safePhase ?? "unindexed"} · ${stats}`);
+      continue;
+    }
     const row = (floorRes.rows ?? []).find((r) => r.live?.token?.toLowerCase() === token);
     const g = grid.find((t) => t.token.toLowerCase() === token);
     const stats = g

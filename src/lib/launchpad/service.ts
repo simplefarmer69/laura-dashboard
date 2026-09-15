@@ -7,7 +7,18 @@ import {
   parseEventLogs,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { ERC20_MIN_ABI, LAUNCHPAD, PAD_ABI, PAD_LANE_KEYS, ROBINHOOD_CHAIN, type PadLane } from "@/lib/launchpad/contracts";
+import {
+  ERC20_MIN_ABI,
+  LAUNCH_CHAINS,
+  LAUNCHPAD,
+  PAD_ABI,
+  PAD_LANE_KEYS,
+  ROBINHOOD_CHAIN,
+  laneChain,
+  laneChainKey,
+  type LaunchChainKey,
+  type PadLane,
+} from "@/lib/launchpad/contracts";
 import { LANE_INFO, laneClosedReason } from "@/lib/launchpad/lanes";
 import PAD_FULL_ABI_JSON from "@/lib/launchpad/StonkSafeLaunchpadV2.abi.json";
 import type { Abi } from "viem";
@@ -16,6 +27,61 @@ import type { LaunchProposal } from "@/lib/types";
 const PAD_FULL_ABI = PAD_FULL_ABI_JSON as Abi;
 
 const publicClient = createPublicClient({ chain: ROBINHOOD_CHAIN, transport: http() });
+
+/*
+ * Per-chain clients (2026-09-15, Arbitrum One lane). Every lane-scoped read
+ * and write below resolves its client from the lane, so the same
+ * createLaunch → arm → verify flow runs on whichever chain the pad lives on.
+ * `publicClient` above stays the Robinhood Chain client for wallet-level
+ * reads that are about the treasury, not a lane.
+ */
+const chainClients = new Map<LaunchChainKey, ReturnType<typeof createPublicClient>>();
+export function chainClient(key: LaunchChainKey) {
+  let c = chainClients.get(key);
+  if (!c) {
+    c = createPublicClient({ chain: LAUNCH_CHAINS[key].chain, transport: http(undefined, { retryCount: 3, retryDelay: 600 }) });
+    chainClients.set(key, c);
+  }
+  return c;
+}
+export function clientFor(lane: PadLane) {
+  return chainClient(laneChainKey(lane));
+}
+function walletFor(lane: PadLane, account: NonNullable<ReturnType<typeof getAccount>>) {
+  return createWalletClient({ account, chain: laneChain(lane).chain, transport: http() });
+}
+
+/**
+ * Minimum native balance the swarm wallet needs on a lane's chain before a
+ * deploy is attempted there. Robinhood Chain uses LAUNCH_CAPS.walletFloorEth
+ * (the treasury floor); a foreign chain only needs gas plus a margin — an
+ * Arbitrum createLaunch + arm costs ~0.0001 ETH at 0.02 gwei.
+ */
+export const FOREIGN_CHAIN_GAS_FLOOR_ETH = 0.003;
+
+/**
+ * Null when the wallet can pay for a deploy on the lane's chain; otherwise a
+ * plain-language reason. The Robinhood floor is checked by the executor's
+ * existing walletStatus path; this covers the lanes on other chains, so an
+ * unfunded Arbitrum lane keeps the launch queued with words instead of an
+ * "insufficient funds for gas" revert.
+ */
+export async function laneFundingProblem(lane: PadLane): Promise<string | null> {
+  const key = laneChainKey(lane);
+  if (key === "robinhood") return null;
+  const account = getAccount();
+  if (!account) return "No wallet configured";
+  const info = LAUNCH_CHAINS[key];
+  try {
+    const bal = Number(formatEther(await chainClient(key).getBalance({ address: account.address })));
+    if (bal < FOREIGN_CHAIN_GAS_FLOOR_ETH) {
+      return `${info.label} wallet holds ${bal.toFixed(5)} ETH, below the ${FOREIGN_CHAIN_GAS_FLOOR_ETH} ETH gas floor; bridge ETH to ${info.label} (Purser bridge-arb) before deploying on the ${lane} lane`;
+    }
+    return null;
+  } catch (err) {
+    return `${info.label} RPC unreachable (${err instanceof Error ? err.message : String(err)}); lane ${lane} waits for the next tick`;
+  }
+}
 
 /**
  * Hard operational caps. Deploys beyond these fail closed regardless of
@@ -54,8 +120,11 @@ export const LAUNCH_CAPS = {
 export interface WalletStatus {
   configured: boolean;
   address: string | null;
+  /** Robinhood Chain native balance (the treasury chain). */
   balanceEth: number | null;
   funded: boolean;
+  /** Native balances on every launch chain, keyed by chain. Null when a read failed. */
+  chains?: Partial<Record<LaunchChainKey, number | null>>;
 }
 
 export function getAccount() {
@@ -67,12 +136,22 @@ export function getAccount() {
 export async function walletStatus(): Promise<WalletStatus> {
   const account = getAccount();
   if (!account) return { configured: false, address: null, balanceEth: null, funded: false };
+  const arbitrum = await chainClient("arbitrum")
+    .getBalance({ address: account.address })
+    .then((b) => Number(formatEther(b)))
+    .catch(() => null);
   try {
     const balance = await publicClient.getBalance({ address: account.address });
     const balanceEth = Number(formatEther(balance));
-    return { configured: true, address: account.address, balanceEth, funded: balanceEth > 0.002 };
+    return {
+      configured: true,
+      address: account.address,
+      balanceEth,
+      funded: balanceEth > 0.002,
+      chains: { robinhood: balanceEth, arbitrum },
+    };
   } catch {
-    return { configured: true, address: account.address, balanceEth: null, funded: false };
+    return { configured: true, address: account.address, balanceEth: null, funded: false, chains: { robinhood: null, arbitrum } };
   }
 }
 
@@ -94,10 +173,11 @@ export interface PadState {
 
 export async function padState(lane: PadLane): Promise<PadState> {
   const address = LAUNCHPAD.pads[lane] as `0x${string}`;
+  const client = clientFor(lane);
   const [fee, count, bounds] = await Promise.all([
-    publicClient.readContract({ address, abi: PAD_ABI, functionName: "launchFeeWei" }),
-    publicClient.readContract({ address, abi: PAD_ABI, functionName: "launchCount" }),
-    publicClient.readContract({ address, abi: PAD_ABI, functionName: "bounds" }),
+    client.readContract({ address, abi: PAD_ABI, functionName: "launchFeeWei" }),
+    client.readContract({ address, abi: PAD_ABI, functionName: "launchCount" }),
+    client.readContract({ address, abi: PAD_ABI, functionName: "bounds" }),
   ]);
   return {
     lane,
@@ -120,19 +200,33 @@ export async function padState(lane: PadLane): Promise<PadState> {
 export interface LanePadState extends PadState {
   quoteSymbol: string;
   kind: "crypto" | "stock";
+  /** Chain the pad lives on ("robinhood" | "arbitrum"). */
+  chain: LaunchChainKey;
+  chainLabel: string;
   /** Null when the lane can deploy right now (stock lanes close on weekends). */
   closedReason: string | null;
 }
 
-/* Batched transport for the all-lanes sweep (8 pads x 3 views): this RPC
-   rate-limits bursts, and these reads back the console/viewer, not deploys. */
-const batchedClient = createPublicClient({
-  chain: ROBINHOOD_CHAIN,
-  transport: http(undefined, { batch: true, retryCount: 3, retryDelay: 600 }),
-});
+/* Batched transports for the all-lanes sweep (9 pads x 3 views, per chain):
+   the Robinhood RPC rate-limits bursts, and these reads back the
+   console/viewer, not deploys. */
+const batchedClients: Partial<Record<LaunchChainKey, ReturnType<typeof createPublicClient>>> = {};
+function batchedClientFor(lane: PadLane) {
+  const key = laneChainKey(lane);
+  let c = batchedClients[key];
+  if (!c) {
+    c = createPublicClient({
+      chain: LAUNCH_CHAINS[key].chain,
+      transport: http(undefined, { batch: true, retryCount: 3, retryDelay: 600 }),
+    });
+    batchedClients[key] = c;
+  }
+  return c;
+}
 
 async function lanePadState(lane: PadLane): Promise<LanePadState> {
   const address = LAUNCHPAD.pads[lane] as `0x${string}`;
+  const batchedClient = batchedClientFor(lane);
   const [fee, count, bounds] = await Promise.all([
     batchedClient.readContract({ address, abi: PAD_ABI, functionName: "launchFeeWei" }),
     batchedClient.readContract({ address, abi: PAD_ABI, functionName: "launchCount" }),
@@ -154,6 +248,8 @@ async function lanePadState(lane: PadLane): Promise<LanePadState> {
     },
     quoteSymbol: LANE_INFO[lane].quote,
     kind: LANE_INFO[lane].kind,
+    chain: laneChainKey(lane),
+    chainLabel: laneChain(lane).label,
     closedReason: laneClosedReason(lane),
   };
 }
@@ -287,7 +383,7 @@ export async function probeBuyOnly(p: LaunchProposal): Promise<{ accepted: boole
     maxBuyPpm: p.maxBuyPpm ?? 0,
   };
   try {
-    await publicClient.simulateContract({
+    await clientFor(p.lane).simulateContract({
       account,
       address: pad.address as `0x${string}`,
       abi: PAD_ABI,
@@ -347,7 +443,8 @@ export async function deployLaunch(p: LaunchProposal): Promise<DeployResult> {
     maxBuyPpm: p.maxBuyPpm ?? 0,
   };
 
-  const walletClient = createWalletClient({ account, chain: ROBINHOOD_CHAIN, transport: http() });
+  const publicClient = clientFor(p.lane);
+  const walletClient = walletFor(p.lane, account);
   const { request, result } = await publicClient.simulateContract({
     account,
     address,
@@ -414,6 +511,7 @@ export async function findOrphanDeploy(
   const account = getAccount();
   if (!account) return null;
   const address = LAUNCHPAD.pads[lane] as `0x${string}`;
+  const publicClient = clientFor(lane);
   const count = (await publicClient.readContract({ address, abi: PAD_FULL_ABI, functionName: "launchCount" })) as bigint;
   const known = new Set([...knownTokens].map((t) => t.toLowerCase()));
   const me = account.address.toLowerCase();
@@ -439,7 +537,7 @@ export async function findOrphanDeploy(
 /** True when the pad reports the launch's supply loaded and clock started. */
 export async function isLaunchArmed(lane: PadLane, launchId: string): Promise<boolean> {
   const address = LAUNCHPAD.pads[lane] as `0x${string}`;
-  const launch = (await publicClient.readContract({
+  const launch = (await clientFor(lane).readContract({
     address,
     abi: PAD_FULL_ABI,
     functionName: "getLaunch",
@@ -469,7 +567,8 @@ export async function armLaunch(p: LaunchProposal): Promise<ArmResult> {
   if (await isLaunchArmed(p.lane, p.launchId)) return { armTxHash: "", alreadyArmed: true };
 
   const supplyWei = parseEther(String(p.supplyTokens));
-  const walletClient = createWalletClient({ account, chain: ROBINHOOD_CHAIN, transport: http() });
+  const publicClient = clientFor(p.lane);
+  const walletClient = walletFor(p.lane, account);
 
   const allowance = (await publicClient.readContract({
     address: token,
@@ -544,52 +643,99 @@ interface FloorRow {
  * "live": a created-but-unarmed launch sits in the floor's Waiting pile and the
  * operator will rightly say they don't see it. Only phase "live"/"bonded"/
  * "graduated" counts as visible.
+ *
+ * Arbitrum lanes (2026-09-15): the floor API has no Arbitrum rows until the
+ * site cutover (guide rev 8 §1.2), so the grid's per-token `safePhase` — the
+ * same field the /launcher Arbitrum board renders — decides visibility,
+ * corroborated by the pad's own `armed` flag when the grid has not indexed
+ * the token yet.
  */
-export async function verifyLaunchVisible(tokenAddress: string): Promise<LaunchVisibility> {
+export async function verifyLaunchVisible(tokenAddress: string, lane: PadLane = "weth"): Promise<LaunchVisibility> {
   const token = tokenAddress.toLowerCase();
+  const chain = laneChain(lane);
 
-  const floorRes = await fetch(LAUNCHPAD.floorApi, {
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!floorRes.ok) throw new Error(`floor HTTP ${floorRes.status}`);
-  const floor = (await floorRes.json()) as { ok?: boolean; rows?: FloorRow[] };
-  const row = (floor.rows ?? []).find((r) => r.live?.token?.toLowerCase() === token) ?? null;
+  let row: FloorRow | null = null;
+  if (chain.floorApi) {
+    const floorRes = await fetch(chain.floorApi, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!floorRes.ok) throw new Error(`floor HTTP ${floorRes.status}`);
+    const floor = (await floorRes.json()) as { ok?: boolean; rows?: FloorRow[] };
+    row = (floor.rows ?? []).find((r) => r.live?.token?.toLowerCase() === token) ?? null;
+  }
 
   let safeHref: string | null = null;
   let gridImage = false;
+  let gridPhase: string | null = null;
+  let gridSafeId: number | null = null;
   try {
-    const gridRes = await fetch(`${LAUNCHPAD.gridApi}?sort=new`, {
+    const sep = chain.gridApi.includes("?") ? "&" : "?";
+    const gridRes = await fetch(`${chain.gridApi}${sep}sort=new`, {
       headers: { accept: "application/json" },
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
     if (gridRes.ok) {
       const grid = (await gridRes.json()) as {
-        tokens?: { token: string; safeHref?: string; imageHash?: string }[];
+        tokens?: { token: string; safeHref?: string; imageHash?: string; safePhase?: string; safeId?: number }[];
       };
       const entry = (grid.tokens ?? []).find((t) => t.token.toLowerCase() === token);
       safeHref = entry?.safeHref ?? null;
       gridImage = Boolean(entry?.imageHash);
+      gridPhase = entry?.safePhase ?? null;
+      gridSafeId = entry?.safeId ?? null;
     }
   } catch {
-    /* grid is corroborating evidence only; the floor row decides visibility */
+    /* grid is corroborating evidence only on Robinhood; the floor row decides visibility */
   }
 
-  const phase = row?.phase ?? null;
+  if (chain.floorApi) {
+    const phase = row?.phase ?? null;
+    const visible = phase === "live" || phase === "bonded" || phase === "graduated";
+    const detail = row
+      ? `floor id ${row.id} · phase ${phase} · loaded ${row.loadedPct ?? "?"}%${safeHref ? ` · ${safeHref}` : ""}`
+      : "token not present in the floor rows the launcher UI renders";
+    return {
+      visible,
+      phase,
+      floorId: row?.id ?? null,
+      safeHref,
+      imageAttached: Boolean(row?.profile?.logo) || gridImage,
+      detail,
+    };
+  }
+
+  /* Foreign chain: grid safePhase first, pad state as the on-chain fallback. */
+  let phase = gridPhase;
+  if (!phase) {
+    try {
+      const pad = LAUNCHPAD.pads[lane] as `0x${string}`;
+      const id = (await clientFor(lane).readContract({
+        address: pad,
+        abi: PAD_FULL_ABI,
+        functionName: "launchIdOfToken",
+        args: [tokenAddress as `0x${string}`],
+      })) as bigint;
+      if (id > 0n) {
+        const launch = (await clientFor(lane).readContract({
+          address: pad,
+          abi: PAD_FULL_ABI,
+          functionName: "getLaunch",
+          args: [id],
+        })) as { armed: boolean; graduated: boolean; bonded: boolean; aborted: boolean };
+        phase = launch.aborted ? "aborted" : launch.bonded ? "bonded" : launch.graduated ? "closing" : launch.armed ? "live" : "waiting";
+      }
+    } catch {
+      /* leave phase null: not proven */
+    }
+  }
   const visible = phase === "live" || phase === "bonded" || phase === "graduated";
-  const detail = row
-    ? `floor id ${row.id} · phase ${phase} · loaded ${row.loadedPct ?? "?"}%${safeHref ? ` · ${safeHref}` : ""}`
-    : "token not present in the floor rows the launcher UI renders";
-  return {
-    visible,
-    phase,
-    floorId: row?.id ?? null,
-    safeHref,
-    imageAttached: Boolean(row?.profile?.logo) || gridImage,
-    detail,
-  };
+  const detail = phase
+    ? `${chain.label} · ${gridPhase ? "grid" : "pad"} phase ${phase}${gridSafeId ? ` · safe id ${gridSafeId}` : ""}${safeHref ? ` · ${safeHref}` : ""}`
+    : `${chain.label}: token not yet in the launcher grid and pad lookup failed`;
+  return { visible, phase, floorId: gridSafeId, safeHref, imageAttached: gridImage, detail };
 }
 
 /** Live launcher grid from the official public API (for context in the console). */

@@ -12,10 +12,11 @@ import {
   probeBuyOnly,
   verifyLaunchVisible,
   walletStatus,
+  laneFundingProblem,
 } from "@/lib/launchpad/service";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { deployCapacity } from "@/lib/launchpad/capacity";
-import { laneClosedReason } from "@/lib/launchpad/lanes";
+import { laneClosedReason, setChainFunded } from "@/lib/launchpad/lanes";
 import { reservedLaunchNameHit } from "@/lib/launchpad/spec";
 import {
   attachTokenLogo,
@@ -50,6 +51,10 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
     return { ok: false, error: "Only approved launches can deploy", httpStatus: 409 };
   const laneClosed = laneClosedReason(launch.lane);
   if (laneClosed) return { ok: false, error: laneClosed, httpStatus: 409 };
+  /* Foreign-chain lanes (Arbitrum One) pay gas from that chain's balance, not
+     the Robinhood treasury the floor check below reads. */
+  const funding = await laneFundingProblem(launch.lane);
+  if (funding) return { ok: false, error: funding, httpStatus: 409 };
 
   const wallet = await walletStatus();
   if (!wallet.configured)
@@ -159,7 +164,7 @@ export async function executeLaunch(id: string): Promise<ExecuteResult> {
     let verifyDetail = "";
     if (armedAt && result.tokenAddress) {
       try {
-        const vis = await verifyLaunchVisible(result.tokenAddress);
+        const vis = await verifyLaunchVisible(result.tokenAddress, launch.lane);
         verifyDetail = vis.detail;
         if (vis.visible) verifiedAt = Date.now();
       } catch (err) {
@@ -311,7 +316,7 @@ async function reconcileOrphanDeploys(state: SwarmState): Promise<void> {
 
 declare global {
   var __lauraLaunchExecutor:
-    | { running: boolean; nextAttemptAt: Record<string, number>; lastWindowNote?: number }
+    | { running: boolean; nextAttemptAt: Record<string, number>; lastWindowNote?: number; lastFundingNote?: string }
     | undefined;
 }
 
@@ -361,7 +366,7 @@ async function armAndRecord(launch: LaunchProposal): Promise<void> {
 /** Confirms an armed launch renders on the Stonklauncher UI and records the proof. */
 async function verifyDeployedLaunch(launch: LaunchProposal): Promise<boolean> {
   if (!launch.tokenAddress) return false;
-  const vis = await verifyLaunchVisible(launch.tokenAddress);
+  const vis = await verifyLaunchVisible(launch.tokenAddress, launch.lane);
   if (!vis.visible) {
     log(`verify: ${launch.symbol} not user-visible yet (${vis.detail})`);
     return false;
@@ -403,6 +408,14 @@ export async function runLaunchExecutor(): Promise<void> {
     }
 
     const now = Date.now();
+    /* Refresh the Arbitrum funding flag the synchronous lane gate reads, so
+       an unfunded arbweth spec waits (queued, with words) instead of failing. */
+    const arbFunding = await laneFundingProblem("arbweth");
+    setChainFunded("arbitrum", arbFunding === null);
+    if (arbFunding && es.lastFundingNote !== arbFunding) {
+      es.lastFundingNote = arbFunding;
+      log(`autonomy: ${arbFunding}`);
+    }
     const unarmed = state.launches.filter(
       (l) =>
         l.status === "deployed" &&

@@ -258,3 +258,53 @@ export function buyEligibility(state: SwarmState, now = Date.now()): BuyEligibil
     nextEligibleAt: 0,
   };
 }
+
+/**
+ * Bridge caps (2026-09-15). The operator-directed 1 ETH bridge to Arbitrum
+ * One runs under the "operator" grant; Purser's own `bridge-arb` action is a
+ * gas top-up rail for the Arbitrum launch lane and is capped far below that.
+ * Both go through Relay's quote → deposit → status flow; a quote whose fees
+ * exceed `maxFeeBps` is refused in code.
+ */
+export const BRIDGE_CAPS = {
+  /** Purser: max ETH per bridge */
+  maxEthPerBridge: 0.05,
+  /** Purser: max ETH bridged per rolling 7 days */
+  maxEthPer7d: 0.1,
+  /** Purser: only top up while the Arbitrum balance is under this */
+  arbitrumTopUpBelowEth: 0.02,
+  /** Operator-directed bridges: max ETH per bridge */
+  operatorMaxEthPerBridge: 1.0,
+  /** Any bridge: skip dust */
+  minEth: 0.005,
+  /** Any bridge: refuse a quote whose total fees exceed this share of the amount */
+  maxFeeBps: 50,
+  /** Any bridge: Robinhood balance must stay at or above this after sending */
+  robinhoodFloorEth: TREASURY_CAPS.treasuryFloorEth,
+} as const;
+
+export interface BridgeEligibility {
+  eligible: boolean;
+  amountEth: number;
+  reason: string;
+}
+
+/** Pure caps math for Purser's bridge-arb top-ups (no chain reads). */
+export function bridgeEligibility(state: SwarmState, requestedEth: number, arbitrumBalanceEth: number, now = Date.now()): BridgeEligibility {
+  if (arbitrumBalanceEth >= BRIDGE_CAPS.arbitrumTopUpBelowEth) {
+    return { eligible: false, amountEth: 0, reason: `Arbitrum wallet holds ${arbitrumBalanceEth.toFixed(4)} ETH, at or above the ${BRIDGE_CAPS.arbitrumTopUpBelowEth} ETH top-up line; nothing to bridge` };
+  }
+  const weekAgo = now - 7 * 24 * 3_600_000;
+  const spent7d = (state.treasuryBridges ?? [])
+    .filter((b) => b.by === "treasurer" && b.ts >= weekAgo && b.status !== "failed" && b.status !== "refund")
+    .reduce((s, b) => s + b.amountEth, 0);
+  const room = Math.max(0, BRIDGE_CAPS.maxEthPer7d - spent7d);
+  if (room < BRIDGE_CAPS.minEth) {
+    return { eligible: false, amountEth: 0, reason: `7-day bridge budget used (${spent7d.toFixed(4)} of ${BRIDGE_CAPS.maxEthPer7d} ETH)` };
+  }
+  const amountEth = Math.min(requestedEth, BRIDGE_CAPS.maxEthPerBridge, room);
+  if (amountEth < BRIDGE_CAPS.minEth) {
+    return { eligible: false, amountEth: 0, reason: `amount ${amountEth.toFixed(4)} ETH is under the ${BRIDGE_CAPS.minEth} ETH dust floor` };
+  }
+  return { eligible: true, amountEth, reason: `ok: ${amountEth.toFixed(4)} ETH (7d room ${room.toFixed(4)} ETH)` };
+}
