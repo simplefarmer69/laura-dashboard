@@ -19,6 +19,18 @@ A special project is an external or delegated build brought into the StonkBroker
   Meebits-side build lands on the chain, the ask is the LP pairing rule: quote
   it in $STONKBROKER.
 
+## Nightshades, the first live one (2026-09-14)
+
+Meebco Labs (the Meebits team) and Clutch Markets shipped Nightshades on
+Robinhood Chain on 2026-09-14: four faction tokens ($GHST, $WATCH, $KNGHT,
+$ZMBI) launched through a custom StonkLauncher pad, bonded into hooked
+Uniswap v4 pools, and StonkBrokers holders each got a free Knights NFT. It is
+WETH quoted, not $STONKBROKER quoted, so it works the volume lever through
+ecosystem volume and the fee lever through the launch and Sunrise tax splits
+(StockBooster and Protocol each take 13.33% of the anti-snipe tax). Purser is
+allowed to trade the faction tokens under hard caps (operator grant
+2026-09-15). Full rules, contracts and the Nightpaper: 88-nightshades.md.
+
 ## The mechanics, precisely
 
 - The rail already exists. The launchpad's stonk lane (pad
