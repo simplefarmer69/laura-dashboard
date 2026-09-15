@@ -53,6 +53,51 @@ export const LAUNCHPAD = {
   floorApi: "https://www.stonkbrokers.cash/api/safe-launch/floor",
 } as const;
 
+/**
+ * Stonklauncher V3 on Arbitrum One (opened at fee 0 on 2026-09-15). Listed
+ * for AWARENESS: the launcher feed, the Telegram bot and the intel radar read
+ * these lanes, and the floor API mixes their rows in with Robinhood rows
+ * (each Arbitrum row's `lane.chainId` is 42161; launch ids sit in their own
+ * offset bands). LAURA's own deploy rail (executor.ts) still targets the
+ * Robinhood pads above only: the swarm treasury, gas float and creator fee
+ * plumbing all live on 4663, so an Arbitrum deploy target needs a funded
+ * Arbitrum treasury and its own executor pass before it can be offered.
+ */
+export const LAUNCHPAD_ARBITRUM = {
+  chainId: 42161,
+  explorer: "https://arbiscan.io",
+  lens: "0x7376f9dC6432434D611488CB3E852071ed29E276",
+  /** Bond venue on Arbitrum is Uniswap v3 only. */
+  bondVenue: "uniswap-v3",
+  pads: {
+    weth: "0x9540AC4173E5A8c7970743bd13aEc5E9e97FcD22",
+    usdc: "0x42a561Bf35E311A59492ECe678315949a112D9ef",
+    usdt: "0xAdc21631C65799fd5752EBEb0D55a4f28b73F098",
+    wbtc: "0x2b2Df013f0fb71A46434d952B5A71C593fBF3d60",
+    arb: "0xA6096F7c3186f815D1F477f9e9dE9f4323eF7241",
+    gmx: "0xd3A44fB4fA4dd98662f511D5aF5B9399bF0E70CF",
+    pendle: "0x36AAE654aD50b6e2D8c867703faB0160bA8b0B25",
+    ape: "0x8D2a8236FC7294f736C537d22393259e3Db5C8F9",
+    boop: "0xA08B9b63c0db362FB5e4b0ccc7f178cb10fc4AfF",
+    pear: "0xF14971037dED25792Cd4D5516a9688F07D5bbabd",
+    // Reality Protocol tokenized stocks (rSTOCK). Only rAAPL / rSPCX / rHOOD
+    // have real Uniswap v3 depth; the rest are open pads with no pool yet.
+    raapl: "0x009c43dD3C002B02965e0327ef35da0515c7c746",
+    rspcx: "0xbc9Bc56D0018b9c1c71aaB74e917c89CC97A637E",
+    rhood: "0xE467ADbE0671e1747242089169968Ad32e8BE09d",
+    rnvda: "0xea69D73A62Bd25644b2d164BA1A56F521aeA8616",
+    rtsla: "0x58329852104FFeA8103E8377E0DcBF5098667682",
+    rmsft: "0x1338a39f86824A5a3a6282EEd3Ac399681600D63",
+    rgoogl: "0x4Ad64B9b5990b37616bd297Ab1Cc11C3fbB2FAed",
+    ramzn: "0xDBFf2b590B9b04b2A75D6d5249B666C3c373bdAb",
+    rmeta: "0x238d85f92a1B2346C0262254B9E3d233C1ad32BE",
+    rcoin: "0x6fce80BCe616aBd45a29fb286E5c86EfE989140D",
+    rspy: "0xEECf01bac1BA354451AA2852727ebC304B2e5bA2",
+  },
+} as const;
+
+export type ArbitrumPadLane = keyof typeof LAUNCHPAD_ARBITRUM.pads;
+
 export type PadLane = keyof typeof LAUNCHPAD.pads;
 
 /**

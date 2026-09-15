@@ -28,6 +28,9 @@ export type LauncherFeedData = {
     buyer: string;
     eth: number;
     paidIn: string;
+    /** 4663 Robinhood Chain, 42161 Arbitrum One. */
+    chainId?: number;
+    chain?: string;
     mcapUsd: number | null;
     ts: number;
   }>;
@@ -258,7 +261,7 @@ export function LauncherFeedPanel({ data }: { data: LauncherFeedData | null }) {
             </Badge>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground">Robinhood Chain launchpad tape · the Telegram bot&apos;s onchain data</p>
+        <p className="text-[11px] text-muted-foreground">Robinhood Chain and Arbitrum One launchpad tape · the Telegram bot&apos;s onchain data</p>
       </CardHeader>
       <CardContent>
         <ul className="space-y-1.5">
@@ -268,6 +271,7 @@ export function LauncherFeedPanel({ data }: { data: LauncherFeedData | null }) {
               <span className="min-w-0 flex-1 truncate">
                 <span className="text-foreground">{b.symbol || b.name}</span>
                 <span className="text-muted-foreground"> · {shortAddr(b.buyer)}</span>
+                {b.chainId === 42161 && <span className="text-muted-foreground"> · Arbitrum</span>}
               </span>
               <span className="font-mono text-[11px] text-[var(--sb-green)]">{eth(b.eth)} {b.paidIn}</span>
               <span className="w-10 text-right font-mono text-[10px] text-muted-foreground">{ago(b.ts)}</span>

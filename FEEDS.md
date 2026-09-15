@@ -13,17 +13,26 @@ snapshot.
 
 ## GET /api/feeds/launcher
 
-The Stonklauncher onchain tape  -  the same Robinhood Chain launchpad data the
-@StonkLauncher_BuyBot Telegram bot tracks.
+The Stonklauncher onchain tape  -  the same launchpad data the
+@StonkLauncher_BuyBot Telegram bot tracks, across both launcher chains:
+Robinhood Chain (4663) and the Arbitrum One V3 lanes (42161, live since
+2026-09-15).
 
 - `buys[]`: recent buys with `launchId`, `name`, `symbol`, `phase`, `buyer`,
-  `eth` (size), `paidIn` (quote symbol), `mcapUsd`, `block`, `ts` (ms epoch).
+  `eth` (size in quote units), `paidIn` (quote symbol: ETH, USDG, GME... on
+  Robinhood; WETH, USDC, USDT, ARB, rAAPL... on Arbitrum), `chainId`,
+  `chain` (label), `mcapUsd`, `block`, `ts` (ms epoch). Ordered newest first
+  by timestamp (block heights are not comparable across chains).
+- `chains[]`: the chains the tape covers (`chainId`, `label`).
 - `stats`: pad wide aggregates (`launches`, `graduated`, `bonded`, `buys`,
   `sells`, `uniqueBuyers`, `grossBuyEth`, `taxEth`, `bondedRaiseEth`).
 - `ethUsd`, `headBlock`.
 
 Upstream: `stonkbrokers.io/api/safe-launch/{buys,stats,floor}` (floor is used
-only to resolve launch ids to names, cached 5 minutes). Buy tape cached 5s.
+to resolve launch ids to names and to derive the pad set per chain, cached
+5 minutes). Buy tape cached 5s. The cold chain seed runs one leg per chain
+(`ROBINHOOD_RPC_URL`, `ARBITRUM_RPC_URL`; public RPC defaults). `stats` is
+Robinhood pad wide only (the upstream stats route is 4663 scoped).
 
 ## GET /api/feeds/nft-buys
 
