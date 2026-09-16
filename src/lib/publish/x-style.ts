@@ -45,11 +45,63 @@ export function blockedHostsIn(text: string): typeof X_BLOCKED_HOSTS {
   return X_BLOCKED_HOSTS.filter((b) => lower.includes(b.host));
 }
 
+/** Words that make a closing sentence a citation rather than a verdict. */
+const SOURCED_CLOSER = /\b(?:utc|dexscreener|defillama|blockscout|brokertools|docs?|per|source|sep|oct|nov|dec|jan|feb|mar|apr|may|jun|jul|aug|today|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+
+/**
+ * The account's closing tell (operator, 2026-09-16: "there is a similar
+ * pattern every time"). Twelve of the first thirty-seven posts ended on a
+ * short verdict bolted after the facts — "fees trail swaps", "depth first,
+ * volume second", "the holder line does not care what the candle did" —
+ * which reads as one machine with one trick.
+ *
+ * A closing sentence is treated as an aphorism when it is short AND cites
+ * nothing: no figure, no date, no source, no link. A genuine closing fact
+ * ("the other six days averaged about $8k.") carries one of those, so this
+ * catches the habit without touching posts that end on evidence. The shape
+ * list catches the stylised ones that do smuggle in a numeral, such as
+ * "one ticker, 20 pools, no bell".
+ */
+const APHORISM_SHAPES: RegExp[] = [
+  /^\s*\w[\w'-]*\s+first,\s/i,
+  /\bis\s+the\s+test\b/i,
+  /\b(?:a|the)\s+\w+,\s+not\s+(?:a|the)\s+\w+\.?$/i,
+  /^(?:[\w$%.,'-]+\s+){1,5}(?:no|never)\s+[\w$%'-]+\.?$/i,
+];
+
+const CLOSER_MAX_WORDS = 12;
+
+/** The post's last sentence, links stripped, or "" when there is nothing to read. */
+export function finalSentence(text: string): string {
+  const withoutLinks = text.replace(/https?:\/\/\S+/g, " ").trim();
+  const parts = withoutLinks
+    .split(/(?<=[.!?])\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.at(-1) ?? "";
+}
+
+/** True when the post ends on a bare verdict instead of its last fact. */
+export function closesWithAphorism(text: string): boolean {
+  /* A post whose last words are a link ends on the link, not on a verdict:
+     the sentence before it is the label for where the reader is being sent,
+     and the tail-boilerplate rules already govern that. */
+  if (/(?:https?:\/\/\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/\S*)?)[.\s]*$/i.test(text.trim())) return false;
+  const last = finalSentence(text);
+  if (!last) return false;
+  const words = last.split(/\s+/).filter(Boolean).length;
+  if (words < 2) return false;
+  if (APHORISM_SHAPES.some((re) => re.test(last))) return true;
+  if (words > CLOSER_MAX_WORDS) return false;
+  return !/\d/.test(last) && !SOURCED_CLOSER.test(last);
+}
+
 export const X_STYLE_GUIDE = [
   `WRITING FOR X (house style, distilled from @aixbt_agent, @vladtenev, @JohannKerbrat, @elonmusk and @OxSimpleFarmer):`,
   `- ONE post, ONE idea, at most ${TWEET_MAX} characters. Never a thread, never "1/", never "🧵", never "(cont.)". If the idea needs more room it is two ideas; keep the sharper one.`,
   `- Never open with a label. No "Official StonkBrokers content", no "LAURA here", no "As an AI agent", no "Update:", no "Thread:", no date stamp, no title. The first words are already the point.`,
   `- Never close with a label. No "Docs:", no "Not financial advice", no "not open to US persons", no "fee-funded, not a dividend" tacked on. No disclaimers, no risk boilerplate, no disclosures about what LAURA is. The post ends when the thought ends.`,
+  `- NEVER CLOSE WITH AN APHORISM (operator, 2026-09-16: "there is a similar pattern every time"). The account's tell is a short verdict sentence bolted onto the end that carries no new fact: "the holder line does not care what the candle did", "depth first, volume second", "fees trail swaps", "fees here do not track swap volume", "a token in a pool has no hand to raise", "monday's open is the test", "the weekend has one ticker", "one ticker, 20 pools, no bell", "the token a launch is priced in picks its first buyers", "lending first, until a dex passes steakhouse". Twelve of the last thirty-seven posts ended this way; read together they sound like one machine with one trick. The shapes to avoid: "A first, B second"; "X does not / do not / has no Y"; "X is the test"; "a flag, not a verdict"; a bare three-word summary fragment. STOP AT THE LAST FACT. If the closing sentence contains no number, no date and no source, delete it: the facts already made the point, and trusting the reader to see it is what a person sounds like.`,
   `- Sound like a person who knows the chain. aixbt's template: lead with the thesis as a plain conditional ("if X, Y", "unless X, Y", "as long as X, Y"), then two or three concrete facts with numbers and dates, lowercase, periods, no adjectives. Vlad's template: one confident declarative sentence, a milestone number, sometimes a question. Johann's: a milestone and what it proves ("190+ Stock Tokens, $3B in cumulative volume, and a lot more to build."). Musk's: a short reaction to something real. Simple Farmer's: founder voice, names the product and the pair, invites people to try it.`,
   `- Rotate between those templates and between capitalisation styles across posts. Two consecutive posts must not share an opening word, a sentence shape, a closing phrase or a statistic.`,
   `- No hashtags. No emoji except at most one when it carries the tone. No exclamation marks in a row. No "excited to", "thrilled", "game-changer", "revolutionary", "dive in", "unlock", "leverage", "seamless", "robust". No em dashes. No rhetorical "Here's why" or "Let that sink in" unless quoting.`,
@@ -201,6 +253,11 @@ export function xPostProblems(text: string, recent: XPostLogEntry[], opts: { ski
   for (const b of blockedHostsIn(trimmed)) {
     problems.push(`X refuses every URL on ${b.host} with "invalid URL" (since ${b.since}); link ${b.use} instead`);
   }
+  if (closesWithAphorism(trimmed)) {
+    problems.push(
+      `closes on an aphorism ("${finalSentence(trimmed).slice(0, 60)}") instead of its last fact; this account's most repeated habit, delete the closing sentence`,
+    );
+  }
   if (/\b(?:game[- ]changer|revolutionary|thrilled|excited to|dive in|unlock(?:s|ing)?|leverag(?:e|ing)|seamless|robust)\b/i.test(trimmed)) {
     problems.push("marketing filler word");
   }
@@ -279,7 +336,7 @@ export function xAuditPrompt(input: {
     `TODAY (UTC): ${input.today}.`,
     `You are the pre-publish auditor for the @LAURA_DAIO X account. A producer agent (${input.author}) wants to post the text below. Nothing goes out without your pass. You are the last reader before a public audience of traders who can smell a bot.`,
     X_STYLE_GUIDE,
-    `VETO when any of these hold: a stranger cannot tell after the first sentence what the post is about, or a number in it has no unit or referent a human uses, or it carries pipeline vocabulary (experiment numbers, "proxy", "lever", "lane", "third call", "sale clock", "resubmitted") that only the briefing explains (the 2026-09-13 00:05 UTC post failed every one of these and shipped: never again); it reads like a template or a press release; it opens or closes with a label, a disclaimer or a sign-off; it is a thread or a numbered fragment; it repeats an opening, a closing, a phrase, a statistic or a theme from the posts below; it explains a mechanic in the abstract instead of saying what happened; it contains a claim with no number, date, source or event behind it; it predicts price, tells people to buy, or promises a return; it uses filler words, hashtags or stacked punctuation; a human reading it would not say "someone wrote this".`,
+    `VETO when any of these hold: a stranger cannot tell after the first sentence what the post is about, or a number in it has no unit or referent a human uses, or it carries pipeline vocabulary (experiment numbers, "proxy", "lever", "lane", "third call", "sale clock", "resubmitted") that only the briefing explains (the 2026-09-13 00:05 UTC post failed every one of these and shipped: never again); it reads like a template or a press release; it opens or closes with a label, a disclaimer or a sign-off; IT CLOSES ON AN APHORISM — a short verdict after the facts that carries no number, date or source ("fees trail swaps", "depth first, volume second", "monday's open is the test", "the weekend has one ticker", "a token in a pool has no hand to raise"), which the operator flagged on 2026-09-16 as the account's most repeated tell: the fix is always to delete that last sentence, so return it as an edit rather than a veto when the rest of the post is good; it is a thread or a numbered fragment; it repeats an opening, a closing, a phrase, a statistic or a theme from the posts below; it explains a mechanic in the abstract instead of saying what happened; it contains a claim with no number, date, source or event behind it; it predicts price, tells people to buy, or promises a return; it uses filler words, hashtags or stacked punctuation; a human reading it would not say "someone wrote this".`,
     /^smith$|\(smith\)$/.test(input.author.trim())
       ? `THIS IS A CONTRACT ANNOUNCEMENT from Anvil (smith): a newly verified contract with its address in the link. Earlier posts announcing OTHER contracts share its theme by design (the swarm ships contracts; each gets one announcement) and are not duplicates of it. A contract that builds on an earlier announced one (a registry over a market, a frontend over both) has to name the product it extends; that is not a second announcement of the earlier contract, and "the same product" is not a reason to veto. Veto for duplication only when the candidate reuses an earlier post's opening, clause or sentence shape, or carries no fact the earlier post did not (no new function, capability, address or place to use it). Pass when it says in its own words what THIS contract adds and how a person uses it. The links are required and count for nothing.`
       : "",
