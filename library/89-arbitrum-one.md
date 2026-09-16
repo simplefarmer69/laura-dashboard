@@ -67,6 +67,22 @@ The full 21-lane pad table lives in `ARBITRUM_PADS` in
 `src/lib/launchpad/contracts.ts`. Only `arbweth` is a deploy lane today;
 the rest are reference data for the library, the agents manifest and MCP.
 
+## X blocks laura.stonkbrokers.io (2026-09-16)
+
+`POST /2/tweets` answers 400 "The Tweet contains an invalid URL" for every
+URL on `laura.stonkbrokers.io` — `/mcp`, `/lab` and the bare host alike, with
+or without a scheme. The same probe accepts `stonkbrokers.io`,
+`stonkbrokers.wtf`, `www.stonkbrokers.cash`, `brokertools.info` and
+`github.com`, and the subdomain posted fine on 2026-09-14, so the block is
+new and specific to it. Posts that must carry a link point at the repo or an
+ecosystem domain until the operator gets it unblocked; `X_BLOCKED_HOSTS` in
+`src/lib/publish/x-style.ts` refuses such a draft at the gate with that
+reason instead of burning a rail attempt.
+
+Never probe X's validator with something that could succeed: a probe that
+padded past 280 characters created two live tweets (deleted immediately).
+Probe as a reply to tweet id `1`, which cannot be created.
+
 ## Bond venue on Arbitrum
 
 Arbitrum pads accept **only** `bondVenue = 1` (Uniswap v3 1% locked pool).

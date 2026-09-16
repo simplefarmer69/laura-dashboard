@@ -19,6 +19,32 @@ import type { XPostLogEntry } from "@/lib/publish/x-guard";
 
 export const TWEET_MAX = 280;
 
+/**
+ * Hosts X refuses to accept in a post body. `POST /2/tweets` answers 400
+ * "The Tweet contains an invalid URL" for every URL on these, so a draft
+ * carrying one burns a rail attempt and 15 minutes of backoff for a reason
+ * the log does not explain.
+ *
+ * laura.stonkbrokers.io was verified blocked on 2026-09-16 (probed against
+ * /mcp, /lab and the bare host; it had posted successfully on 2026-09-14, so
+ * the block is new). stonkbrokers.io, stonkbrokers.wtf, www.stonkbrokers.cash,
+ * brokertools.info and github.com all pass. Re-probe and remove the entry once
+ * the operator gets the subdomain unblocked.
+ */
+export const X_BLOCKED_HOSTS: { host: string; since: string; use: string }[] = [
+  {
+    host: "laura.stonkbrokers.io",
+    since: "2026-09-16",
+    use: "the GitHub repo (github.com/simplefarmer69/laura-dashboard) or an ecosystem domain such as stonkbrokers.io",
+  },
+];
+
+/** Blocked hosts present in `text`, whatever the scheme (X auto-links bare hosts too). */
+export function blockedHostsIn(text: string): typeof X_BLOCKED_HOSTS {
+  const lower = text.toLowerCase();
+  return X_BLOCKED_HOSTS.filter((b) => lower.includes(b.host));
+}
+
 export const X_STYLE_GUIDE = [
   `WRITING FOR X (house style, distilled from @aixbt_agent, @vladtenev, @JohannKerbrat, @elonmusk and @OxSimpleFarmer):`,
   `- ONE post, ONE idea, at most ${TWEET_MAX} characters. Never a thread, never "1/", never "🧵", never "(cont.)". If the idea needs more room it is two ideas; keep the sharper one.`,
@@ -172,6 +198,9 @@ export function xPostProblems(text: string, recent: XPostLogEntry[], opts: { ski
   const emoji = trimmed.match(/\p{Extended_Pictographic}/gu)?.length ?? 0;
   if (emoji > 1) problems.push(`${emoji} emoji`);
   if (/!{2,}/.test(trimmed)) problems.push("stacked exclamation marks");
+  for (const b of blockedHostsIn(trimmed)) {
+    problems.push(`X refuses every URL on ${b.host} with "invalid URL" (since ${b.since}); link ${b.use} instead`);
+  }
   if (/\b(?:game[- ]changer|revolutionary|thrilled|excited to|dive in|unlock(?:s|ing)?|leverag(?:e|ing)|seamless|robust)\b/i.test(trimmed)) {
     problems.push("marketing filler word");
   }
