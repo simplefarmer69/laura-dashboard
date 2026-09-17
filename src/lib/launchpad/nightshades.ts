@@ -697,6 +697,15 @@ export async function nightshadesDigest(state: SwarmState, now = Date.now()): Pr
   const byFaction = new Map(positions.map((p) => [p.faction, p]));
   const spent = nightshadesEligibility(state, "ghosts", "buy", now).spent24hEth;
   const lines: string[] = [];
+  /* Purser is handed the date but not the hour, so a schedule like "10%
+     clears at 15:54Z" has nothing to anchor against. Lead with the wall clock
+     and say the zone once: the manager, the hook and the game API all work in
+     UTC, and a Night read in local time is a missed window. */
+  lines.push(
+    `- NOW: ${new Date(now).toISOString().slice(0, 16).replace("T", " ")}Z. EVERY time in this section is UTC, which is the zone the game's own contracts and API use; a "Z" suffix means UTC. The Night runs on a daily schedule${
+      game.nextNightAt ? ` at ${hhmm(game.nextNightAt)}Z` : ""
+    } and the Sunrise window is the ${game.snipeWindowSecs / 60} minutes after it ends.`,
+  );
   lines.push(
     `- Clock: ${game.nightActive ? `A NIGHT IS RESOLVING NOW (ends ~${new Date(game.nightEndsAt).toISOString().slice(11, 16)}Z); every swap reverts with NightCurfew until then` : `no Night in progress`} · next Night ${game.nextNightAt ? `${new Date(game.nextNightAt).toISOString().slice(11, 16)}Z (${relTime(game.nextNightAt, now)})` : "unscheduled per the game API"} · Nights resolved so far: ${game.nightsResolved} · Sunrise anti-snipe tax right now ${(game.snipeTaxBps / 100).toFixed(2)}% (buys refused above ${NIGHTSHADES_CAPS.maxSnipeTaxBpsBuy / 100}%, sells above ${NIGHTSHADES_CAPS.maxSnipeTaxBpsSell / 100}%) · vault boost pot ${game.nightBoostPotEth.toFixed(2)} WETH waiting to be added to the next survivors' pools.`,
   );
