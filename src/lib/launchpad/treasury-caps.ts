@@ -63,7 +63,7 @@ export const ECO_CAPS = {
  * every Night, so every position is sized as a wager the treasury can lose
  * outright: the whole book at once costs about one day of the accumulation
  * budget. Trading is refused in code while a Night is resolving and while the
- * Sunrise anti-snipe tax is above `maxSnipeTaxBps`.
+ * Sunrise anti-snipe tax is above the ceiling for that side.
  */
 export const NIGHTSHADES_CAPS = {
   /** Max WETH per single buy */
@@ -76,9 +76,32 @@ export const NIGHTSHADES_CAPS = {
   slippageBps: 300,
   /** One trade per faction per this many hours (no churning a pool) */
   perFactionGapHours: 1,
-  /** Never trade while the Sunrise anti-snipe tax is above this (it starts at 99%) */
-  maxSnipeTaxBps: 100,
+  /**
+   * Sunrise anti-snipe tax ceilings, asymmetric by side (operator directive
+   * 2026-09-16: play the Sunrise window instead of sitting it out).
+   *
+   * The hook decays the tax from 99% to 0% linearly across snipeWindowSecs
+   * (3600s, verified on-chain 2026-09-17). A single 1% ceiling therefore only
+   * cleared in the FINAL 36 SECONDS of the hour, which no cycle cadence can
+   * hit: every trade so far landed outside the window and the struck-pool
+   * discount was never available.
+   *
+   * Buying is where paying tax can pay: a struck pool has just had 20-80% of
+   * its liquidity pulled and its tokens sold into it, so the discount is far
+   * larger than a late-window tax. 10% clears with about six minutes left,
+   * and on a 0.003 WETH buy that ceiling is worth 0.0003 WETH.
+   *
+   * Selling stays at 1%. The free exit is BEFORE the Night, and paying to
+   * leave a pool that has already been struck pays the tax twice.
+   */
+  maxSnipeTaxBpsBuy: 1000,
+  maxSnipeTaxBpsSell: 100,
 } as const;
+
+/** Sunrise tax ceiling for a side. */
+export function maxSnipeTaxBpsFor(side: "buy" | "sell"): number {
+  return side === "buy" ? NIGHTSHADES_CAPS.maxSnipeTaxBpsBuy : NIGHTSHADES_CAPS.maxSnipeTaxBpsSell;
+}
 
 export interface NightshadesHolding {
   faction: string;

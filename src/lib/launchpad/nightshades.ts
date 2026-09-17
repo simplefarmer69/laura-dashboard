@@ -12,7 +12,7 @@ import {
 import { ROBINHOOD_CHAIN } from "@/lib/launchpad/contracts";
 import { QUOTE_TOKENS } from "@/lib/launchpad/earnings";
 import { getAccount } from "@/lib/launchpad/service";
-import { TREASURY_CAPS, NIGHTSHADES_CAPS, nightshadesEligibility, openNightshadesPositions, type NightshadesHolding } from "@/lib/launchpad/treasury-caps";
+import { TREASURY_CAPS, NIGHTSHADES_CAPS, maxSnipeTaxBpsFor, nightshadesEligibility, openNightshadesPositions, type NightshadesHolding } from "@/lib/launchpad/treasury-caps";
 import { loadState, newId, pushEvent, updateState } from "@/lib/store";
 import type { NightshadesFactionId, NightshadesTrade, SwarmState } from "@/lib/types";
 
@@ -396,17 +396,72 @@ export type NightshadesResult =
   | { ok: true; sent: false; reason: string }
   | { ok: false; reason: string };
 
-/** The two game-clock guards every swap shares; read fresh (not from the cache) right before sending. */
-async function gameClockGuard(): Promise<string | null> {
+/**
+ * The two game-clock guards every swap shares; read fresh (not from the
+ * cache) right before sending. The Sunrise ceiling is per side: a buy may pay
+ * a late-window tax to reach a struck pool's discount, a sell may not, because
+ * the free exit was before the Night (see NIGHTSHADES_CAPS).
+ */
+async function gameClockGuard(side: "buy" | "sell"): Promise<string | null> {
   const [status, tax] = await Promise.all([
     publicClient.readContract({ address: NIGHTSHADES.manager, abi: MANAGER_ABI, functionName: "nightStatus" }),
     publicClient.readContract({ address: NIGHTSHADES.hook, abi: HOOK_ABI, functionName: "currentSnipeTaxBps" }),
   ]);
   if (status[0]) return `a Night is resolving right now (curfew until ~${new Date(Number(status[1]) * 1000).toISOString().slice(11, 16)}Z); the router refuses every swap until it ends`;
-  if (Number(tax) > NIGHTSHADES_CAPS.maxSnipeTaxBps) {
-    return `Sunrise anti-snipe tax is ${(Number(tax) / 100).toFixed(2)}% right now (cap ${NIGHTSHADES_CAPS.maxSnipeTaxBps / 100}%); it decays to 0% over the hour after a Night, wait for it`;
+  const ceiling = maxSnipeTaxBpsFor(side);
+  if (Number(tax) > ceiling) {
+    return `Sunrise anti-snipe tax is ${(Number(tax) / 100).toFixed(2)}% right now, above the ${ceiling / 100}% ceiling for a ${side}; it decays to 0% across the hour after a Night, so wait for it to fall`;
   }
   return null;
+}
+
+export interface SunriseWindow {
+  /** A Night is resolving; every swap reverts. */
+  nightActive: boolean;
+  /** Inside the post-Night Sunrise window, where the tax is still decaying. */
+  sunriseLive: boolean;
+  opensAt: number;
+  closesAt: number;
+  minutesElapsed: number;
+  minutesLeft: number;
+  taxBps: number;
+  /** Clock time each ceiling is first cleared, from the live tax and the linear decay. */
+  clearsAt: { bps: number; at: number; minutesAway: number }[];
+  /** Minutes until the next Night, when the game API scheduled one. */
+  minutesToNextNight: number | null;
+}
+
+/**
+ * Where we are in the Night/Sunrise cycle and when each tax ceiling clears.
+ *
+ * The hook decays the tax linearly from 9900 bps to 0 across snipeWindowSecs,
+ * so the moment a ceiling clears is arithmetic, not a guess. Purser runs on a
+ * cycle cadence rather than continuously, so it needs the schedule to decide
+ * whether the window is worth waiting for.
+ */
+export function sunriseWindow(game: NightshadesState, now = Date.now()): SunriseWindow {
+  const opensAt = game.nightEndsAt;
+  const closesAt = opensAt + game.snipeWindowSecs * 1000;
+  const sunriseLive = !game.nightActive && now >= opensAt && now < closesAt && game.snipeTaxBps > 0;
+  const clearsAt = [2000, 1000, 500, 100]
+    .filter((bps) => game.snipeTaxBps > bps)
+    .map((bps) => {
+      /* Linear decay: the tax hits `bps` when the window has this much left. */
+      const msLeftAtClear = (bps / 9900) * game.snipeWindowSecs * 1000;
+      const at = closesAt - msLeftAtClear;
+      return { bps, at, minutesAway: Math.max(0, (at - now) / 60_000) };
+    });
+  return {
+    nightActive: game.nightActive,
+    sunriseLive,
+    opensAt,
+    closesAt,
+    minutesElapsed: Math.max(0, (now - opensAt) / 60_000),
+    minutesLeft: Math.max(0, (closesAt - now) / 60_000),
+    taxBps: game.snipeTaxBps,
+    clearsAt,
+    minutesToNextNight: game.nextNightAt ? (game.nextNightAt - now) / 60_000 : null,
+  };
 }
 
 async function ensureAllowance(
@@ -438,7 +493,7 @@ export async function nightshadesBuy(opts: { faction: string; amountEth: number;
   const state = await loadState();
   const elig = nightshadesEligibility(state, f.id, "buy");
   if (!elig.eligible) return { ok: true, sent: false, reason: elig.reason };
-  const clock = await gameClockGuard();
+  const clock = await gameClockGuard("buy");
   if (clock) return { ok: true, sent: false, reason: clock };
 
   let amountEth = Math.min(opts.amountEth, elig.amountEth, NIGHTSHADES_CAPS.maxEthPerTrade);
@@ -500,7 +555,7 @@ export async function nightshadesBuy(opts: { faction: string; amountEth: number;
       kind: "treasury.nightshades",
       agentId: "treasurer",
       title: `Purser bought ${tokenAmount.toFixed(0)} $${f.symbol} (Nightshades ${f.name}) for ${amountEth.toFixed(4)} WETH`,
-      detail: `${opts.reason} · game router ${NIGHTSHADES.router} · tx ${txHash} · ${game ? `Nights resolved so far: ${game.nightsResolved}; next Night ${game.nextNightAt ? new Date(game.nextNightAt).toISOString().slice(0, 16).replace("T", " ") + "Z" : "unscheduled"}` : "game clock unread"} · 24h spend ${(elig.spent24hEth + amountEth).toFixed(4)}/${NIGHTSHADES_CAPS.maxEthPer24h} WETH · caps: ≤${NIGHTSHADES_CAPS.maxEthPerTrade} WETH/trade, ${NIGHTSHADES_CAPS.perFactionGapHours}h per faction, no trades during a Night or above ${NIGHTSHADES_CAPS.maxSnipeTaxBps / 100}% Sunrise tax`,
+      detail: `${opts.reason} · game router ${NIGHTSHADES.router} · tx ${txHash} · ${game ? `Nights resolved so far: ${game.nightsResolved}; next Night ${game.nextNightAt ? new Date(game.nextNightAt).toISOString().slice(0, 16).replace("T", " ") + "Z" : "unscheduled"}` : "game clock unread"} · 24h spend ${(elig.spent24hEth + amountEth).toFixed(4)}/${NIGHTSHADES_CAPS.maxEthPer24h} WETH · caps: ≤${NIGHTSHADES_CAPS.maxEthPerTrade} WETH/trade, ${NIGHTSHADES_CAPS.perFactionGapHours}h per faction, no trades during a Night or above ${NIGHTSHADES_CAPS.maxSnipeTaxBpsBuy / 100}% Sunrise tax on a buy`,
       refId: trade.id,
     });
   });
@@ -525,7 +580,7 @@ export async function nightshadesSell(opts: { faction: string; fraction: number;
   if (fraction === 0) return { ok: true, sent: false, reason: "fraction 0: nothing to sell" };
   const elig = nightshadesEligibility(state, f.id, "sell");
   if (!elig.eligible) return { ok: true, sent: false, reason: elig.reason };
-  const clock = await gameClockGuard();
+  const clock = await gameClockGuard("sell");
   if (clock) return { ok: true, sent: false, reason: clock };
 
   const balance = await publicClient.readContract({ address: f.token, abi: ERC20_ABI, functionName: "balanceOf", args: [account.address] });
@@ -601,6 +656,36 @@ function relTime(ms: number, now: number): string {
  * sell-now value. Every number Purser may cite about Nightshades comes from
  * here.
  */
+const hhmm = (ms: number): string => new Date(ms).toISOString().slice(11, 16);
+
+/**
+ * The Sunrise line: where the clock is in the Night/Sunrise cycle, and the
+ * exact minute each tax ceiling clears. Purser wakes on a cycle cadence, so
+ * "the tax is 44% right now" is useless on its own; "10% clears at 15:54Z,
+ * nine minutes away" is something it can plan a trade around.
+ */
+function sunriseLine(game: NightshadesState, now: number): string {
+  const w = sunriseWindow(game, now);
+  if (w.nightActive) {
+    return `- SUNRISE: the Night is still resolving. It ends ~${hhmm(w.opensAt)}Z, and the moment it does the Sunrise window opens at a 99% tax that decays to 0% over ${game.snipeWindowSecs / 60} minutes. Struck pools are at their cheapest the second trading reopens and the tax is worst at exactly that moment; the buy point is late in the window, not at the open.`;
+  }
+  if (w.sunriseLive) {
+    const schedule = w.clearsAt.length
+      ? w.clearsAt.map((c) => `${c.bps / 100}% at ${hhmm(c.at)}Z (${c.minutesAway.toFixed(0)}m)`).join(" · ")
+      : "every ceiling already cleared";
+    return `- SUNRISE IS LIVE: window ${hhmm(w.opensAt)}Z to ${hhmm(w.closesAt)}Z, ${w.minutesElapsed.toFixed(0)}m elapsed, ${w.minutesLeft.toFixed(0)}m left, tax ${(w.taxBps / 100).toFixed(2)}% and falling. Clears: ${schedule}. This is the one hour a day struck pools trade at a discount. A buy costs the tax on top of the pool's 1% fee, so name both against the discount before you spend.`;
+  }
+  const toNight = w.minutesToNextNight;
+  const preNight = toNight !== null && toNight <= 90;
+  return `- SUNRISE: not in a window (tax 0%, trading is unrestricted). Last window ran ${hhmm(w.opensAt)}Z to ${hhmm(w.closesAt)}Z; the next opens when the ${game.nextNightAt ? `${hhmm(game.nextNightAt)}Z` : "next"} Night ends, roughly ${game.nextNightAt ? hhmm(game.nextNightAt + 60 * 60_000) : "an hour later"}Z.${
+    preNight
+      ? ` PRE-NIGHT EXIT WINDOW: the Night is ${toNight.toFixed(0)} minutes out and selling is free right now. Anything you do not want exposed to a strike should leave before it, not after.`
+      : toNight !== null
+        ? ` The Night is ${(toNight / 60).toFixed(1)}h out; the free exit window is the 90 minutes before it.`
+        : ""
+  }`;
+}
+
 export async function nightshadesDigest(state: SwarmState, now = Date.now()): Promise<string> {
   let game: NightshadesState;
   try {
@@ -613,8 +698,9 @@ export async function nightshadesDigest(state: SwarmState, now = Date.now()): Pr
   const spent = nightshadesEligibility(state, "ghosts", "buy", now).spent24hEth;
   const lines: string[] = [];
   lines.push(
-    `- Clock: ${game.nightActive ? `A NIGHT IS RESOLVING NOW (ends ~${new Date(game.nightEndsAt).toISOString().slice(11, 16)}Z); every swap reverts with NightCurfew until then` : `no Night in progress`} · next Night ${game.nextNightAt ? `${new Date(game.nextNightAt).toISOString().slice(11, 16)}Z (${relTime(game.nextNightAt, now)})` : "unscheduled per the game API"} · Nights resolved so far: ${game.nightsResolved} · Sunrise anti-snipe tax right now ${(game.snipeTaxBps / 100).toFixed(2)}% (trades refused above ${NIGHTSHADES_CAPS.maxSnipeTaxBps / 100}%) · vault boost pot ${game.nightBoostPotEth.toFixed(2)} WETH waiting to be added to the next survivors' pools.`,
+    `- Clock: ${game.nightActive ? `A NIGHT IS RESOLVING NOW (ends ~${new Date(game.nightEndsAt).toISOString().slice(11, 16)}Z); every swap reverts with NightCurfew until then` : `no Night in progress`} · next Night ${game.nextNightAt ? `${new Date(game.nextNightAt).toISOString().slice(11, 16)}Z (${relTime(game.nextNightAt, now)})` : "unscheduled per the game API"} · Nights resolved so far: ${game.nightsResolved} · Sunrise anti-snipe tax right now ${(game.snipeTaxBps / 100).toFixed(2)}% (buys refused above ${NIGHTSHADES_CAPS.maxSnipeTaxBpsBuy / 100}%, sells above ${NIGHTSHADES_CAPS.maxSnipeTaxBpsSell / 100}%) · vault boost pot ${game.nightBoostPotEth.toFixed(2)} WETH waiting to be added to the next survivors' pools.`,
   );
+  lines.push(sunriseLine(game, now));
   if (game.lastNight) {
     lines.push(
       `- Last Night #${game.lastNight.roundId}: damaged ${game.lastNight.damaged.join(", ") || "none"} (${(game.lastNight.pullBps / 100).toFixed(0)}% of their pool liquidity pulled, magnitude ${game.lastNight.magnitude}) · survived ${game.lastNight.survivors.join(", ") || "none"}.`,
