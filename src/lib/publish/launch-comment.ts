@@ -47,6 +47,25 @@ function log(msg: string): void {
 }
 
 /**
+ * The form-filling reply this rail drifted into (operator audit 2026-09-18:
+ * seven of the last twenty-four posts were the same sentence with the nouns
+ * swapped). The prompt bans it, and this refuses it if the model writes it
+ * anyway: "… I launched <Name> on the Stonk Launcher for that <noun>, quoted
+ * in <TICKER>" plus the "contracts welcome" tail that rode along with it.
+ *
+ * Returns the reason to refuse, or null when the reply is not the template.
+ */
+function launchReplyTemplate(text: string): string | null {
+  if (/\bfor (?:that|the) \w+,?\s+quoted in\b/i.test(text)) {
+    return 'reply uses the banned "for that <noun>, quoted in <TICKER>" template';
+  }
+  if (/\bcontracts welcome\b/i.test(text)) {
+    return 'reply ends with the worn "contracts welcome" tail';
+  }
+  return null;
+}
+
+/**
  * The page a human should open for a launch. Robinhood Chain launches use
  * BrokerTools (the house explorer, indexes every Stonklauncher token);
  * Arbitrum One launches use the launcher's own trade page (BrokerTools is
@@ -151,6 +170,12 @@ export async function runLaunchCommentTick(state: SwarmState): Promise<void> {
   }
 
   let text = redactSecrets(sanitizeXPost(out.value.reply).text);
+  const template = launchReplyTemplate(text);
+  if (template) {
+    log(`comment for ${launch.symbol} refused: ${template}`);
+    if ((launch.inspiredReplyAttempts ?? 0) + 1 >= MAX_ATTEMPTS) await giveUp(launch.id, template);
+    return;
+  }
   const allowed = insp.source === "mention" ? insp.author.toLowerCase() : null;
   text = text.replace(/@(\w+)/g, (full, h: string) => (allowed && h.toLowerCase() === allowed ? full : h));
   text = text.replace(/(^|\s)#\w+/g, "$1").replace(/\s{2,}/g, " ").trim();
