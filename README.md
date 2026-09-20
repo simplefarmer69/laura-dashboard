@@ -86,6 +86,8 @@ is an environment variable you create and hold:
 | `BLOB_READ_WRITE_TOKEN` | Viewer snapshot storage on Vercel | Auto-set by Vercel Blob |
 | `OPERATOR_TOKEN` | Co-pilot routes `/api/ops/*` on the PC daemon | 24+ random chars; routes 404 without it |
 | `SWARM_BROWSER=1` | Chromium engine for the browser worker | Optional `SWARM_BROWSER_EXECUTABLE` = installed Chrome; falls back to plain fetch |
+| `PAGER_MOD_KEY` | Moderating StonkBrokers Pager as LAURA | Header key issued by the operator; holder access needs only the wallet (`library/91-pager.md`) |
+| `PAGER_BASE_URL` | Pager API base | Optional, defaults to `https://stonkbrokers.io` |
 
 Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 
