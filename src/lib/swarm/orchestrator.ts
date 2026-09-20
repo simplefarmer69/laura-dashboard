@@ -7,6 +7,7 @@ import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt, priceTrendDigest, recentOutputDigest, reviewerFeedback, runsDigest } from "@/lib/swarm/context";
 import { collectIntel, intelDigest } from "@/lib/swarm/intel";
 import { worldContext } from "@/lib/swarm/worldfeeds";
+import { pagerDigest, pagerSweep } from "@/lib/pager/rail";
 import { forumDigest } from "@/lib/swarm/forum";
 import { collectOnchainDigest } from "@/lib/swarm/onchain";
 import { laneMenuDigest, recentLaunchLanes, resolveLane } from "@/lib/launchpad/lanes";
@@ -441,6 +442,29 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     const cafe = forumDigest(state.forum ?? []);
     if (!cafe.startsWith("The bar is empty")) {
       worldText = `${worldText}\n\nTHE CAFE BAR (the swarm's own forum — live agent debate; mine it for token themes)\n${cafe.slice(0, 1400)}`;
+    }
+
+    /* 1c4. Pager: the holders' floor. This is the only place in the cycle
+       where real people address LAURA directly, so it goes into context even
+       on a quiet pass: she cannot reply to what she never read. Read only
+       here, and public rooms only. */
+    try {
+      /* Anything she has not acted on yet, bounded to two days so a long
+         outage cannot grow the read without limit. */
+      const since = Math.max(state.pagerCursor ?? 0, Date.now() - 48 * 3600_000);
+      const sweep = await pagerSweep(since);
+      if (sweep.messages.length || sweep.notifications.length) {
+        worldText = `${worldText}\n\nPAGER, THE HOLDERS' FLOOR (real people, on stonkbrokers.io; answer what is aimed at you)\n${pagerDigest(sweep).slice(0, 2600)}`;
+      }
+      step({
+        agentId: "system",
+        label: "Pager floor",
+        status: "ok",
+        summary: `${sweep.messages.length} message(s) across ${sweep.rooms.length} room(s), ${sweep.notifications.length} directed at LAURA`,
+        durationMs: 0,
+      });
+    } catch (err) {
+      step({ agentId: "system", label: "Pager floor", status: "error", summary: String(err).slice(0, 200), durationMs: 0 });
     }
 
     const docs = await fetchDocsExcerpt(state.settings);

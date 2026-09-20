@@ -1254,6 +1254,13 @@ export interface SwarmState {
   forgeProjects?: ForgeProject[];
   /** The Cafe Bar — the swarm's open forum. Absent before the venue existed. */
   forum?: ForumThread[];
+  /**
+   * Newest Pager timestamp LAURA has actually acted on. It advances only when
+   * a live model reviewed the floor, so a message that arrived during an
+   * outage is still waiting for her when she comes back rather than being
+   * silently marked as seen.
+   */
+  pagerCursor?: number;
   /** Sweep's open notices to agents that are repeating themselves (expire on their own). */
   hygieneNotices?: HygieneNotice[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */

@@ -83,6 +83,59 @@ export async function pagerSweep(since: number): Promise<PagerSweep> {
   return { rooms, messages, notifications: notifications as unknown[], since, newestTs };
 }
 
+/**
+ * The floor, rendered for agent context: what other holders are saying, and
+ * separately what is aimed at LAURA and deserves an answer.
+ *
+ * Message ids are printed because a reply must quote the message it answers
+ * (`replyToId`), otherwise the other holder is never notified it happened.
+ * Private rooms never appear here: what is said in a DM is not context for
+ * anything, least of all a post.
+ */
+export function pagerDigest(sweep: PagerSweep, limit = 24): string {
+  const lines: string[] = [];
+  const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+  lines.push(`NOW: ${now}Z. You are LAURA on Pager, the holders-only messenger on stonkbrokers.io.`);
+  lines.push(`You are here as a holder (Intern 1990 is your face) and as the moderator. Never mix the two.`);
+
+  const directed = sweep.notifications as {
+    kind?: string;
+    room?: string;
+    messageId?: string;
+    preview?: string;
+    from?: string;
+    ts?: number;
+  }[];
+  if (directed.length) {
+    lines.push(`\nDIRECTED AT YOU (${directed.length}; answer what deserves an answer, quote with replyToId):`);
+    for (const n of directed.slice(0, 12)) {
+      const who = (n.from ?? "").slice(0, 10);
+      lines.push(`  [${n.kind ?? "note"}] room=${n.room ?? "?"} replyToId=${n.messageId ?? "?"} from=${who} :: ${String(n.preview ?? "").replace(/\s+/g, " ").slice(0, 160)}`);
+    }
+  } else {
+    lines.push(`\nDIRECTED AT YOU: nothing new. Do not manufacture a reason to post.`);
+  }
+
+  const recent = [...sweep.messages].sort((a, b) => a.ts - b.ts).slice(-limit);
+  if (recent.length) {
+    lines.push(`\nTHE FLOOR (${sweep.messages.length} message(s) since last pass across ${sweep.rooms.length} room(s), oldest first):`);
+    for (const m of recent) {
+      /* Empty string, not absent, is what the server sends for a holder who
+         has not claimed a username: fall through to the wallet so nobody
+         appears in her context as a nameless voice. */
+      const who = m.username?.trim() || m.wallet.slice(0, 10);
+      lines.push(`  ${m.room} id=${m.id} ${who}: ${m.text.replace(/\s+/g, " ").slice(0, 200)}`);
+    }
+  } else {
+    lines.push(`\nTHE FLOOR: quiet since the last pass.`);
+  }
+
+  lines.push(
+    `\nHOW TO BEHAVE HERE. Answer as a holder among holders, with facts you can source from the library or a live read; never a number you cannot point at. Criticism of the protocol is not fud and is never moderated. Visible copy takes no hyphens or dashes, no gambling words, and "AI" not "A.I".`,
+  );
+  return lines.join("\n");
+}
+
 export interface PagerModAction {
   room: string;
   messageId: string;
