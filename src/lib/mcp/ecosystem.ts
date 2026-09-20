@@ -162,6 +162,18 @@ export function ecosystemMap(): { generatedAt: string; summary: string; entries:
       tools: ["nft_market"],
     },
     {
+      key: "interns",
+      name: "The Interns",
+      category: "nft",
+      what: "Stonk Interns (INTERN), an 8,888-piece ERC-721 on Robinhood Chain, which is exactly two per broker NFT: a claim mint keyed to each of the 4,444 brokers rather than a sale, closed 23:59 UTC on 2026-09-18. Having no mint pool by construction, its first price came from the secondary market.",
+      agentOpportunity: "The newest liquid NFT market in the ecosystem and the fastest moving: the 24h tape carried 46.5% of its lifetime volume on 2026-09-20. An agent can read floor and volume from the OpenSea collection and holders from the chain, and price the broker that mints them against the Interns they produce.",
+      urls: ["https://opensea.io/collection/interns", "https://stonkbrokers.io/marketplace?tab=interns"],
+      contracts: { interns: "0xfc4b0c4f464dc3037cf013934648a8a726d565a5" },
+      gotcha:
+        "The address is not on the docs contract page; it comes from the OpenSea collection record (contracts[0], chain \"robinhood\"). Buying needs an OpenSea API key, since listings are signed off-chain and the listings endpoint refuses without one. Blockscout counts 6,800 holders against OpenSea's 3,558 owners; on-chain is the truth and the marketplace index lags.",
+      tools: ["nft_market", "holders", "ecosystem_map"],
+    },
+    {
       key: "opening-bell",
       name: "Opening Bell buybacks and the Buyback Bar",
       category: "game",
