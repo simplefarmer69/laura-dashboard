@@ -67,7 +67,24 @@ export interface PagerJob {
  * not be spread or reordered.
  */
 export function jobDetailsHash(d: { title: string; details: string; links: string[] }): `0x${string}` {
-  return keccak256(toHex(JSON.stringify({ title: d.title, details: d.details, links: d.links })));
+  return keccak256(toHex(JSON.stringify({ title: d.title, details: d.details, links: normalizeJobLinks(d.links) })));
+}
+
+/**
+ * Canonicalise links the way the server does before it rehashes them. It
+ * parses each one, so a bare origin comes back with the trailing slash that
+ * `new URL()` adds. Hashing the raw string instead commits a hash the server
+ * can never reproduce, which escrows the bounty and then refuses the
+ * description: that is what stranded jobs 9 and 10.
+ */
+export function normalizeJobLinks(links: string[]): string[] {
+  return (links ?? []).map((l) => {
+    try {
+      return new URL(l.trim()).toString();
+    } catch {
+      return l.trim();
+    }
+  });
 }
 
 const BOARD_ABI = parseAbi([
@@ -106,6 +123,11 @@ export function jobCopyProblem(d: { title: string; details: string }): string | 
   if (body.length > 900) return `description must be 900 characters or fewer (got ${body.length})`;
   const sentences = body.split(/[.!?]+(?:\s|$)/).filter((s) => s.trim().length > 0).length;
   if (sentences < 2 || sentences > 5) return `description must be 2 to 5 sentences (got ${sentences})`;
+  /* The board rehashes the description on its side and compares it to the
+     hash already committed on chain. Quote marks make those two disagree, so
+     a description carrying one escrows fine and then cannot attach, leaving
+     a funded job nobody can read. Cheaper to refuse the character. */
+  if (/["'\u2018\u2019\u201c\u201d]/.test(`${title} ${body}`)) return "visible copy must not contain quote marks: the board rehashes the text and a quote breaks the match against the on chain hash";
   return null;
 }
 
@@ -169,7 +191,7 @@ export async function createPagerJob(spec: PagerJobSpec): Promise<{ jobId: numbe
   const chainId = await pub.getChainId();
   const wallet = createWalletClient({ account, transport, chain: { id: chainId, name: "robinhood", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc()] } } } });
 
-  const details = { title: spec.title.trim(), details: spec.details.trim(), links: spec.links ?? [] };
+  const details = { title: spec.title.trim(), details: spec.details.trim(), links: normalizeJobLinks(spec.links ?? []) };
   /* Last gate before money moves. The board validates this copy only after
      the escrow exists, so checking it here is the difference between a
      rejected draft and a funded job nobody can read. */

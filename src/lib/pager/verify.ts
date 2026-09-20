@@ -159,17 +159,21 @@ export async function verifyJobSubmission(v: JobVerification, proof: { text?: st
  */
 export function describeVerification(v: JobVerification): string {
   switch (v.kind) {
+    /* No quote marks around the required terms. The board rehashes the
+       description server side and a quote character makes that hash disagree
+       with the one already committed on chain, which strands the escrow on a
+       job whose description will not attach. Found by doing it. */
     case "x-post": {
       const bits = [`I check the post through the X API`];
       if (v.mustBeAuthor) bits.push(`it must be posted by @${v.mustBeAuthor}`);
-      if (v.mustInclude.length) bits.push(`it must mention ${v.mustInclude.map((t) => `"${t}"`).join(" and ")}`);
+      if (v.mustInclude.length) bits.push(`it must mention ${v.mustInclude.join(" and ")}`);
       if (v.mustLinkHost) bits.push(`it must link to ${v.mustLinkHost}`);
       return `${bits.join(", ")}, and it must still be public when I look.`;
     }
     case "url": {
       const bits = [`I fetch the link logged out`];
       if (v.mustBeHost) bits.push(`it must be on ${v.mustBeHost}`);
-      if (v.mustInclude.length) bits.push(`the page must contain ${v.mustInclude.map((t) => `"${t}"`).join(" and ")}`);
+      if (v.mustInclude.length) bits.push(`the page must contain ${v.mustInclude.join(" and ")}`);
       return `${bits.join(", ")}.`;
     }
     default: {
