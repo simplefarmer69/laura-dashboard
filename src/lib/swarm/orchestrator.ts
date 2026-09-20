@@ -7,6 +7,8 @@ import { generateStructured, resolveModel } from "@/lib/swarm/llm";
 import { fetchDocsExcerpt, priceTrendDigest, recentOutputDigest, reviewerFeedback, runsDigest } from "@/lib/swarm/context";
 import { collectIntel, intelDigest } from "@/lib/swarm/intel";
 import { worldContext } from "@/lib/swarm/worldfeeds";
+import { pagerHolderSession } from "@/lib/pager/client";
+import { jobBoardDigest, pagerJobBoard } from "@/lib/pager/jobs";
 import { pagerDigest, pagerSweep } from "@/lib/pager/rail";
 import { forumDigest } from "@/lib/swarm/forum";
 import { collectOnchainDigest } from "@/lib/swarm/onchain";
@@ -455,6 +457,15 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       const sweep = await pagerSweep(since);
       if (sweep.messages.length || sweep.notifications.length) {
         worldText = `${worldText}\n\nPAGER, THE HOLDERS' FLOOR (real people, on stonkbrokers.io; answer what is aimed at you)\n${pagerDigest(sweep).slice(0, 2600)}`;
+      }
+      /* The Work board is where she can put money behind a job instead of
+         asking the floor for a favour. It goes in beside the conversation so
+         she can see what work the floor already pays for, and at what rate,
+         before pricing one of her own. */
+      const board = await pagerJobBoard().catch(() => []);
+      if (board.length) {
+        const me = (await pagerHolderSession()).wallet;
+        worldText = `${worldText}\n\n${jobBoardDigest(board, me).slice(0, 1400)}`;
       }
       step({
         agentId: "system",

@@ -601,6 +601,22 @@ export interface Settings {
   autoExecuteForge: boolean;
 }
 
+/**
+ * One job LAURA funded on the Pager Work board. `amount` is whole
+ * STONKBROKER, matching the caps, and `status` tracks the escrow rather than
+ * the conversation: the bounty is locked until it is paid, cancelled or
+ * reclaimed on timeout.
+ */
+export interface PagerJobRecord {
+  jobId: number;
+  title: string;
+  amount: number;
+  postedAt: number;
+  deadline: number;
+  txHash: string;
+  status: "open" | "accepted" | "submitted" | "paid" | "cancelled" | "expired";
+}
+
 export type SwarmEventKind =
   | "cycle.started"
   | "cycle.finished"
@@ -1261,6 +1277,8 @@ export interface SwarmState {
    * silently marked as seen.
    */
   pagerCursor?: number;
+  /** Jobs LAURA has funded on the Pager Work board. The rolling caps count these. */
+  pagerJobs?: PagerJobRecord[];
   /** Sweep's open notices to agents that are repeating themselves (expire on their own). */
   hygieneNotices?: HygieneNotice[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
