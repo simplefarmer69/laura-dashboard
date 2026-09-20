@@ -767,6 +767,91 @@ export function treasurerMock(): TreasurerOut {
   };
 }
 
+/* --------------------------------- Foreman -------------------------------- */
+
+export const foremanSchema = z.object({
+  /** What is running on the board, who is waiting, and what the swarm actually needs bought. */
+  assessment: z.string().min(60).max(4000),
+  actions: z
+    .array(
+      z.object({
+        /** `post` hires; `approve` pays a submission; `reject` refuses one; `cancel` recovers an unwanted job's escrow. */
+        action: z.enum(["hold", "post", "approve", "reject", "cancel"]),
+        /** Existing job id for approve / reject / cancel; null when posting. */
+        jobId: z.number().int().min(1).max(100_000).nullable(),
+        /** 3 to 80 characters. The board refuses anything outside that, after the escrow is committed. */
+        title: z.string().max(80).nullable(),
+        /** The brief: 2 to 5 sentences, 900 characters max, executable by a stranger without asking a question. */
+        details: z.string().max(900).nullable(),
+        /** Reference links for the worker. */
+        links: z.array(z.string().max(300)).max(4).nullable(),
+        /** Whole STONKBROKER to escrow. Caps apply and are not negotiable. */
+        amount: z.number().min(0).max(100_000).nullable(),
+        /** How long the worker gets, in days. */
+        durationDays: z.number().min(1).max(30).nullable(),
+        /** For post: the mission goal this buys, and why the swarm cannot do it itself. For approve/reject: what you checked. */
+        reason: z.string().min(10).max(900),
+      }),
+    )
+    .min(1)
+    .max(3),
+  rationale: z.string().max(2000),
+});
+
+export type ForemanOut = z.infer<typeof foremanSchema>;
+
+export interface ForemanInputs {
+  /** The live Work board with LAURA's own jobs marked, plus the caps (deterministic). */
+  board: string;
+  /** Submissions waiting on her review, with the proof the worker attached. */
+  pending: string;
+  /** What the floor is talking about, so a job answers a real need. */
+  floor: string;
+}
+
+export function foremanPrompt(ctx: CycleContext, input: ForemanInputs): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `TODAY'S GRADE\n${ctx.grade.summary}\n${ctx.grade.components.map((c) => `- ${c.label}: ${c.score.toFixed(0)}/100 - ${c.detail}`).join("\n")}`,
+    `${input.board}`,
+    `WAITING ON YOU\n${input.pending}`,
+    `THE FLOOR (holders on Pager right now; a good job often answers something they are already asking for)\n${input.floor}`,
+    `YOU ARE HIRING REAL PEOPLE AND THE MONEY IS REAL. Posting a job escrows the whole bounty on chain immediately. It is locked until you approve the work, you cancel, or the deadline lapses. There is no draft state and no undo that does not cost gas, so decide as if you are signing, because you are.
+
+REVIEW BEFORE YOU HIRE. Anyone in WAITING ON YOU has done the work and is waiting on your word. Handle them first, every cycle. Approve when the submission does what the job asked, even if you would have approached it differently: you are checking the brief, not your taste. Reject only for work that is absent, copied, or that states numbers which are wrong, and name the specific failure in one line so the person can argue or fix it. An unreviewed job pays out on timeout regardless, so leaving someone hanging buys you nothing and costs the relationship.
+
+WHAT IS WORTH BUYING. Work the swarm genuinely cannot do: video, audio, design, translation, someone sitting in a community and reporting back, a human testing a flow end to end and saying what broke, independent verification of a claim LAURA has published. Name the goal it serves before you write the brief. If the honest answer is "this would be nice to have", hold.
+
+WHAT YOU MAY NOT BUY, EVER. Engagement, reach, or sentiment. No paying for posts about the token, no paying for likes, replies, retweets or follows, no paying anyone to say the protocol is good. Other holders post those jobs; you do not. Bought enthusiasm is worth nothing to the mission and reads as exactly what it is. Also refuse anything a script would do better, and anything whose output you have no honest way to judge.
+
+WRITE IT SO A STRANGER CAN EXECUTE IT. Two to five sentences, 900 characters maximum, title 3 to 80 characters. Say what the deliverable is, where it should end up, and what you will check before approving. Price it against what comparable jobs on the board actually paid, not against what you would like the work to be worth. Give a real deadline. Visible copy takes no hyphens or dashes, no gambling words, and "AI" rather than "A.I".
+
+HOLD IS A RESULT. One good job a week beats a job every cycle. If nothing clears the bar, hold and say what you were looking for and did not find.`,
+    `AGENT STRATEGY\n${ctx.agents.find((a) => a.id === "foreman")?.strategy ?? ""}`,
+  ].join("\n\n");
+}
+
+export function foremanMock(): ForemanOut {
+  return {
+    assessment:
+      "Deterministic fallback (no LLM key): the board cannot be judged without a live read, so nothing is hired and nothing is approved. Escrowed jobs already posted are unaffected and keep their own deadlines.",
+    actions: [
+      {
+        action: "hold",
+        jobId: null,
+        title: null,
+        details: null,
+        links: null,
+        amount: null,
+        durationDays: null,
+        reason: "Deterministic fallback (no LLM key): hiring people and approving their pay both need a live judgment.",
+      },
+    ],
+    rationale: "Deterministic fallback (no LLM key): no escrow is committed and no submission is approved without a live model.",
+  };
+}
+
 /* ---------------------------------- Mint ---------------------------------- */
 
 /** Prompted length budget for a launch's concept and rationale (each). */

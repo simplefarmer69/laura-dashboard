@@ -350,7 +350,9 @@ export type KnownAgentId =
   /** Anvil: contract smith; writes, compiles, deploys and verifies small contracts people on X asked for. */
   | "smith"
   /** Sweep: hygiene and efficiency; duplicate and loop detection, hot-store compaction, notices to repeating agents. */
-  | "janitor";
+  | "janitor"
+  /** Foreman: hires people on the Pager Work board and reviews what they hand back. */
+  | "foreman";
 
 /**
  * Agents the Architect creates at runtime carry a `dyn_` id. They live only
@@ -654,6 +656,7 @@ export type SwarmEventKind =
   | "intel.catalyst"
   /** An agent opened a thread in The Cafe Bar. */
   | "pager.pass"
+  | "pager.job"
   | "forum.thread"
   /** An agent posted a reply in The Cafe Bar. */
   | "forum.post"

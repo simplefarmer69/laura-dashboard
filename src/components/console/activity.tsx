@@ -29,6 +29,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "forum.thread":
     case "forum.post":
     case "pager.pass":
+    case "pager.job":
     case "x.replied":
     case "x.followed":
     case "x.watched":
@@ -167,6 +168,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "forum.thread":
     case "forum.post":
     case "pager.pass":
+    case "pager.job":
     case "proposal.created":
     case "launch.proposed":
     case "utility.proposed":

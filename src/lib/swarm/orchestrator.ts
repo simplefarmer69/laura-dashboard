@@ -87,6 +87,7 @@ import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { marketAlphaLinesLive, mergeAlpha } from "@/lib/swarm/market-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
+import { runForeman } from "@/lib/swarm/foreman";
 import { runTreasurer } from "@/lib/swarm/treasurer";
 import { tokenTapeDigest } from "@/lib/swarm/token-tape";
 import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
@@ -143,6 +144,13 @@ const FORUM_ONLY_AGENTS: AgentId[] = ["smartlp", "nftintel", "tokenintel"];
 const VAULT_STRIDE_MS = 2 * 60 * 60_000;
 /** Purser runs on Vault's cadence: treasury state moves on 6h buy gaps, not 75-minute cycles. */
 const TREASURER_STRIDE_MS = VAULT_STRIDE_MS;
+/**
+ * Foreman looks at the board every six hours rather than every cycle. Hiring
+ * is the slowest loop the swarm has (a person needs days, not minutes), and a
+ * hiring agent asked "anything to buy?" every few minutes will eventually
+ * talk itself into yes.
+ */
+const FOREMAN_STRIDE_MS = 6 * 3600_000;
 const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
 const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
 /** Anvil designs at most one contract about every six hours (FORGE_CAPS allow 2 deploys a day). */
@@ -916,6 +924,45 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         treasurer.lastError = String(err);
         step({ agentId: "treasurer", label: "Treasury plan", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "treasurer", title: "Purser failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 3a2. Foreman: hires people on the Pager Work board and reviews what
+       they hand back. Runs on its own stride, and reviewing a submission is
+       the half that cannot wait: an unreviewed job pays out on timeout, so a
+       skipped cycle costs the relationship rather than saving the money. */
+    const foreman = agentById(state, "foreman");
+    if (foreman.status === "paused") {
+      step({ agentId: "foreman", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (foreman.lastRunAt !== null && Date.now() - foreman.lastRunAt < FOREMAN_STRIDE_MS) {
+      step({
+        agentId: "foreman",
+        label: "Work board",
+        status: "skipped",
+        summary: `Stride: last looked ${((Date.now() - foreman.lastRunAt) / 3600_000).toFixed(1)}h ago (< ${FOREMAN_STRIDE_MS / 3600_000}h)`,
+        durationMs: 0,
+      });
+    } else {
+      const t0 = Date.now();
+      try {
+        foreman.status = "running";
+        const res = await runForeman(state, foreman, resolved, ctx, ctx.world.slice(0, 2000));
+        markRan(foreman);
+        step({
+          agentId: "foreman",
+          label: "Work board",
+          status: res.held ? "skipped" : "ok",
+          summary: res.held
+            ? `Held: ${res.notes.join(" · ").slice(0, 200) || "nothing worth hiring"}`
+            : `${res.posted} job(s) posted, ${res.reviewed} submission(s) reviewed`,
+          durationMs: Date.now() - t0,
+        });
+      } catch (err) {
+        foreman.status = "error";
+        foreman.lastError = String(err);
+        step({ agentId: "foreman", label: "Work board", status: "error", summary: String(err), durationMs: Date.now() - t0 });
+        pushEvent(state, { kind: "error", agentId: "foreman", title: "Foreman failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }
