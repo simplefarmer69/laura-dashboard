@@ -1,3 +1,4 @@
+import type { JobVerification } from "@/lib/pager/verify";
 import type { PadLane } from "@/lib/launchpad/contracts";
 
 export type MetricSource = "live" | "partial" | "mock";
@@ -617,6 +618,12 @@ export interface PagerJobRecord {
   deadline: number;
   txHash: string;
   status: "open" | "accepted" | "submitted" | "paid" | "cancelled" | "expired";
+  /**
+   * The machine check this job will be approved against. Recorded at posting
+   * time because approval happens days later, and a check invented after the
+   * work is in is not a check, it is an opinion.
+   */
+  verify?: JobVerification;
 }
 
 export type SwarmEventKind =

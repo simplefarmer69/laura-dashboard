@@ -12,6 +12,7 @@ import {
   type PagerJob,
 } from "@/lib/pager/jobs";
 import { visibleCopyProblem } from "@/lib/pager/rail";
+import { describeVerification, verifyJobSubmission, type JobVerification, type VerificationResult } from "@/lib/pager/verify";
 import { generateStructured, type ResolvedModel } from "@/lib/swarm/llm";
 import { agentSystem, foremanMock, foremanPrompt, foremanSchema, type CycleContext } from "@/lib/swarm/tasks";
 import { pushEvent } from "@/lib/store";
@@ -120,6 +121,7 @@ export async function runForeman(
   let posted = 0;
   let reviewed = 0;
   for (const a of out.value.actions.slice(0, 3)) {
+    let verifiedNote: VerificationResult | null = null;
     try {
       if (a.action === "hold") {
         notes.push(`hold: ${a.reason.slice(0, 160)}`);
@@ -147,6 +149,31 @@ export async function runForeman(
           notes.push(`${a.action} refused: job ${a.jobId} is ${job.status}, nothing has been submitted to judge`);
           continue;
         }
+        /* An approval releases money, so the machine check decides it, not
+           the model's read of the submission. A check that cannot run is a
+           refusal: the job keeps its deadline and gets looked at again next
+           cycle, which is the safe side to fail on. */
+        if (a.action === "approve") {
+          const recorded = (state.pagerJobs ?? []).find((r) => r.jobId === a.jobId);
+          if (!recorded?.verify) {
+            notes.push(`approve refused: job ${a.jobId} has no recorded check, so there is nothing to verify it against`);
+            continue;
+          }
+          const proof = (job as unknown as { proof?: { text?: string; links?: string[] } | null }).proof;
+          const result = await verifyJobSubmission(recorded.verify, proof);
+          if (!result.verified) {
+            notes.push(`approve refused on job ${a.jobId}: ${result.reason}`);
+            pushEvent(state, {
+              kind: "pager.job",
+              agentId: "foreman",
+              refId: String(a.jobId),
+              title: `Foreman held job #${a.jobId}: the check did not pass`,
+              detail: `${result.reason} · ${JSON.stringify(result.evidence).slice(0, 300)}`,
+            });
+            continue;
+          }
+          verifiedNote = result;
+        }
         const hash = await boardWrite(a.action, a.jobId);
         reviewed += 1;
         const record = (state.pagerJobs ?? []).find((r) => r.jobId === a.jobId);
@@ -156,7 +183,9 @@ export async function runForeman(
           agentId: "foreman",
           refId: String(a.jobId),
           title: `Foreman ${a.action}d job #${a.jobId}: ${job.details?.title ?? "untitled"}`,
-          detail: `${a.reason.slice(0, 400)} · ${hash}`,
+          detail: [a.reason.slice(0, 400), verifiedNote ? `check passed: ${verifiedNote.reason} · ${JSON.stringify(verifiedNote.evidence).slice(0, 240)}` : null, hash]
+            .filter(Boolean)
+            .join(" · "),
         });
         log(`${a.action} job ${a.jobId} → ${hash}`);
         continue;
@@ -167,9 +196,24 @@ export async function runForeman(
         notes.push("post skipped: a job needs a title and a brief");
         continue;
       }
+      /* The whole point of the directive: no check, no job. Work she cannot
+         confirm is work she cannot pay for without guessing. */
+      if (!a.verify) {
+        notes.push("post refused: no check declared, and she only hires for work an API can confirm");
+        continue;
+      }
+      const verify: JobVerification =
+        a.verify.kind === "x-post"
+          ? { kind: "x-post", mustInclude: a.verify.mustInclude, ...(a.verify.host ? { mustLinkHost: a.verify.host } : {}) }
+          : { kind: "url", mustInclude: a.verify.mustInclude, ...(a.verify.host ? { mustBeHost: a.verify.host } : {}) };
+      /* State the check in the brief itself. The worker is measured against
+         it, so they get to read it before they start rather than discover it
+         in a rejection. */
+      const stated = describeVerification(verify);
+      const details = a.details.includes(stated) ? a.details : `${a.details.trim()} ${stated}`;
       const spec = {
         title: a.title,
-        details: a.details,
+        details,
         links: a.links ?? [],
         amount: Math.floor(a.amount ?? 0),
         durationSec: Math.round((a.durationDays ?? 7) * 86_400),
@@ -194,6 +238,7 @@ export async function runForeman(
         deadline: Math.floor(Date.now() / 1000) + spec.durationSec,
         txHash,
         status: "open",
+        verify,
       };
       state.pagerJobs = [...(state.pagerJobs ?? []), record];
       pushEvent(state, {

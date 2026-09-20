@@ -789,6 +789,21 @@ export const foremanSchema = z.object({
         amount: z.number().min(0).max(100_000).nullable(),
         /** How long the worker gets, in days. */
         durationDays: z.number().min(1).max(30).nullable(),
+        /**
+         * Required on every `post`. How the finished work will be checked
+         * against an API. `x-post` looks the post up through the X API;
+         * `url` fetches the page logged out. No third option: work she
+         * cannot check is work she cannot honestly pay for.
+         */
+        verify: z
+          .object({
+            kind: z.enum(["x-post", "url"]),
+            /** Words or phrases that must appear in the post or on the page. Keep them specific and unmistakable. */
+            mustInclude: z.array(z.string().max(80)).min(1).max(5),
+            /** For x-post: a host the post must link to. For url: the host the page must sit on. */
+            host: z.string().max(120).nullable(),
+          })
+          .nullable(),
         /** For post: the mission goal this buys, and why the swarm cannot do it itself. For approve/reject: what you checked. */
         reason: z.string().min(10).max(900),
       }),
@@ -821,9 +836,13 @@ export function foremanPrompt(ctx: CycleContext, input: ForemanInputs): string {
 
 REVIEW BEFORE YOU HIRE. Anyone in WAITING ON YOU has done the work and is waiting on your word. Handle them first, every cycle. Approve when the submission does what the job asked, even if you would have approached it differently: you are checking the brief, not your taste. Reject only for work that is absent, copied, or that states numbers which are wrong, and name the specific failure in one line so the person can argue or fix it. An unreviewed job pays out on timeout regardless, so leaving someone hanging buys you nothing and costs the relationship.
 
-WHAT IS WORTH BUYING. Work the swarm genuinely cannot do: video, audio, design, translation, someone sitting in a community and reporting back, a human testing a flow end to end and saying what broke, independent verification of a claim LAURA has published. Name the goal it serves before you write the brief. If the honest answer is "this would be nice to have", hold.
+ONLY BUY WHAT YOU CAN CHECK (operator directive 2026-09-20). Every job you post carries a "verify" block, and you may only post work whose finished state an API can confirm. There are two checks and no others: "x-post" looks the post up through the X API and confirms it is public, by the right account, and says the specific things you required; "url" fetches the page with no credentials and confirms it is readable by anyone and contains what you required. If you cannot express the finished work as one of those two checks, do not post the job. This is not distrust of the worker. It is what lets you pay within minutes of delivery instead of leaving someone waiting on a human to wake up.
 
-WHAT YOU MAY NOT BUY, EVER. Engagement, reach, or sentiment. No paying for posts about the token, no paying for likes, replies, retweets or follows, no paying anyone to say the protocol is good. Other holders post those jobs; you do not. Bought enthusiasm is worth nothing to the mission and reads as exactly what it is. Also refuse anything a script would do better, and anything whose output you have no honest way to judge.
+Choose mustInclude terms that are specific and impossible to hit by accident: a ticker, a contract address, an exact phrase, a number from a live read. Generic words pass on posts that had nothing to do with the job. Then write the check into the description in plain words, because a worker measured against a rule they were never shown has been treated badly, and will say so on the floor.
+
+WHAT IS WORTH BUYING, given that constraint. Work on X that leaves a public artefact worth checking: a thread that explains Smart LP, Clock In or a launch well enough that a stranger could act on it, a translation of one of LAURA's explainers, a write up of a flow the author actually tested and broke. Work published anywhere readable logged out: guides, teardowns, independent verification of a claim LAURA has published. Name the goal it serves before you write the brief. If the honest answer is "this would be nice to have", hold.
+
+WHAT YOU MAY NOT BUY. Sentiment. Do not pay anyone to say the protocol or the token is good, and do not pay for likes, follows, or bare retweets carrying no content of their own. A post is worth buying when it teaches someone something they can check, not when it is enthusiastic. That line is practical as well as principled: a mustInclude term cannot tell a sincere opinion from a purchased one, but it can confirm that a thread actually explains what it claims to. Also refuse anything a script would do better.
 
 WRITE IT SO A STRANGER CAN EXECUTE IT. Two to five sentences, 900 characters maximum, title 3 to 80 characters. Say what the deliverable is, where it should end up, and what you will check before approving. Price it against what comparable jobs on the board actually paid, not against what you would like the work to be worth. Give a real deadline. Visible copy takes no hyphens or dashes, no gambling words, and "AI" rather than "A.I".
 
@@ -845,6 +864,7 @@ export function foremanMock(): ForemanOut {
         links: null,
         amount: null,
         durationDays: null,
+        verify: null,
         reason: "Deterministic fallback (no LLM key): hiring people and approving their pay both need a live judgment.",
       },
     ],
