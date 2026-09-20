@@ -92,6 +92,24 @@ export interface JobEligibility {
 }
 
 /**
+ * The board's own validation of the visible copy, mirrored here because it
+ * runs on the wrong side of the money. The escrow is committed on chain
+ * against the hash of this text, but the description is only accepted
+ * afterwards, so a title or body the site rejects leaves a funded job that
+ * can never show what it is asking for. Found the hard way: a six sentence
+ * description passed every local check, escrowed, and was then refused.
+ */
+export function jobCopyProblem(d: { title: string; details: string }): string | null {
+  const title = d.title.trim();
+  if (title.length < 3 || title.length > 80) return `title must be 3 to 80 characters (got ${title.length})`;
+  const body = d.details.trim();
+  if (body.length > 900) return `description must be 900 characters or fewer (got ${body.length})`;
+  const sentences = body.split(/[.!?]+(?:\s|$)/).filter((s) => s.trim().length > 0).length;
+  if (sentences < 2 || sentences > 5) return `description must be 2 to 5 sentences (got ${sentences})`;
+  return null;
+}
+
+/**
  * Everything that must hold before a job may be funded. Pure apart from the
  * balance read, and it fails closed: an unreadable balance is a refusal, not
  * an assumption that the money is there.
@@ -99,6 +117,8 @@ export interface JobEligibility {
 export async function jobEligibility(state: SwarmState, spec: PagerJobSpec): Promise<JobEligibility> {
   const caps = PAGER_JOB_CAPS;
   if (!spec.title?.trim() || !spec.details?.trim()) return { eligible: false, reason: "a job needs a title and a description of the work" };
+  const copy = jobCopyProblem(spec);
+  if (copy) return { eligible: false, reason: `the board will refuse this copy after the escrow is committed: ${copy}` };
   if (!Number.isFinite(spec.amount) || spec.amount <= 0) return { eligible: false, reason: "bounty must be a positive amount of STONKBROKER" };
   if (spec.amount > caps.maxTokenPerJob) {
     return { eligible: false, reason: `bounty ${spec.amount} STONKBROKER is over the ${caps.maxTokenPerJob} per job cap` };
@@ -150,6 +170,11 @@ export async function createPagerJob(spec: PagerJobSpec): Promise<{ jobId: numbe
   const wallet = createWalletClient({ account, transport, chain: { id: chainId, name: "robinhood", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [rpc()] } } } });
 
   const details = { title: spec.title.trim(), details: spec.details.trim(), links: spec.links ?? [] };
+  /* Last gate before money moves. The board validates this copy only after
+     the escrow exists, so checking it here is the difference between a
+     rejected draft and a funded job nobody can read. */
+  const copy = jobCopyProblem(details);
+  if (copy) throw new Error(`refusing to escrow: the board will reject this copy (${copy})`);
   const amountWei = BigInt(Math.round(spec.amount)) * 10n ** 18n;
   const duration = BigInt(spec.durationSec ?? PAGER_JOB_CAPS.defaultDurationSec);
 
@@ -159,7 +184,6 @@ export async function createPagerJob(spec: PagerJobSpec): Promise<{ jobId: numbe
     await pub.waitForTransactionReceipt({ hash: approveHash });
   }
 
-  const before = await pub.readContract({ address: PAGER_JOB_BOARD, abi: BOARD_ABI, functionName: "jobCount" });
   const txHash = await wallet.writeContract({
     address: PAGER_JOB_BOARD,
     abi: BOARD_ABI,
@@ -178,14 +202,24 @@ export async function createPagerJob(spec: PagerJobSpec): Promise<{ jobId: numbe
   });
   const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
   if (receipt.status !== "success") throw new Error(`createJob reverted (${txHash})`);
-  const jobId = Number(before) + 1;
+  /* Read the id back rather than assuming it stepped by one from a count
+     taken before the send: another holder posting in the same block would
+     make that guess attach this job's description to theirs. */
+  const jobId = Number(await pub.readContract({ address: PAGER_JOB_BOARD, abi: BOARD_ABI, functionName: "jobCount" }));
 
   const session = await pagerHolderSession();
-  await fetch(`${PAGER_BASE_URL}/api/pager/jobs`, {
+  const attach = await fetch(`${PAGER_BASE_URL}/api/pager/jobs`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${session.token}` },
     body: JSON.stringify({ jobId, ...details }),
   });
+  if (!attach.ok) {
+    /* The bounty is already escrowed at this point, so say so loudly and name
+       the job: it needs either a successful retry or a cancel to get the
+       money back, and silence here is what leaves one stranded. */
+    const why = await attach.text().catch(() => `${attach.status}`);
+    throw new Error(`job ${jobId} is funded (${txHash}) but its description was refused: ${why.slice(0, 200)}. Retry the attach or cancel the job to recover the escrow.`);
+  }
   return { jobId, txHash };
 }
 
