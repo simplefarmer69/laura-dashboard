@@ -9,12 +9,25 @@ import type { SwarmState } from "@/lib/types";
  * grant rests on — like LAUNCH_CAPS, they fail closed and never bend.
  */
 export const TREASURY_CAPS = {
-  /** Max ETH per single buy */
-  maxEthPerBuy: 0.005,
+  /**
+   * Accumulation rails, raised 2026-09-20 on the operator's instruction to
+   * "accumulate more $STONKBROKER faster".
+   *
+   * Previously 0.005 per buy / 0.01 per 24h / 6h apart, which against a
+   * 2.78 ETH wallet bought roughly a third of a percent of the spendable
+   * balance a day and would have taken most of a year to deploy it. The new
+   * rails are 4x the ticket, 6x the daily rate and twice the frequency:
+   * 0.06 ETH a day against ~2.43 ETH above the floor is about a 40 day
+   * runway, before the creator fees that keep topping the wallet up.
+   *
+   * The floor is untouched and still checked on every spend, so launches and
+   * gas can never be starved by accumulation.
+   */
+  maxEthPerBuy: 0.02,
   /** Max total ETH spent on buys per rolling 24h */
-  maxEthPer24h: 0.01,
+  maxEthPer24h: 0.06,
   /** Minimum hours between buys */
-  minBuyGapHours: 6,
+  minBuyGapHours: 3,
   /** Never spend below this ETH balance — launch gas + deploys stay funded */
   treasuryFloorEth: 0.35,
   /** Slippage guard on the quoted amountOut (basis points) */
