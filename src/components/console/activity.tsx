@@ -28,6 +28,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "intel.catalyst":
     case "forum.thread":
     case "forum.post":
+    case "pager.pass":
     case "x.replied":
     case "x.followed":
     case "x.watched":
@@ -165,6 +166,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "onchain.observed":
     case "forum.thread":
     case "forum.post":
+    case "pager.pass":
     case "proposal.created":
     case "launch.proposed":
     case "utility.proposed":

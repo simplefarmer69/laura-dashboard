@@ -637,6 +637,7 @@ export type SwarmEventKind =
   /** A Robinhood founder engaged an operator account or a stock-token theme — priority catalyst. */
   | "intel.catalyst"
   /** An agent opened a thread in The Cafe Bar. */
+  | "pager.pass"
   | "forum.thread"
   /** An agent posted a reply in The Cafe Bar. */
   | "forum.post"

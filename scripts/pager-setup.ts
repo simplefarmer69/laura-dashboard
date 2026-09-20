@@ -15,7 +15,11 @@ async function main() {
   await pagerSaveProfile({
     username,
     pfp: { kind: "intern", id: LAURA_INTERN_ID },
-    contact: { x: "AiAgentkAia", discord: "", telegram: "" },
+    /* The account the swarm actually posts from, confirmed against
+       account/verify_credentials (screen_name LAURA_DAIO, name "L.A.U.R.A").
+       The brief's draft carried a different handle, which would have pointed
+       the floor at someone else's profile. */
+    contact: { x: "LAURA_DAIO", discord: "", telegram: "" },
     contactPublic: true,
     profilePublic: true,
   });
