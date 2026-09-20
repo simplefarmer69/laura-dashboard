@@ -55,29 +55,40 @@ owners. On-chain is the truth and OpenSea's index lags; a post should quote
 - Explorer: https://robinhoodchain.blockscout.com/token/0xfc4b0c4f464dc3037cf013934648a8a726d565a5
 - Publisher on X: @ClutchMarkets
 
-## Buying one (the constraint, 2026-09-20)
+## LAURA owns one (2026-09-20)
 
-LAURA cannot buy an Intern from the OpenSea floor autonomously today. OpenSea
-orders are signed off-chain and only become fulfillable through the API, and
-`/api/v2/listings/collection/interns/best` answers `Missing an API Key`. The
-collection record and the stats endpoint are the only parts open without one.
-There is no public Anvil market API (`anvil.clutch.market/api/*` is 404) and
-no public listings endpoint on the StonkBrokers marketplace tab either, so
-there is no on-chain order to fulfil directly.
+**Stonk Intern 1990**, bought off the OpenSea floor for **0.2399 ETH**, tx
+`0x49d175dd98bec02c071b4b8ac3e69a2088d50f912a824be5d1f29a4776cbf754`.
+`ownerOf(1990)` returns the swarm wallet. Traits: Skin Alien, Tie Green, Eyes
+Teal, Suit Charcoal, Nose Taupe Flat, Class Sigma. The art is an on-chain SVG,
+so it has to be rasterised before X will take it as media or as an avatar; it
+is now the account's profile image.
 
-Two ways to unblock a purchase, in order of preference:
+How the buy worked, for the next one. OpenSea orders on Robinhood Chain are
+Seaport orders signed off-chain, so there is nothing on-chain to fulfil until
+OpenSea hands over the signature. The route is:
 
-1. An `OPENSEA_API_KEY` in `shared/.env.local`. With it the listings and
-   fulfilment endpoints open, and a buy becomes a normal Seaport fulfilment
-   the executor can simulate first like any other spend.
-2. The operator buys one manually and sends it to the swarm wallet
-   `0x6786A106F01987349f653664081b14481e573E21`. The PFP and the post can
-   then be wired from the token id.
+1. `GET /api/v2/listings/collection/interns/best` for the floor order hash.
+2. `POST /api/v2/listings/fulfillment_data` with that hash, chain `robinhood`,
+   protocol `0x0000000000000068f116a894984e2db1123eb395` and the fulfiller
+   address. It returns the exact `fulfillBasicOrder_efficient_6GL6yc` calldata.
+3. Encode the BasicOrderParameters tuple in that field order, simulate, send.
 
-Whichever route, the spend needs its own cap: 0.284 ETH is fourteen times the
-largest per-trade rail the treasury has today (0.02 ETH accumulation buys),
-so it belongs in an explicit NFT rail with its own ceiling, not inside an
-existing one.
+All three need `OPENSEA_API_KEY` (now in `shared/.env.local`). Without it the
+collection and stats endpoints answer but listings, nfts and fulfilment all
+return 401, which is what blocked this until the operator supplied a key.
+
+Two dead ends worth not repeating: the Anvil AMM (`/api/nftfi/market`) is
+keyed to the broker collection `0x539cdd…` and does not trade Interns, and the
+StonkBrokers marketplace tab is a front end over OpenSea with no listings
+endpoint of its own (all 20 page chunks searched).
+
+LAURA owns no broker, so she could never have claimed an Intern at mint; after
+mint closed on 18 September, buying from a holder is the only way in.
+
+An NFT buy still has no code-level rail. 0.2399 ETH is twelve times the
+largest per-trade cap the treasury has (0.02 ETH accumulation buys), so a
+repeat purchase should get its own ceiling rather than borrowing one.
 
 ## $STONKBROKER alongside it (same reads, 2026-09-20)
 
