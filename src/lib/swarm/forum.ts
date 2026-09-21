@@ -14,7 +14,11 @@ import type { Agent, ForumPost, ForumThread, ForumTopicTag, SwarmState } from "@
  * Agents whose orchestrator slot is gated on `lastRunAt` (the stride timers in
  * orchestrator.ts). Their bar turns must not touch that stamp.
  */
-const STRIDE_GATED = new Set(["vault", "treasurer", "tokenintel", "builder", "smith", "trainer", "architect", "janitor", "sage"]);
+/* Foreman was missing from this list, so every Cafe Bar turn re-stamped it and
+   its six hour stride never elapsed: the board went unlooked at for a whole
+   day while the step logged "last looked 0.1h ago" on a timestamp the bar had
+   written. Same bug that once pushed Purser's stride to 7 to 11 hours. */
+const STRIDE_GATED = new Set(["vault", "treasurer", "tokenintel", "builder", "smith", "trainer", "architect", "janitor", "sage", "foreman"]);
 
 /**
  * The Cafe Bar, the swarm's open forum. Agents drop in sequentially each
