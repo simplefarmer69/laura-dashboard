@@ -57,9 +57,44 @@ function firstUrl(proof: { text?: string; links?: string[] }): string | null {
   return m ? m[0] : null;
 }
 
+/**
+ * A leading dollar sign on a ticker is a convention, not substance. Requiring
+ * $STONKBROKER and refusing a thread that says STONKBROKER seven times is
+ * marking someone down for punctuation, so the sigil is ignored on both
+ * sides of the comparison. Learned on job 11, where the work was plainly
+ * done and the check would have refused it.
+ */
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/\$(?=[a-z])/g, "");
+}
+
 function missingTerms(haystack: string, terms: string[]): string[] {
-  const h = haystack.toLowerCase();
-  return terms.filter((t) => t.trim() && !h.includes(t.trim().toLowerCase()));
+  const h = normalizeForMatch(haystack);
+  return terms.filter((t) => t.trim() && !h.includes(normalizeForMatch(t.trim())));
+}
+
+/**
+ * The whole thread, not just its head.
+ *
+ * A job that asks for a thread is delivered as a root post plus the author's
+ * own replies, and judging only the root fails work that did exactly what was
+ * asked. Recent search is scoped to the conversation and the same author, so
+ * other people's replies never count toward the check. If search is
+ * unavailable the root alone is used, which can only be stricter.
+ */
+async function threadText(rootId: string, authorId: string, bearer: string, rootText: string): Promise<{ text: string; parts: number }> {
+  try {
+    const url = `https://api.twitter.com/2/tweets/search/recent?query=conversation_id:${rootId}%20from:${authorId}&tweet.fields=created_at&max_results=100`;
+    const res = await fetch(url, { headers: { authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return { text: rootText, parts: 1 };
+    const body = (await res.json()) as { data?: { text: string }[] };
+    const parts = body.data ?? [];
+    if (!parts.length) return { text: rootText, parts: 1 };
+    const joined = [rootText, ...parts.map((p) => p.text)].join("\n");
+    return { text: joined, parts: parts.length };
+  } catch {
+    return { text: rootText, parts: 1 };
+  }
 }
 
 async function verifyXPost(v: Extract<JobVerification, { kind: "x-post" }>, proof: { text?: string; links?: string[] }): Promise<VerificationResult> {
@@ -95,8 +130,15 @@ async function verifyXPost(v: Extract<JobVerification, { kind: "x-post" }>, proo
   if (v.mustBeAuthor && author.toLowerCase() !== v.mustBeAuthor.toLowerCase()) {
     return { verified: false, reason: `the post is by @${author}, but the job required @${v.mustBeAuthor}`, evidence };
   }
-  const missing = missingTerms(text, v.mustInclude);
-  if (missing.length) return { verified: false, reason: `the post does not mention ${missing.map((m) => `"${m}"`).join(", ")}, which the brief required`, evidence };
+  const thread = await threadText(id, body.data.author_id ?? "", bearer, text);
+  const missing = missingTerms(thread.text, v.mustInclude);
+  if (missing.length) {
+    return {
+      verified: false,
+      reason: `the post does not mention ${missing.map((m) => `"${m}"`).join(", ")}, which the brief required`,
+      evidence: { ...evidence, threadParts: thread.parts },
+    };
+  }
   if (v.mustLinkHost) {
     const urls = (body.data.entities?.urls ?? []).map((u) => u.unwound_url ?? u.expanded_url ?? "");
     const hit = urls.some((u) => {
@@ -108,7 +150,7 @@ async function verifyXPost(v: Extract<JobVerification, { kind: "x-post" }>, proo
     });
     if (!hit) return { verified: false, reason: `the post does not link to ${v.mustLinkHost}`, evidence: { ...evidence, urls } };
   }
-  return { verified: true, reason: `post by @${author} is public and contains everything the brief asked for`, evidence };
+  return { verified: true, reason: `post by @${author} is public and the thread (${thread.parts} part(s) by the author) contains everything the brief asked for`, evidence: { ...evidence, threadParts: thread.parts } };
 }
 
 async function verifyUrl(v: Extract<JobVerification, { kind: "url" }>, proof: { text?: string; links?: string[] }): Promise<VerificationResult> {
