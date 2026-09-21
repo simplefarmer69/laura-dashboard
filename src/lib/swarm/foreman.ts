@@ -143,6 +143,8 @@ export interface ForemanResult {
   posted: number;
   reviewed: number;
   held: boolean;
+  /** True when the plan came from the deterministic mock. A mock pass looked at nothing and must not consume the stride. */
+  usedMock: boolean;
   notes: string[];
 }
 
@@ -175,7 +177,7 @@ export async function runForeman(
       title: "Foreman held (fallback, no live model)",
       detail: "No job was posted and no submission was reviewed: hiring a person and paying one both need a live judgment.",
     });
-    return { posted: 0, reviewed: 0, held: true, notes: ["no live model"] };
+    return { posted: 0, reviewed: 0, held: true, usedMock: true, notes: ["no live model"] };
   }
 
   let posted = 0;
@@ -325,7 +327,7 @@ export async function runForeman(
       detail: notes.join(" · ").slice(0, 600) || out.value.rationale.slice(0, 600),
     });
   }
-  return { posted, reviewed, held: !posted && !reviewed, notes };
+  return { posted, reviewed, held: !posted && !reviewed, usedMock: false, notes };
 }
 
 export { PAGER_JOB_CAPS };

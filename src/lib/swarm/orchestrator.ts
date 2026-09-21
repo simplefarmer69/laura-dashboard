@@ -984,7 +984,11 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
       try {
         foreman.status = "running";
         const res = await runForeman(state, foreman, resolved, ctx, ctx.world.slice(0, 2000));
-        markRan(foreman);
+        /* A fallback pass looked at nothing, so it does not start the six
+           hour clock. Otherwise every mock cycle during an outage pushes the
+           first real look further away, which is what kept Foreman skipping
+           for hours after the model came back. */
+        if (!res.usedMock) markRan(foreman);
         step({
           agentId: "foreman",
           label: "Work board",
