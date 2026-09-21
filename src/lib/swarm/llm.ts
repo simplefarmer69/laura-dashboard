@@ -108,8 +108,13 @@ export function buildPrompt<T>(call: StructuredCall<T>, extraUser?: string): { i
     content.length >= MIN_CACHEABLE_CHARS
       ? { role: "system", content, providerOptions: CACHE_CONTROL }
       : { role: "system", content };
+  /* Shared blocks before the agent's own system prompt. The system prompt
+     differs per agent, so putting it first would give every agent a different
+     prefix and the library and cycle digests behind it would never be shared.
+     This way the first blocks are identical across the whole cycle and are
+     written once and read by every agent after the first. */
   return {
-    instructions: [sys(call.system), ...stable.map(sys)],
+    instructions: [...stable.map(sys), sys(call.system)],
     messages: [{ role: "user", content: extraUser ? `${call.prompt}${extraUser}` : call.prompt }],
   };
 }

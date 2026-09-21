@@ -228,14 +228,43 @@ export function cachedContext(ctx: CycleContext, agentId: string): { ctx: CycleC
   const library = ctx.library?.trim() ?? "";
   const skills = ctx.skills[agentId]?.trim() ?? "";
   const stable: string[] = [];
+
+  /* Ordered from most shared to least. A cache hit needs an identical prefix,
+     so everything every agent sees this cycle must come before anything only
+     one agent sees. Library first (identical across cycles), then the cycle
+     digests (identical across the seventeen agents of one cycle), then this
+     agent's skills. The agent's system prompt follows all of these. */
   if (library) stable.push(`LIBRARY (durable build knowledge; trust it)\n${library}`);
+
+  const cycle = [
+    ["LIVE INTERNET INTEL (fetched this cycle: X, CoinGecko, Blockscout, DexScreener; today's real world)", ctx.intel],
+    ["CHAIN ALPHA (code computed Robinhood Chain anomalies with numbers and sources)", ctx.chainAlpha],
+    ["WORLD FEEDS (prediction markets, sports, launcher tape, protocol economics, community chat, the Pager floor)", ctx.world],
+    ["ON-CHAIN STATE (LAURA's treasury, LP and earnings, with Watcher's alerts)", ctx.onchain],
+    ["WATCHED VOICES AND LAUNCH REQUESTS", ctx.xVoices],
+    ["THE ACCOUNT ON X (what @LAURA_DAIO already posted; never echo it)", ctx.xPosted],
+    ["PRICE TREND", ctx.priceTrend],
+  ].filter(([, v]) => (v ?? "").trim().length > 0);
+  if (cycle.length) {
+    stable.push(`THIS CYCLE'S SHARED CONTEXT (identical for every agent this cycle)\n\n${cycle.map(([h, v]) => `${h}\n${v}`).join("\n\n")}`);
+  }
+
   if (skills) stable.push(`YOUR SKILLS (operating procedures; follow them)\n${skills}`);
+
+  const ptr = (name: string) => `(${name} is in your system context above, under THIS CYCLE'S SHARED CONTEXT; read it there)`;
   return {
     stable,
     ctx: {
       ...ctx,
       library: library ? "(the full LIBRARY is in your system context above; read it there)" : ctx.library,
       skills: skills ? { ...ctx.skills, [agentId]: "(your SKILLS are in your system context above; read them there)" } : ctx.skills,
+      intel: ctx.intel?.trim() ? ptr("LIVE INTERNET INTEL") : ctx.intel,
+      chainAlpha: ctx.chainAlpha?.trim() ? ptr("CHAIN ALPHA") : ctx.chainAlpha,
+      world: ctx.world?.trim() ? ptr("WORLD FEEDS") : ctx.world,
+      onchain: ctx.onchain?.trim() ? ptr("ON-CHAIN STATE") : ctx.onchain,
+      xVoices: ctx.xVoices?.trim() ? ptr("WATCHED VOICES") : ctx.xVoices,
+      xPosted: ctx.xPosted?.trim() ? ptr("THE ACCOUNT ON X") : ctx.xPosted,
+      priceTrend: ctx.priceTrend?.trim() ? ptr("PRICE TREND") : ctx.priceTrend,
     },
   };
 }
