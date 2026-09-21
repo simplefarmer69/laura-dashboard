@@ -171,8 +171,23 @@ function machineBusy(): string | null {
 }
 
 /** Cycles started in the rolling 24h window, whatever their trigger. */
+/**
+ * Cycles that actually cost model budget in the last day.
+ *
+ * The budget exists to bound API spend, so a cycle in which every call fell
+ * back to the deterministic mock cost nothing and must not count. Counting it
+ * did real damage during the 2026-09-19 credit outage: 67 of 72 slots were
+ * consumed by cycles that produced no decisions, and the budget would have
+ * kept LAURA idle for up to a further day after credits were restored, for
+ * work that had never been done. A run with no call record is counted, since
+ * unknown spend is not the same as none.
+ */
 export function cyclesInLast24h(state: SwarmState, now = Date.now()): number {
-  return state.runs.filter((r) => r.startedAt > now - DAY_MS).length;
+  return state.runs.filter((r) => {
+    if (r.startedAt <= now - DAY_MS) return false;
+    if (r.llmCalls === undefined) return true;
+    return r.llmCalls > (r.llmFallbacks ?? 0);
+  }).length;
 }
 
 /** Trigger events recorded since the last cycle finished. */
