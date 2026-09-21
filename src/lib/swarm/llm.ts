@@ -1,4 +1,4 @@
-import { generateObject, generateText, type LanguageModel, type ModelMessage } from "ai";
+import { generateObject, generateText, type LanguageModel, type ModelMessage, type SystemModelMessage } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { z } from "zod";
@@ -49,8 +49,69 @@ export interface StructuredCall<T> {
   schema: z.ZodType<T>;
   system: string;
   prompt: string;
+  /**
+   * Large context that is identical from one call to the next: the library
+   * digest, an agent's skills, a long rulebook. Sent as cached system blocks
+   * AHEAD of the prompt, because Anthropic caches by prefix and anything
+   * placed after the first changing byte is re-billed in full every call.
+   * Up to three blocks; more are merged into the third.
+   */
+  stable?: string[];
   /** Deterministic fallback used when no provider key is configured or the call fails. */
   mock: () => T;
+}
+
+/**
+ * Prompt caching (operator directive 2026-09-21).
+ *
+ * The prompts were built dynamic-first: mission, metrics and today's intel at
+ * the top, the library and skills at the bottom. That is the worst possible
+ * order for a prefix cache, since the head differs every cycle and defeats
+ * the cache before it ever reaches the reusable tail. The fix is not to
+ * rewrite nineteen prompt builders but to change what goes where: the system
+ * prompt and any `stable` blocks are sent first as cache-controlled system
+ * messages, and the changing prompt follows as the user turn.
+ *
+ * Anthropic's minimum cacheable prefix is 1024 tokens, so tiny blocks are
+ * sent uncached rather than wasting a breakpoint. The provider ignores these
+ * options on OpenAI, so the same call shape works on the failover leg.
+ */
+const CACHE_CONTROL = { anthropic: { cacheControl: { type: "ephemeral" as const } } };
+const MIN_CACHEABLE_CHARS = 1024 * 3.5;
+const MAX_STABLE_BLOCKS = 3;
+
+/**
+ * One line per call so the saving is a fact in the log rather than a claim.
+ * Cache reads are billed at a tenth of the base input rate; writes at a
+ * quarter more. A cold cycle after a library edit will show writes, and every
+ * cycle after it should show reads on the same tokens.
+ */
+function logCacheUsage(resolved: ResolvedModel, usage: { inputTokens?: number; inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } } | undefined): void {
+  const total = usage?.inputTokens ?? 0;
+  const read = usage?.inputTokenDetails?.cacheReadTokens ?? 0;
+  const write = usage?.inputTokenDetails?.cacheWriteTokens ?? 0;
+  if (!total) return;
+  const pct = Math.round((read / total) * 100);
+  console.log(`[llm] ${resolved.provider}/${resolved.modelId} input ${total} tok: ${pct}% from cache (read ${read}, wrote ${write})`);
+}
+
+export function buildPrompt<T>(call: StructuredCall<T>, extraUser?: string): { instructions: SystemModelMessage[]; messages: ModelMessage[] } {
+  const stable = [...(call.stable ?? [])].filter((s) => s.trim().length > 0);
+  if (stable.length > MAX_STABLE_BLOCKS) {
+    const head = stable.slice(0, MAX_STABLE_BLOCKS - 1);
+    const tail = stable.slice(MAX_STABLE_BLOCKS - 1).join("\n\n");
+    stable.splice(0, stable.length, ...head, tail);
+  }
+  /* AI SDK 7 carries system content in `instructions`; each entry becomes its
+     own system block on the wire, and a block marked here gets cache_control. */
+  const sys = (content: string): SystemModelMessage =>
+    content.length >= MIN_CACHEABLE_CHARS
+      ? { role: "system", content, providerOptions: CACHE_CONTROL }
+      : { role: "system", content };
+  return {
+    instructions: [sys(call.system), ...stable.map(sys)],
+    messages: [{ role: "user", content: extraUser ? `${call.prompt}${extraUser}` : call.prompt }],
+  };
 }
 
 /**
@@ -125,14 +186,14 @@ export async function generateStructured<T>(
 ): Promise<{ value: T; usedMock: boolean; repaired: boolean }> {
   if (!resolved.model) return { value: call.mock(), usedMock: true, repaired: false };
   try {
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: resolved.model,
       schema: call.schema,
-      system: call.system,
-      prompt: call.prompt,
+      ...buildPrompt(call),
       maxRetries: 2,
       abortSignal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
     });
+    logCacheUsage(resolved, usage);
     return { value: object, usedMock: false, repaired: false };
   } catch (err) {
     if (isBillingOrAuthError(err)) {
@@ -154,11 +215,15 @@ export async function generateStructured<T>(
       `[llm] ${resolved.provider}/${resolved.modelId} schema failure [${schemaIssues(cause)}] (${cause.slice(0, 200)}), attempting repair`,
     );
     try {
+      /* Same cached prefix as the first attempt, so the repair reads the
+         system and stable blocks from cache instead of paying for them twice. */
       const { object } = await generateObject({
         model: resolved.model,
         schema: call.schema,
-        system: call.system,
-        prompt: `${call.prompt}\n\nYOUR PREVIOUS ATTEMPT FAILED SCHEMA VALIDATION.\nValidation error: ${cause.slice(0, 1200)}\nPrevious output (may be truncated):\n${(e.text ?? "").slice(0, 3000)}\n\nReturn a corrected response that satisfies the schema exactly. Respect every min/max length and enum.`,
+        ...buildPrompt(
+          call,
+          `\n\nYOUR PREVIOUS ATTEMPT FAILED SCHEMA VALIDATION.\nValidation error: ${cause.slice(0, 1200)}\nPrevious output (may be truncated):\n${(e.text ?? "").slice(0, 3000)}\n\nReturn a corrected response that satisfies the schema exactly. Respect every min/max length and enum.`,
+        ),
         maxRetries: 1,
         abortSignal: AbortSignal.timeout(LLM_CALL_TIMEOUT_MS),
       });

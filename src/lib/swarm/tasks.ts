@@ -212,6 +212,34 @@ export interface CycleContext {
   xVoices: string;
 }
 
+/**
+ * Split a cycle context into the part that changes every cycle and the part
+ * that does not, for prompt caching.
+ *
+ * The library digest and an agent's skills are the two largest blocks in
+ * every prompt and are byte-identical across cycles until a file under
+ * /library changes. Returned as `stable` they ride ahead of the prompt as
+ * cached system blocks; the ctx handed back carries short pointers in their
+ * place so the existing prompt builders keep rendering their headers without
+ * re-sending the text. Order is fixed (library, then skills) so the prefix
+ * stays identical across agents that share the same library.
+ */
+export function cachedContext(ctx: CycleContext, agentId: string): { ctx: CycleContext; stable: string[] } {
+  const library = ctx.library?.trim() ?? "";
+  const skills = ctx.skills[agentId]?.trim() ?? "";
+  const stable: string[] = [];
+  if (library) stable.push(`LIBRARY (durable build knowledge; trust it)\n${library}`);
+  if (skills) stable.push(`YOUR SKILLS (operating procedures; follow them)\n${skills}`);
+  return {
+    stable,
+    ctx: {
+      ...ctx,
+      library: library ? "(the full LIBRARY is in your system context above; read it there)" : ctx.library,
+      skills: skills ? { ...ctx.skills, [agentId]: "(your SKILLS are in your system context above; read them there)" } : ctx.skills,
+    },
+  };
+}
+
 function lessonsDigest(lessons: Lesson[], limit = 12): string {
   const recent = lessons.slice(-limit);
   if (recent.length === 0) return "No lessons recorded yet.";

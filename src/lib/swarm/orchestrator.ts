@@ -67,8 +67,7 @@ import {
   watcherPrompt,
   STRATEGY_BUDGET_CHARS,
   type CycleContext,
-  type SageInputs,
-} from "@/lib/swarm/tasks";
+  type SageInputs, cachedContext } from "@/lib/swarm/tasks";
 import { launcherGrid } from "@/lib/launchpad/service";
 import { launchCapacityDigest } from "@/lib/launchpad/treasury";
 import { isDuplicateLaunch, reservedLaunchNameHit } from "@/lib/launchpad/spec";
@@ -531,7 +530,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: chainReadSchema,
               system: agentSystem(watcher),
-              prompt: watcherPrompt(ctx),
+              prompt: watcherPrompt(cachedContext(ctx, "watcher").ctx),
+              stable: cachedContext(ctx, "watcher").stable,
               mock: () => watcherMock(ctx),
             }),
           ),
@@ -580,7 +580,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         await generateStructured(resolved, {
           schema: briefSchema,
           system: agentSystem(scout),
-          prompt: scoutPrompt(ctx),
+          prompt: scoutPrompt(cachedContext(ctx, "scout").ctx),
+          stable: cachedContext(ctx, "scout").stable,
           mock: () => scoutMock(ctx),
         }),
       ),
@@ -652,7 +653,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: researchSchema,
               system: agentSystem(researcher),
-              prompt: researcherPrompt(ctx),
+              prompt: researcherPrompt(cachedContext(ctx, "researcher").ctx),
+              stable: cachedContext(ctx, "researcher").stable,
               mock: () => researcherMock(ctx),
             }),
           ),
@@ -737,7 +739,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: draftsSchema,
               system: agentSystem(agent),
-              prompt: producerPrompt(agent, ctx),
+              prompt: producerPrompt(agent, cachedContext(ctx, agent.id).ctx),
+              stable: cachedContext(ctx, agent.id).stable,
               mock: () => producerMock(agent, ctx),
             }),
           ),
@@ -840,7 +843,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: vaultSchema,
               system: agentSystem(vault),
-              prompt: vaultPrompt(ctx),
+              prompt: vaultPrompt(cachedContext(ctx, "vault").ctx),
+              stable: cachedContext(ctx, "vault").stable,
               mock: () => vaultMock(ctx),
             }),
           ),
@@ -1017,7 +1021,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: criticSchema,
               system: agentSystem(critic),
-              prompt: criticPrompt(ctx, cycleDrafts),
+              prompt: criticPrompt(cachedContext(ctx, "critic").ctx, cycleDrafts),
+              stable: cachedContext(ctx, "critic").stable,
               mock: () => criticMock(cycleDrafts),
             }),
           ),
@@ -1162,7 +1167,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: launchSchema,
               system: agentSystem(mint),
-              prompt: mintPrompt(ctx, floor, pending, spoken, capacity, laneMenu, queueLimit),
+              prompt: mintPrompt(cachedContext(ctx, "mint").ctx, floor, pending, spoken, capacity, laneMenu, queueLimit),
+              stable: cachedContext(ctx, "mint").stable,
               mock: () => mintMock(ctx, pending, queueLimit),
             }),
           ),
@@ -1244,7 +1250,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: launchSchema,
               system: agentSystem(ticker),
-              prompt: tickerLaunchPrompt(ctx, tape, pending, spoken, capacity, laneMenu, mintQueueLimit(state.settings)),
+              prompt: tickerLaunchPrompt(cachedContext(ctx, "mint").ctx, tape, pending, spoken, capacity, laneMenu, mintQueueLimit(state.settings)),
+              stable: cachedContext(ctx, "mint").stable,
               mock: () => ({ launch: null, skipReason: "Deterministic fallback (no live model): tape launches need a live read of the market." }),
             }),
           ),
@@ -1321,11 +1328,12 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
                 schema: builderSchema,
                 system: agentSystem(builder),
                 prompt: builderPrompt(
-                  ctx,
+                  cachedContext(ctx, "builder").ctx,
                   builderCandidatesDigest(state),
                   utilityProjectsDigest(state),
                   builderCapacityDigest(state),
                 ),
+                stable: cachedContext(ctx, "builder").stable,
                 mock: () => builderMock(),
               }),
             ),
@@ -1429,7 +1437,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: forgeSchema,
               system: agentSystem(smith),
-              prompt: forgePrompt(ctx, forgeProjectsDigest(state), forgeCapacityDigest(state), SOLIDITY_RULES_FOR_PROMPT),
+              prompt: forgePrompt(cachedContext(ctx, "smith").ctx, forgeProjectsDigest(state), forgeCapacityDigest(state), SOLIDITY_RULES_FOR_PROMPT),
+              stable: cachedContext(ctx, "smith").stable,
               mock: () => forgeMock(),
             }),
           ),
@@ -1559,7 +1568,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           await generateStructured(resolved, {
             schema: proposalsSchema,
             system: agentSystem(coach),
-            prompt: coachPrompt(ctx),
+            prompt: coachPrompt(cachedContext(ctx, "coach").ctx),
+            stable: cachedContext(ctx, "coach").stable,
             mock: () => coachMock(ctx),
           }),
         ),
@@ -1708,7 +1718,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
           await generateStructured(resolved, {
             schema: trainerSchema,
             system: agentSystem(trainer),
-            prompt: trainerPrompt(ctx, targets),
+            prompt: trainerPrompt(cachedContext(ctx, "trainer").ctx, targets),
+            stable: cachedContext(ctx, "trainer").stable,
             mock: () => trainerMock(targets),
           }),
         ),
@@ -1952,7 +1963,8 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
             await generateStructured(resolved, {
               schema: sageSchema,
               system: agentSystem(sage),
-              prompt: sagePrompt(ctx, inputs),
+              prompt: sagePrompt(cachedContext(ctx, "sage").ctx, inputs),
+              stable: cachedContext(ctx, "sage").stable,
               mock: () => sageMock(inputs),
             }),
           ),

@@ -14,7 +14,7 @@ import { nightshadesBuy, nightshadesDigest, nightshadesSell } from "@/lib/launch
 import { bridgeDigest, bridgeEth, chainBalances, refreshPendingBridges } from "@/lib/launchpad/bridge";
 import { BRIDGE_CAPS } from "@/lib/launchpad/treasury-caps";
 import { generateStructured, type ResolvedModel } from "@/lib/swarm/llm";
-import { agentSystem, treasurerMock, treasurerPrompt, treasurerSchema, type CycleContext, type TreasurerOut } from "@/lib/swarm/tasks";
+import { agentSystem, treasurerMock, treasurerPrompt, treasurerSchema, type CycleContext, type TreasurerOut, cachedContext } from "@/lib/swarm/tasks";
 import { newId, pushEvent } from "@/lib/store";
 import type { Agent, SwarmState, TreasuryOpAction, TreasuryOpRecord } from "@/lib/types";
 
@@ -206,7 +206,8 @@ export async function runTreasurer(input: { state: SwarmState; resolved: Resolve
   const out = await generateStructured(resolved, {
     schema: treasurerSchema,
     system: agentSystem(agent),
-    prompt: treasurerPrompt(ctx, { sleeves, candidates: candidatesDigest(cands), nightshades, bridge, vaultMemo: vaultMemoDigest(state), ledger: ledgerDigest(state) }),
+    prompt: treasurerPrompt(cachedContext(ctx, "treasurer").ctx, { sleeves, candidates: candidatesDigest(cands), nightshades, bridge, vaultMemo: vaultMemoDigest(state), ledger: ledgerDigest(state) }),
+    stable: cachedContext(ctx, "treasurer").stable,
     mock: treasurerMock,
   });
   const plan = out.value;
