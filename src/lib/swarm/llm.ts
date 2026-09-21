@@ -82,9 +82,42 @@ function schemaIssues(cause: string): string {
  */
 const LLM_CALL_TIMEOUT_MS = Number(process.env.SWARM_LLM_TIMEOUT_MS ?? 4 * 60_000);
 
+/**
+ * A refusal that no retry and no repair can change: the account is out of
+ * credit, the key is wrong, or the quota is spent. Treating these as schema
+ * failures, which is what happened during the 2026-09-19 outage, burned a
+ * repair call against the same wall on every one of 17 calls per cycle.
+ */
+export function isBillingOrAuthError(err: unknown): boolean {
+  const e = err as { statusCode?: number; status?: number; message?: string; cause?: { message?: string; statusCode?: number } };
+  const status = e.statusCode ?? e.status ?? e.cause?.statusCode;
+  if (status === 401 || status === 402 || status === 403) return true;
+  const text = `${e.message ?? ""} ${e.cause?.message ?? ""} ${String(err)}`.toLowerCase();
+  return /credit balance|insufficient_quota|insufficient quota|credits depleted|payment required|billing|invalid api key|invalid x-api-key|authentication_error|exceeded your current quota/.test(text);
+}
+
+/**
+ * The other configured provider, if there is one. Anthropic falls to OpenAI
+ * and OpenAI to Anthropic; nothing falls to mock here, because reaching mock
+ * is the caller's decision and it is logged as such.
+ */
+export function resolveSecondary(primary: ResolvedModel): ResolvedModel | null {
+  if (primary.provider === "anthropic" && process.env.OPENAI_API_KEY) {
+    const id = DEFAULT_MODELS.openai;
+    return { provider: "openai", modelId: id, model: createOpenAI({ apiKey: process.env.OPENAI_API_KEY })(id) };
+  }
+  if (primary.provider === "openai" && process.env.ANTHROPIC_API_KEY) {
+    const id = DEFAULT_MODELS.anthropic;
+    return { provider: "anthropic", modelId: id, model: createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(id) };
+  }
+  return null;
+}
+
 export async function generateStructured<T>(
   resolved: ResolvedModel,
   call: StructuredCall<T>,
+  /* Internal: set on the failover leg so a secondary that is also out of credit cannot bounce back. */
+  isFailover = false,
 ): Promise<{ value: T; usedMock: boolean; repaired: boolean }> {
   if (!resolved.model) return { value: call.mock(), usedMock: true, repaired: false };
   try {
@@ -98,6 +131,17 @@ export async function generateStructured<T>(
     });
     return { value: object, usedMock: false, repaired: false };
   } catch (err) {
+    if (isBillingOrAuthError(err)) {
+      /* Nothing this provider can do. Either another one is configured and
+         takes the call, or this is honestly a mock turn. Never a repair. */
+      const secondary = isFailover ? null : resolveSecondary(resolved);
+      if (secondary) {
+        console.error(`[llm] ${resolved.provider}/${resolved.modelId} refused for billing/auth; failing over to ${secondary.provider}/${secondary.modelId}`);
+        return generateStructured(secondary, call, true);
+      }
+      console.error(`[llm] ${resolved.provider}/${resolved.modelId} refused for billing/auth and no secondary provider is configured; using mock`);
+      return { value: call.mock(), usedMock: true, repaired: false };
+    }
     /* One repair attempt: feed the validation failure and the raw output back
        so the model can fix its own JSON instead of losing the whole turn. */
     const e = err as { text?: string; cause?: { message?: string } };
