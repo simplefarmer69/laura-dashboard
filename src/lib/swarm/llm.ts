@@ -93,7 +93,11 @@ export function isBillingOrAuthError(err: unknown): boolean {
   const status = e.statusCode ?? e.status ?? e.cause?.statusCode;
   if (status === 401 || status === 402 || status === 403) return true;
   const text = `${e.message ?? ""} ${e.cause?.message ?? ""} ${String(err)}`.toLowerCase();
-  return /credit balance|insufficient_quota|insufficient quota|credits depleted|payment required|billing|invalid api key|invalid x-api-key|authentication_error|exceeded your current quota/.test(text);
+  /* A 429 is usually transient rate limiting and must stay retryable, so the
+     status alone is not enough. The monthly spend cap Anthropic enforces
+     also arrives as a 429, worded "reached your API usage limits ... monthly
+     API usage threshold", and no retry inside the month can change that. */
+  return /credit balance|insufficient_quota|insufficient quota|credits depleted|payment required|billing|invalid api key|invalid x-api-key|authentication_error|exceeded your current quota|reached your api usage limits|usage threshold|spend limit|spending limit/.test(text);
 }
 
 /**
