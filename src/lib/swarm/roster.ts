@@ -585,4 +585,10 @@ export const NON_PRODUCER_AGENTS: AgentId[] = [
   "smartlp",
   "nftintel",
   "tokenintel",
+  /* Pager agents: they have their own steps and their output is a reply to a
+     named person or an escrow, never an X draft. Left off this list, Foreman
+     was being asked for a metrics post every cycle and wasting a model call
+     producing near-duplicates of Ledger's. */
+  "desk",
+  "foreman",
 ];
