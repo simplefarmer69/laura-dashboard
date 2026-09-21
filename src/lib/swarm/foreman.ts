@@ -113,9 +113,14 @@ export function reconcileJobsFromBoard(state: SwarmState, board: PagerJob[], wal
         jobId: job.id,
         title: job.details?.title ?? `job ${job.id}`,
         amount,
-        /* Unknown from chain; dated now so a recovered job still occupies its
-           open slot rather than looking like ancient history. */
-        postedAt: Date.now(),
+        /* The board does not say when a job was posted, and guessing "now"
+           is worse than admitting that: every job LAURA has ever posted would
+           then count against the rolling 24h spend forever and quietly
+           disable hiring for good. Zero means unknown, so a recovered job
+           sits outside that window. Live exposure is still bounded, because
+           the cap that matters here counts open jobs by status rather than
+           by age, and terminal jobs occupy no slot. */
+        postedAt: 0,
         deadline: job.deadline,
         txHash: "",
         status,
