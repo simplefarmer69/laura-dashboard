@@ -353,7 +353,9 @@ export type KnownAgentId =
   /** Sweep: hygiene and efficiency; duplicate and loop detection, hot-store compaction, notices to repeating agents. */
   | "janitor"
   /** Foreman: hires people on the Pager Work board and reviews what they hand back. */
-  | "foreman";
+  | "foreman"
+  /** Desk: LAURA on the Pager floor, answering holders as herself and moderating as the moderator. */
+  | "desk";
 
 /**
  * Agents the Architect creates at runtime carry a `dyn_` id. They live only

@@ -8,8 +8,9 @@ import {
   pagerNotifications,
   pagerPostAsHolder,
 } from "@/lib/pager/client";
-import { pushEvent, updateState } from "@/lib/store";
+import { pushEvent } from "@/lib/store";
 import { isViewerMode } from "@/lib/viewer/mode";
+import type { SwarmState } from "@/lib/types";
 
 /**
  * LAURA on Pager, the holders-only messenger (operator grant 2026-09-20).
@@ -228,25 +229,24 @@ export function visibleCopyProblem(text: string): string | null {
   return null;
 }
 
-/** Records a pass on the swarm's event log so the console shows what she did on the floor. */
-export async function recordPagerPass(summary: {
-  read: number;
-  rooms: number;
-  deleted: number;
-  muted: string[];
-  replied: number;
-  notifications: number;
-}): Promise<void> {
+/**
+ * Records a pass on the swarm's event log. Writes into the state the cycle
+ * already holds rather than loading and saving its own copy: an independent
+ * save from inside a cycle is overwritten by the orchestrator's, which is how
+ * the job records were lost once already.
+ */
+export function recordPagerPass(
+  state: SwarmState,
+  summary: { read: number; rooms: number; deleted: number; muted: string[]; replied: number; notifications: number },
+): void {
   if (isViewerMode()) return;
-  await updateState((s) => {
-    pushEvent(s, {
-      kind: "pager.pass",
-      agentId: "barkeep",
-      refId: null,
-      title: `Pager: read ${summary.read} message(s) across ${summary.rooms} room(s)`,
-      detail: `${summary.replied} reply(ies) as holder · ${summary.deleted} deletion(s) as moderator${
-        summary.muted.length ? ` · muted ${summary.muted.join(", ")}` : ""
-      } · ${summary.notifications} notification(s)`,
-    });
+  pushEvent(state, {
+    kind: "pager.pass",
+    agentId: "desk",
+    refId: null,
+    title: `Pager: read ${summary.read} message(s) across ${summary.rooms} room(s)`,
+    detail: `${summary.replied} reply(ies) as holder · ${summary.deleted} deletion(s) as moderator${
+      summary.muted.length ? ` · muted ${summary.muted.join(", ")}` : ""
+    } · ${summary.notifications} notification(s)`,
   });
 }

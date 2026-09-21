@@ -767,6 +767,66 @@ export function treasurerMock(): TreasurerOut {
   };
 }
 
+/* ---------------------------------- Desk ---------------------------------- */
+
+export const deskSchema = z.object({
+  /** Who addressed LAURA, what they actually asked, and what on the floor needs the moderator. */
+  assessment: z.string().min(40).max(3000),
+  replies: z
+    .array(
+      z.object({
+        room: z.string().max(80),
+        /** The message being answered. Required: an unquoted reply notifies nobody. */
+        replyToId: z.string().min(4).max(40),
+        /** LAURA's words, first person. Under 600 characters. No hyphens or dashes, no gambling words, "AI" not "A.I". */
+        text: z.string().min(1).max(600),
+        /** Why this deserves an answer and where the facts in it come from. */
+        why: z.string().min(5).max(300),
+      }),
+    )
+    .max(3),
+  moderation: z
+    .array(
+      z.object({
+        room: z.string().max(80),
+        messageId: z.string().min(4).max(40),
+        wallet: z.string().min(10).max(64),
+        /** The category it falls in and the words that put it there. Never "disagreed with the protocol". */
+        reason: z.string().min(10).max(300),
+        /** Optional one line posted as the moderator when the removal could look arbitrary. */
+        note: z.string().max(200).nullable(),
+      }),
+    )
+    .max(5),
+  rationale: z.string().max(1500),
+});
+
+export type DeskOut = z.infer<typeof deskSchema>;
+
+export function deskPrompt(ctx: CycleContext, floor: string): string {
+  return [
+    `TODAY (UTC): ${ctx.grade.date}.`,
+    `MISSION\n${missionDigest(ctx.mission)}`,
+    `METRICS (the numbers you may cite; anything else needs a source in the library)\n${metricsDigest(ctx.metrics)}`,
+    floor,
+    `YOU ARE LAURA, ON THE FLOOR, AMONG HOLDERS. Answer the people in DIRECTED AT YOU and nobody else. A like is not a message and gets no reply. A greeting gets one short line. A question gets a real answer with a number or a source, or an honest "I do not know that yet" when you cannot source it; never a number you made up. Quote the message you are answering with its replyToId, or the holder is never told you replied. One reply per person per pass. Do not repeat anything you have already said on the floor. If nothing was asked, return no replies and say so; silence is a fine result and filling it is not.
+
+VOICE. First person, plain, short. You are a holder here, not a brand. No hyphens or dashes anywhere in the text, no gambling vocabulary, "AI" not "A.I".
+
+THE MODERATOR HAT IS A DIFFERENT PERSON. It removes fud aimed at holders, slurs, spam, scam links, drainer bait and doxxing, and nothing else. Criticism of the protocol, of a launch, of you, however sharp, is never moderated. When in doubt, leave it. Moderation entries need the exact messageId and wallet from THE FLOOR. If a removal could look arbitrary, add a one line note as the moderator saying what was removed; never argue. Private rooms are refused in code, you do not need to avoid them yourself.`,
+    `AGENT STRATEGY\n${ctx.agents.find((a) => a.id === "desk")?.strategy ?? ""}`,
+  ].join("\n\n");
+}
+
+export function deskMock(): DeskOut {
+  return {
+    assessment: "Deterministic fallback (no LLM key): the floor cannot be read for meaning without a live model, so nobody is answered and nothing is moderated.",
+    replies: [],
+    moderation: [],
+    rationale: "Deterministic fallback (no LLM key): speaking to a named person and removing their words both need a live judgment.",
+  };
+}
+
 /* --------------------------------- Foreman -------------------------------- */
 
 export const foremanSchema = z.object({

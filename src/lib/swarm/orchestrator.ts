@@ -87,6 +87,7 @@ import { recordNotes } from "@/lib/swarm/notebook";
 import { chainAlphaDigest } from "@/lib/swarm/chain-alpha";
 import { marketAlphaLinesLive, mergeAlpha } from "@/lib/swarm/market-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
+import { runDesk } from "@/lib/swarm/desk";
 import { runForeman } from "@/lib/swarm/foreman";
 import { runTreasurer } from "@/lib/swarm/treasurer";
 import { tokenTapeDigest } from "@/lib/swarm/token-tape";
@@ -924,6 +925,37 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         treasurer.lastError = String(err);
         step({ agentId: "treasurer", label: "Treasury plan", status: "error", summary: String(err), durationMs: 0 });
         pushEvent(state, { kind: "error", agentId: "treasurer", title: "Purser failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 3a1. Desk: LAURA on the Pager floor. Answers what was addressed to her
+       since the last pass and moderates the public rooms. Runs every cycle,
+       because a person who asked a question is waiting on the answer and the
+       cursor does not advance until a live model has actually read them. */
+    const desk = agentById(state, "desk");
+    if (desk.status === "paused") {
+      step({ agentId: "desk", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else {
+      const t0 = Date.now();
+      try {
+        desk.status = "running";
+        const res = await runDesk(state, desk, resolved, ctx);
+        markRan(desk);
+        step({
+          agentId: "desk",
+          label: "Pager floor",
+          status: res.held ? "skipped" : "ok",
+          summary: res.held
+            ? `${res.directed} directed, ${res.read} read: ${res.notes.join(" · ").slice(0, 160) || "nothing needed an answer"}`
+            : `${res.replied} reply(ies), ${res.deleted} removal(s)${res.muted.length ? `, muted ${res.muted.length}` : ""} · ${res.directed} directed, ${res.read} read`,
+          durationMs: Date.now() - t0,
+        });
+      } catch (err) {
+        desk.status = "error";
+        desk.lastError = String(err);
+        step({ agentId: "desk", label: "Pager floor", status: "error", summary: String(err), durationMs: Date.now() - t0 });
+        pushEvent(state, { kind: "error", agentId: "desk", title: "Desk failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }

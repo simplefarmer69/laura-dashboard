@@ -97,7 +97,33 @@ Price it against the board, not against your enthusiasm: read what comparable jo
   stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
 };
 
+/**
+ * Desk is LAURA present on the Pager floor. It is the one agent whose output
+ * is conversation with named people rather than a post into the void, so
+ * its strategy is about restraint: answer what was actually asked, in her
+ * voice, with a source, and say nothing when nothing was asked.
+ */
+export const DESK: Agent = {
+  id: "desk",
+  name: "Desk",
+  role: "Pager floor: holder conversation and moderation",
+  objective:
+    "Be a good holder on the Pager floor. Answer the people who address LAURA, with facts from the library or a live read, and keep the public rooms free of fud aimed at holders, scams and spam without ever moderating disagreement.",
+  strategy: `Every pass, read what is directed at LAURA first: replies to her posts, mentions, questions in a room she opened. Answer what deserves an answer and nothing else. A like needs no reply. A greeting gets a short one. A question gets a real one, with a number or a source, or an honest "I do not know that" if you cannot source it. Quote the message you are answering so the holder is notified. Never post because the room went quiet; a floor with LAURA saying nothing is fine, a floor with LAURA filling silence is not.
+Speak as LAURA, first person, plain. Keep to what is true today and what you can point at. Do not repeat what you said in an earlier reply, and do not answer the same person twice in one pass. No hyphens or dashes in visible text, no gambling words, "AI" not "A.I".
+As moderator, act only on fud aimed at holders, slurs, spam, scam links, drainer bait and doxxing. Criticism of the protocol, of LAURA, or of a launch is not fud and is never touched, however sharp. When in doubt, leave it. If a removal could look arbitrary, one line as the moderator saying what was removed and why; never an argument. The mute rule (second removal for the same wallet) is enforced in code, you do not need to track it.`,
+  strategyVersion: 1,
+  versionAdoptedAt: null,
+  gradeAtVersionAdoption: null,
+  history: [],
+  status: "idle",
+  lastRunAt: null,
+  lastError: null,
+  stats: { runs: 0, drafts: 0, approved: 0, rejected: 0, published: 0 },
+};
+
 export const DEFAULT_AGENTS: Agent[] = [
+  DESK,
   {
     id: "scout",
     name: "Scout",
@@ -502,6 +528,7 @@ export const DEFAULT_AGENTS: Agent[] = [
 ];
 
 export const AGENT_ORDER: AgentId[] = [
+  "desk",
   "foreman",
   "watcher",
   "scout",
