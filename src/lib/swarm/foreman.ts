@@ -12,7 +12,7 @@ import {
   type PagerJob,
 } from "@/lib/pager/jobs";
 import { visibleCopyProblem } from "@/lib/pager/rail";
-import { describeVerification, verifyJobSubmission, type JobVerification, type VerificationResult } from "@/lib/pager/verify";
+import { describeVerification, parseVerificationFromBrief, verifyJobSubmission, type JobVerification, type VerificationResult } from "@/lib/pager/verify";
 import { generateStructured, type ResolvedModel } from "@/lib/swarm/llm";
 import { agentSystem, foremanMock, foremanPrompt, foremanSchema, type CycleContext } from "@/lib/swarm/tasks";
 import { pushEvent } from "@/lib/store";
@@ -80,6 +80,60 @@ async function boardWrite(fn: "approve" | "reject" | "cancel", jobId: number): P
   return hash;
 }
 
+const BOARD_STATUS: Record<string, PagerJobRecord["status"]> = {
+  Open: "open",
+  Accepted: "accepted",
+  Submitted: "submitted",
+  Paid: "paid",
+  Cancelled: "cancelled",
+  Expired: "expired",
+};
+
+/**
+ * Rebuild the local record of LAURA's jobs from the board.
+ *
+ * The caps and the review loop both read `state.pagerJobs`, and that is a
+ * cache, not the truth: a state write can be lost to a concurrent save, and
+ * when it is, a live escrow silently stops counting against the caps and
+ * becomes unapprovable. The board is the truth, so every run starts by
+ * agreeing with it. The check is recovered from the published brief, which is
+ * the same text the worker was shown and is committed on chain by hash.
+ */
+export function reconcileJobsFromBoard(state: SwarmState, board: PagerJob[], wallet: string): string[] {
+  const notes: string[] = [];
+  const existing = new Map((state.pagerJobs ?? []).map((r) => [r.jobId, r]));
+  for (const job of board) {
+    if (!isMine(job, wallet)) continue;
+    const status = BOARD_STATUS[job.status] ?? "open";
+    const amount = Number(BigInt(job.amount) / 10n ** 18n);
+    const verify = job.details ? (parseVerificationFromBrief(job.details.details) ?? undefined) : undefined;
+    const record = existing.get(job.id);
+    if (!record) {
+      existing.set(job.id, {
+        jobId: job.id,
+        title: job.details?.title ?? `job ${job.id}`,
+        amount,
+        /* Unknown from chain; dated now so a recovered job still occupies its
+           open slot rather than looking like ancient history. */
+        postedAt: Date.now(),
+        deadline: job.deadline,
+        txHash: "",
+        status,
+        verify,
+      });
+      notes.push(`recovered job ${job.id} (${status}, ${amount} STONKBROKER) from the board`);
+      continue;
+    }
+    if (record.status !== status) {
+      record.status = status;
+      notes.push(`job ${job.id} is now ${status}`);
+    }
+    if (!record.verify && verify) record.verify = verify;
+  }
+  state.pagerJobs = [...existing.values()].sort((a, b) => a.jobId - b.jobId);
+  return notes;
+}
+
 export interface ForemanResult {
   posted: number;
   reviewed: number;
@@ -97,6 +151,7 @@ export async function runForeman(
   const notes: string[] = [];
   const wallet = (await pagerHolderSession()).wallet;
   const board = await pagerJobBoard();
+  notes.push(...reconcileJobsFromBoard(state, board, wallet));
 
   const out = await generateStructured(resolved, {
     schema: foremanSchema,
@@ -155,12 +210,13 @@ export async function runForeman(
            cycle, which is the safe side to fail on. */
         if (a.action === "approve") {
           const recorded = (state.pagerJobs ?? []).find((r) => r.jobId === a.jobId);
-          if (!recorded?.verify) {
+          const check = recorded?.verify ?? (job.details ? parseVerificationFromBrief(job.details.details) : null);
+          if (!check) {
             notes.push(`approve refused: job ${a.jobId} has no recorded check, so there is nothing to verify it against`);
             continue;
           }
           const proof = (job as unknown as { proof?: { text?: string; links?: string[] } | null }).proof;
-          const result = await verifyJobSubmission(recorded.verify, proof);
+          const result = await verifyJobSubmission(check, proof);
           if (!result.verified) {
             notes.push(`approve refused on job ${a.jobId}: ${result.reason}`);
             pushEvent(state, {

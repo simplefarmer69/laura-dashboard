@@ -138,6 +138,54 @@ async function verifyUrl(v: Extract<JobVerification, { kind: "url" }>, proof: { 
   }
 }
 
+/**
+ * Read the check back out of a published brief.
+ *
+ * The check is written into the job description at posting time, so the
+ * description is a durable public record of it: on chain by hash, and on the
+ * board in words the worker already read. Local state is only a cache, and it
+ * turned out to be a lossy one, so this inverts `describeVerification` and
+ * lets a job be judged from the board alone.
+ *
+ * It also closes a gap worth closing on purpose. The check that runs is now
+ * the same text the worker was shown, rather than a parallel copy in state
+ * that could quietly drift away from it.
+ */
+export function parseVerificationFromBrief(details: string): JobVerification | null {
+  const terms = (s: string): string[] =>
+    s
+      .split(/\s+and\s+/)
+      .map((t) => t.trim().replace(/[.,]+$/, ""))
+      .filter(Boolean);
+
+  /* Hostnames and numbers both contain dots, so a clause cannot end at the
+     first one: "stonkbrokers.io" parsed as "stonkbrokers" produces a host
+     check that refuses the very post it was meant to accept. Clauses end at a
+     comma or at the end of the sentence, and a trailing full stop is trimmed
+     separately. */
+  const clause = (s: string): string => s.trim().replace(/[.,]+$/, "");
+
+  if (/I check the post through the X API/i.test(details)) {
+    const mention = /it must mention (.+?)(?:, it must link to |, and it must still be public|$)/i.exec(details);
+    if (!mention) return null;
+    const author = /it must be posted by @([A-Za-z0-9_]+)/i.exec(details);
+    const host = /it must link to ([^\s,]+)/i.exec(details);
+    return {
+      kind: "x-post",
+      mustInclude: terms(clause(mention[1])),
+      ...(host ? { mustLinkHost: clause(host[1]) } : {}),
+      ...(author ? { mustBeAuthor: author[1] } : {}),
+    };
+  }
+  if (/I fetch the link logged out/i.test(details)) {
+    const contain = /the page must contain (.+?)$/i.exec(details);
+    if (!contain) return null;
+    const host = /it must be on ([^\s,]+)/i.exec(details);
+    return { kind: "url", mustInclude: terms(clause(contain[1])), ...(host ? { mustBeHost: clause(host[1]) } : {}) };
+  }
+  return null;
+}
+
 export async function verifyJobSubmission(v: JobVerification, proof: { text?: string; links?: string[] } | null | undefined): Promise<VerificationResult> {
   if (!proof) return { verified: false, reason: "nothing has been submitted yet", evidence: {} };
   switch (v.kind) {
