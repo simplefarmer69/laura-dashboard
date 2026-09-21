@@ -340,6 +340,19 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (t) => t.id,
       (t) => t.ts,
     ),
+    /* Pager. Both were silently discarded by this merge for a day because
+       they were not listed here: every rebase rebuilt the state from this
+       allowlist and dropped them, which is what wiped the job records and
+       kept the floor cursor at zero so the same people would be answered
+       again next cycle. The cursor is monotonic, so the larger wins. */
+    pagerJobs: mergeById(
+      base.pagerJobs ?? [],
+      work.pagerJobs ?? [],
+      current.pagerJobs ?? [],
+      (j) => String(j.jobId),
+      (j) => j.postedAt,
+    ),
+    pagerCursor: Math.max(work.pagerCursor ?? 0, current.pagerCursor ?? 0) || undefined,
     treasuryOps: mergeById(
       base.treasuryOps ?? [],
       work.treasuryOps ?? [],
