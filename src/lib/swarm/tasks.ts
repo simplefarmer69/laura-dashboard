@@ -898,8 +898,13 @@ export const foremanSchema = z.object({
         jobId: z.number().int().min(1).max(100_000).nullable(),
         /** 3 to 80 characters. The board refuses anything outside that, after the escrow is committed. */
         title: z.string().max(80).nullable(),
-        /** The brief: 2 to 5 sentences, 900 characters max, executable by a stranger without asking a question. */
-        details: z.string().max(900).nullable(),
+        /**
+         * The brief: 2 to 5 sentences, executable by a stranger without asking
+         * a question. 700 characters, not the board's 900: the verification
+         * sentence is appended in code and counts toward the board's limit.
+         * The first live hire was refused at 984 characters for exactly this.
+         */
+        details: z.string().max(700).nullable(),
         /** Reference links for the worker. */
         links: z.array(z.string().max(300)).max(4).nullable(),
         /** Whole STONKBROKER to escrow. Caps apply and are not negotiable. */
@@ -961,7 +966,7 @@ WHAT IS WORTH BUYING, given that constraint. Work on X that leaves a public arte
 
 WHAT YOU MAY NOT BUY. Sentiment. Do not pay anyone to say the protocol or the token is good, and do not pay for likes, follows, or bare retweets carrying no content of their own. A post is worth buying when it teaches someone something they can check, not when it is enthusiastic. That line is practical as well as principled: a mustInclude term cannot tell a sincere opinion from a purchased one, but it can confirm that a thread actually explains what it claims to. Also refuse anything a script would do better.
 
-WRITE IT SO A STRANGER CAN EXECUTE IT. Two to five sentences, 900 characters maximum, title 3 to 80 characters. Say what the deliverable is, where it should end up, and what you will check before approving. Price it against what comparable jobs on the board actually paid, not against what you would like the work to be worth. Give a real deadline. Visible copy takes no hyphens or dashes, no gambling words, and "AI" rather than "A.I".
+WRITE IT SO A STRANGER CAN EXECUTE IT. Two to five sentences, 700 characters maximum (the check sentence is appended for you and the board caps the total at 900), title 3 to 80 characters. Say what the deliverable is, where it should end up, and what you will check before approving. Price it against what comparable jobs on the board actually paid, not against what you would like the work to be worth. Give a real deadline. Visible copy takes no hyphens or dashes, no gambling words, and "AI" rather than "A.I".
 
 HOLD IS A RESULT. One good job a week beats a job every cycle. If nothing clears the bar, hold and say what you were looking for and did not find.`,
     `AGENT STRATEGY\n${ctx.agents.find((a) => a.id === "foreman")?.strategy ?? ""}`,

@@ -283,7 +283,9 @@ export async function runForeman(
       };
       const copy = visibleCopyProblem(spec.title) ?? visibleCopyProblem(spec.details) ?? jobCopyProblem(spec);
       if (copy) {
-        notes.push(`post refused: ${copy}`);
+        /* Name the job so a refusal in the log says what she wanted to buy,
+           not only which rule stopped her. */
+        notes.push(`post refused ("${spec.title.slice(0, 60)}"): ${copy}`);
         continue;
       }
       const elig = await jobEligibility(state, spec);
