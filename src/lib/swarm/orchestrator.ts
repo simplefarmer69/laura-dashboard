@@ -969,14 +969,22 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
        the half that cannot wait: an unreviewed job pays out on timeout, so a
        skipped cycle costs the relationship rather than saving the money. */
     const foreman = agentById(state, "foreman");
+    /* The stride is measured from Foreman's last REAL look, read back from
+       its own event log rather than from lastRunAt. Every pass records a
+       pager.job event and the fallback ones say so in the title, so a mock
+       hold during an outage cannot push the first real look further away.
+       Events survive the state merge; a hand edit to lastRunAt did not. */
+    const lastRealLook = state.events
+      .filter((e) => e.kind === "pager.job" && e.agentId === "foreman" && !/fallback/i.test(e.title))
+      .reduce((m, e) => Math.max(m, e.ts), 0);
     if (foreman.status === "paused") {
       step({ agentId: "foreman", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
-    } else if (foreman.lastRunAt !== null && Date.now() - foreman.lastRunAt < FOREMAN_STRIDE_MS) {
+    } else if (lastRealLook > 0 && Date.now() - lastRealLook < FOREMAN_STRIDE_MS) {
       step({
         agentId: "foreman",
         label: "Work board",
         status: "skipped",
-        summary: `Stride: last looked ${((Date.now() - foreman.lastRunAt) / 3600_000).toFixed(1)}h ago (< ${FOREMAN_STRIDE_MS / 3600_000}h)`,
+        summary: `Stride: last real look ${((Date.now() - lastRealLook) / 3600_000).toFixed(1)}h ago (< ${FOREMAN_STRIDE_MS / 3600_000}h)`,
         durationMs: 0,
       });
     } else {
