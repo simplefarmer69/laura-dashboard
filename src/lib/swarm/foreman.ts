@@ -273,6 +273,13 @@ export async function runForeman(
          it, so they get to read it before they start rather than discover it
          in a rejection. */
       const stated = describeVerification(verify);
+      /* Enforce the model's share of the sentence budget before appending,
+         so the refusal names the real cause instead of blaming the total. */
+      const ownSentences = a.details.trim().split(/[.!?]+(?:\s|$)/).filter((s) => s.trim().length > 0).length;
+      if (ownSentences > 4) {
+        notes.push(`post refused ("${a.title.slice(0, 60)}"): the brief is ${ownSentences} sentences and the check makes one more; write four at most`);
+        continue;
+      }
       const details = a.details.includes(stated) ? a.details : `${a.details.trim()} ${stated}`;
       const spec = {
         title: a.title,
