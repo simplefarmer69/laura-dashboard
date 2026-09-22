@@ -76,7 +76,13 @@ export interface StructuredCall<T> {
  * sent uncached rather than wasting a breakpoint. The provider ignores these
  * options on OpenAI, so the same call shape works on the failover leg.
  */
-const CACHE_CONTROL = { anthropic: { cacheControl: { type: "ephemeral" as const } } };
+/* One hour, not the default five minutes. This VM suspends for 15 to 45
+   minutes in the middle of most cycles, and a five minute cache died in every
+   one of those gaps: measured over the first day, 3.2M tokens were written
+   against only 3.7M read, so the cache was being rebuilt about as often as it
+   was used. The hour tier writes at 2x base instead of 1.25x, but one write
+   per cycle that survives the suspension beats three that do not. */
+const CACHE_CONTROL = { anthropic: { cacheControl: { type: "ephemeral" as const, ttl: "1h" as const } } };
 const MIN_CACHEABLE_CHARS = 1024 * 3.5;
 const MAX_STABLE_BLOCKS = 3;
 

@@ -60,7 +60,16 @@ const MIN_EVENT_GAP_MS = 20 * 60_000;
  * A round is ~19 LLM calls (one per agent plus the host), so at ~16 min per
  * round this adds roughly one round per two cycles.
  */
-const FORUM_QUIET_MS = 60 * 60_000;
+/**
+ * How long the Cafe Bar must be quiet before a round opens. Was one hour.
+ * Measured over the first live day after the credit outage: 8 rounds at
+ * about 30 calls each against 7 work cycles at about 25, so the agents
+ * talking to each other cost more model calls than the launches, trades,
+ * posts and hires combined, at roughly 26k input tokens a turn. Six hours
+ * keeps the bar alive at four rounds a day for a quarter of the spend.
+ * SWARM_FORUM_QUIET_HOURS overrides it without a release.
+ */
+const FORUM_QUIET_MS = Math.max(1, Number(process.env.SWARM_FORUM_QUIET_HOURS ?? 6)) * 60 * 60_000;
 
 /** Event kinds that justify running a cycle early. Deliberately excludes kinds
  *  emitted inside every cycle (grade.stamped, drafts, …) to avoid self-trigger loops.
@@ -375,7 +384,7 @@ async function tick(): Promise<void> {
          lastCycleAt). Rounds are not counted in the cycle budget; the quiet
          window bounds them to at most one per hour on its own. */
       if (Date.now() - lastForumPostAt(state) > FORUM_QUIET_MS && !isForumRoundRunning()) {
-        log("Cafe Bar quiet for over an hour; opening a forum round before the next cycle");
+        log(`Cafe Bar quiet for over ${FORUM_QUIET_MS / 3600_000}h; opening a forum round before the next cycle`);
         const stopLive = startLivePublishing();
         let round: Awaited<ReturnType<typeof runForumRound>>;
         try {
