@@ -82,18 +82,19 @@ function missingTerms(haystack: string, terms: string[]): string[] {
  * other people's replies never count toward the check. If search is
  * unavailable the root alone is used, which can only be stricter.
  */
-async function threadText(rootId: string, authorId: string, bearer: string, rootText: string): Promise<{ text: string; parts: number }> {
+async function threadText(rootId: string, authorId: string, bearer: string, rootText: string, rootUrls: string[]): Promise<{ text: string; parts: number }> {
   try {
-    const url = `https://api.twitter.com/2/tweets/search/recent?query=conversation_id:${rootId}%20from:${authorId}&tweet.fields=created_at&max_results=100`;
+    const url = `https://api.twitter.com/2/tweets/search/recent?query=conversation_id:${rootId}%20from:${authorId}&tweet.fields=created_at,entities&max_results=100`;
     const res = await fetch(url, { headers: { authorization: `Bearer ${bearer}` }, signal: AbortSignal.timeout(20_000) });
-    if (!res.ok) return { text: rootText, parts: 1 };
-    const body = (await res.json()) as { data?: { text: string }[] };
+    if (!res.ok) return { text: [rootText, ...rootUrls].join("\n"), parts: 1 };
+    const body = (await res.json()) as { data?: { text: string; entities?: { urls?: { expanded_url?: string; unwound_url?: string; display_url?: string }[] } }[] };
     const parts = body.data ?? [];
-    if (!parts.length) return { text: rootText, parts: 1 };
-    const joined = [rootText, ...parts.map((p) => p.text)].join("\n");
+    if (!parts.length) return { text: [rootText, ...rootUrls].join("\n"), parts: 1 };
+    const partUrls = parts.flatMap((p) => (p.entities?.urls ?? []).flatMap((u) => [u.unwound_url, u.expanded_url, u.display_url].filter(Boolean) as string[]));
+    const joined = [rootText, ...rootUrls, ...parts.map((p) => p.text), ...partUrls].join("\n");
     return { text: joined, parts: parts.length };
   } catch {
-    return { text: rootText, parts: 1 };
+    return { text: [rootText, ...rootUrls].join("\n"), parts: 1 };
   }
 }
 
@@ -104,7 +105,7 @@ async function verifyXPost(v: Extract<JobVerification, { kind: "x-post" }>, proo
   if (!bearer) return { verified: false, reason: "cannot check X right now (no bearer token configured), so this stays unapproved", evidence: { tweetId: id } };
 
   let body: {
-    data?: { text?: string; author_id?: string; created_at?: string; public_metrics?: Record<string, number>; entities?: { urls?: { expanded_url?: string; unwound_url?: string }[] } };
+    data?: { text?: string; author_id?: string; created_at?: string; public_metrics?: Record<string, number>; entities?: { urls?: { expanded_url?: string; unwound_url?: string; display_url?: string }[] } };
     includes?: { users?: { id: string; username: string }[] };
     errors?: { title?: string; detail?: string }[];
   };
@@ -130,7 +131,13 @@ async function verifyXPost(v: Extract<JobVerification, { kind: "x-post" }>, proo
   if (v.mustBeAuthor && author.toLowerCase() !== v.mustBeAuthor.toLowerCase()) {
     return { verified: false, reason: `the post is by @${author}, but the job required @${v.mustBeAuthor}`, evidence };
   }
-  const thread = await threadText(id, body.data.author_id ?? "", bearer, text);
+  /* X rewrites every link to t.co in the visible text, so a brief that asks
+     for "stonkbrokers.wtf" is met by a post that links to it, and the check
+     has to read the unwound URLs to see that. Found on job 23, where the
+     worker linked the exact domain asked for and the check said it was
+     missing. */
+  const rootUrls = (body.data.entities?.urls ?? []).flatMap((u) => [u.unwound_url, u.expanded_url, u.display_url].filter(Boolean) as string[]);
+  const thread = await threadText(id, body.data.author_id ?? "", bearer, text, rootUrls);
   const missing = missingTerms(thread.text, v.mustInclude);
   if (missing.length) {
     return {
