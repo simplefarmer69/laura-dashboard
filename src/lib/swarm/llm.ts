@@ -92,13 +92,20 @@ const MAX_STABLE_BLOCKS = 3;
  * quarter more. A cold cycle after a library edit will show writes, and every
  * cycle after it should show reads on the same tokens.
  */
-function logCacheUsage(resolved: ResolvedModel, usage: { inputTokens?: number; inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } } | undefined): void {
+function logCacheUsage(
+  resolved: ResolvedModel,
+  usage: { inputTokens?: number; outputTokens?: number; inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } } | undefined,
+): void {
   const total = usage?.inputTokens ?? 0;
   const read = usage?.inputTokenDetails?.cacheReadTokens ?? 0;
   const write = usage?.inputTokenDetails?.cacheWriteTokens ?? 0;
+  /* Output is billed at roughly five times input and was invisible until
+     now: two credit windows in a row lasted about 30 hours while measured
+     input fell by a third, and this is the number that was missing. */
+  const out = usage?.outputTokens ?? 0;
   if (!total) return;
   const pct = Math.round((read / total) * 100);
-  console.log(`[llm] ${resolved.provider}/${resolved.modelId} input ${total} tok: ${pct}% from cache (read ${read}, wrote ${write})`);
+  console.log(`[llm] ${resolved.provider}/${resolved.modelId} input ${total} tok: ${pct}% from cache (read ${read}, wrote ${write}) · output ${out} tok`);
 }
 
 export function buildPrompt<T>(call: StructuredCall<T>, extraUser?: string): { instructions: SystemModelMessage[]; messages: ModelMessage[] } {
