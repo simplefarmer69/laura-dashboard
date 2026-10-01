@@ -12,6 +12,7 @@ import { runBuilderTick } from "@/lib/builder/executor";
 import { runXPublishTick } from "@/lib/publish/auto";
 import { runXMentionsTick } from "@/lib/publish/mentions";
 import { runXPeopleTick } from "@/lib/publish/x-people";
+import { runRedditOutreachTick } from "@/lib/web/outreach";
 import { runXWatchTick } from "@/lib/publish/x-watch";
 import { runLaunchCommentTick } from "@/lib/publish/launch-comment";
 import { runForgeAnnounceTick, runForgeTick } from "@/lib/forge/executor";
@@ -466,6 +467,8 @@ async function outboundPass(): Promise<void> {
   await step("x mentions", () => runXMentionsTick(state));
   await step("x people", () => runXPeopleTick(state));
   await step("x metrics", () => refreshXPostMetrics());
+  /* Reddit outreach: Ranger's queued replies, one per tick inside the caps. */
+  await step("reddit outreach", () => runRedditOutreachTick(state));
 }
 
 function startOutboundLoop(): void {
@@ -483,7 +486,7 @@ function startOutboundLoop(): void {
   };
   setInterval(() => void run(), TICK_MS);
   setTimeout(() => void run(), 15_000);
-  log("outbound rails online (own minute loop: X publish, mentions, watch, comments, people, metrics, Anvil redraft)");
+  log("outbound rails online (own minute loop: X publish, mentions, watch, comments, people, metrics, Anvil redraft, Reddit outreach)");
 }
 
 export function startScheduler(options: { firstTickDelayMs?: number } = {}): void {

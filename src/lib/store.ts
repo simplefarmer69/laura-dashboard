@@ -19,6 +19,10 @@ const MAX_INTEL = 400;
 const MAX_BRIEFS = 50;
 /** Purser's decision ledger; the eco trade ledger is never trimmed (caps are computed from it). */
 const MAX_TREASURY_OPS = 400;
+/** Ranger's field reports; the prompts read the last few, the archive keeps the rest. */
+const MAX_FIELD_REPORTS = 24;
+/** Reddit outreach ledger: the daily caps look back one day, so this is plenty. */
+const MAX_WEB_OUTREACH = 120;
 
 function freshState(): SwarmState {
   return {
@@ -368,6 +372,23 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (n) => n.id,
       (n) => n.ts,
     ),
+    /* Fieldwork: Ranger's reports are written inside the cycle, the outreach
+       rail writes from the scheduler's minute loop beside it. Both must be
+       listed here or the next rebase drops them (the Pager lesson above). */
+    fieldReports: mergeById(
+      base.fieldReports ?? [],
+      work.fieldReports ?? [],
+      current.fieldReports ?? [],
+      (r) => r.id,
+      (r) => r.ts,
+    ),
+    webOutreach: mergeById(
+      base.webOutreach ?? [],
+      work.webOutreach ?? [],
+      current.webOutreach ?? [],
+      (o) => o.id,
+      (o) => o.ts,
+    ),
     lastTuneDate: pick3(base.lastTuneDate, work.lastTuneDate, current.lastTuneDate),
   };
   return merged;
@@ -428,6 +449,8 @@ export async function saveState(state: SwarmState): Promise<void> {
     toWrite.events = toWrite.events.slice(-MAX_EVENTS);
     toWrite.lessons = toWrite.lessons.slice(-MAX_LESSONS);
     if (toWrite.treasuryOps) toWrite.treasuryOps = toWrite.treasuryOps.slice(-MAX_TREASURY_OPS);
+    if (toWrite.fieldReports) toWrite.fieldReports = toWrite.fieldReports.slice(-MAX_FIELD_REPORTS);
+    if (toWrite.webOutreach) toWrite.webOutreach = toWrite.webOutreach.slice(-MAX_WEB_OUTREACH);
     await fs.mkdir(DATA_DIR, { recursive: true });
     const json = JSON.stringify(toWrite, null, 2);
     const tmp = `${STATE_FILE}.${randomUUID()}.tmp`;

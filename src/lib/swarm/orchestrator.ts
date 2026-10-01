@@ -88,6 +88,7 @@ import { marketAlphaLinesLive, mergeAlpha } from "@/lib/swarm/market-alpha";
 import { runXVoiceStudy } from "@/lib/swarm/x-voice";
 import { runDesk } from "@/lib/swarm/desk";
 import { runForeman } from "@/lib/swarm/foreman";
+import { fieldworkDigest, runRanger } from "@/lib/web/ranger";
 import { runTreasurer } from "@/lib/swarm/treasurer";
 import { tokenTapeDigest } from "@/lib/swarm/token-tape";
 import { stripLaunchSignoffs } from "@/lib/launchpad/copy";
@@ -151,6 +152,8 @@ const TREASURER_STRIDE_MS = VAULT_STRIDE_MS;
  * talk itself into yes.
  */
 const FOREMAN_STRIDE_MS = 6 * 3600_000;
+/** Ranger's tool loop is the longest single call in the cycle (up to six minutes); eight passes a day is plenty. */
+const RANGER_STRIDE_MS = 3 * 3600_000;
 const SAGE_STRIDE_MS = 2.5 * 60 * 60_000;
 const BUILDER_STRIDE_MS = 4 * 60 * 60_000;
 /** Anvil designs at most one contract about every six hours (FORGE_CAPS allow 2 deploys a day). */
@@ -446,6 +449,12 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     } catch (err) {
       step({ agentId: "system", label: "Browser worker", status: "error", summary: String(err), durationMs: 0 });
     }
+
+    /* 1c2c. Ranger's field notes: what the open web, Reddit and the forums
+       said on the last passes. Persisted, so this cycle's producers read the
+       previous pass even though Ranger itself runs later in the cycle. */
+    const fieldNotes = fieldworkDigest(state.fieldReports);
+    if (fieldNotes) worldText = `${worldText}\n\n${fieldNotes}`;
 
     /* 1c3. The Cafe Bar: fold the swarm's own forum into world context so
        token ideation can pick up themes the agents are already debating. */
@@ -1011,6 +1020,48 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         foreman.lastError = String(err);
         step({ agentId: "foreman", label: "Work board", status: "error", summary: String(err), durationMs: Date.now() - t0 });
         pushEvent(state, { kind: "error", agentId: "foreman", title: "Foreman failed", detail: String(err), refId: run.id });
+      }
+      await saveState(state);
+    }
+
+    /* 3a3. Ranger: field research on the open web, Reddit and forums with a
+       bounded tool loop. Strided, measured from its own fieldwork events the
+       same way Foreman's is: a held pass (no model, nothing found, cut short
+       before a finding) does not start the clock. */
+    const ranger = agentById(state, "ranger");
+    const lastFieldPass = state.events
+      .filter((e) => e.kind === "web.fieldwork" && e.agentId === "ranger" && !/held|cut short/i.test(e.title))
+      .reduce((m, e) => Math.max(m, e.ts), 0);
+    if (ranger.status === "paused") {
+      step({ agentId: "ranger", label: "Paused", status: "skipped", summary: "Agent paused by operator", durationMs: 0 });
+    } else if (lastFieldPass > 0 && Date.now() - lastFieldPass < RANGER_STRIDE_MS) {
+      step({
+        agentId: "ranger",
+        label: "Fieldwork",
+        status: "skipped",
+        summary: `Stride: last field pass ${((Date.now() - lastFieldPass) / 3600_000).toFixed(1)}h ago (< ${RANGER_STRIDE_MS / 3600_000}h)`,
+        durationMs: 0,
+      });
+    } else {
+      const t0 = Date.now();
+      try {
+        ranger.status = "running";
+        const res = tally(await runRanger(state, ranger, resolved, ctx, run.id));
+        if (!res.usedMock) markRan(ranger);
+        step({
+          agentId: "ranger",
+          label: "Fieldwork",
+          status: res.held ? "skipped" : "ok",
+          summary: res.held
+            ? `Held: ${res.notes.join(" · ").slice(0, 200) || "nothing found"}`
+            : `${res.report?.findings.length ?? 0} finding(s) from ${res.report?.sources.length ?? 0} source(s), ${res.report?.toolCalls ?? 0} tool call(s)${res.queued ? `, ${res.queued} Reddit reply(ies) queued` : ""} · ${res.report?.brief.slice(0, 100) ?? ""}`,
+          durationMs: Date.now() - t0,
+        });
+      } catch (err) {
+        ranger.status = "error";
+        ranger.lastError = String(err);
+        step({ agentId: "ranger", label: "Fieldwork", status: "error", summary: String(err), durationMs: Date.now() - t0 });
+        pushEvent(state, { kind: "error", agentId: "ranger", title: "Ranger failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
     }

@@ -18,7 +18,7 @@ import type { Agent, ForumPost, ForumThread, ForumTopicTag, SwarmState } from "@
    its six hour stride never elapsed: the board went unlooked at for a whole
    day while the step logged "last looked 0.1h ago" on a timestamp the bar had
    written. Same bug that once pushed Purser's stride to 7 to 11 hours. */
-const STRIDE_GATED = new Set(["vault", "treasurer", "tokenintel", "builder", "smith", "trainer", "architect", "janitor", "sage", "foreman"]);
+const STRIDE_GATED = new Set(["vault", "treasurer", "tokenintel", "builder", "smith", "trainer", "architect", "janitor", "sage", "foreman", "ranger"]);
 
 /**
  * The Cafe Bar, the swarm's open forum. Agents drop in sequentially each

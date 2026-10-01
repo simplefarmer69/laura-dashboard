@@ -355,7 +355,9 @@ export type KnownAgentId =
   /** Foreman: hires people on the Pager Work board and reviews what they hand back. */
   | "foreman"
   /** Desk: LAURA on the Pager floor, answering holders as herself and moderating as the moderator. */
-  | "desk";
+  | "desk"
+  /** Ranger: field research on the open web, Reddit and forums with a tool loop; files field reports and queues outreach. */
+  | "ranger";
 
 /**
  * Agents the Architect creates at runtime carry a `dyn_` id. They live only
@@ -726,6 +728,10 @@ export type SwarmEventKind =
   | "forge.failed"
   /** Sweep's hygiene pass: what was compacted, which loops were found, notices issued. */
   | "hygiene.swept"
+  /** Ranger's field pass: what it searched and read on the open web, Reddit and forums, and what it found. */
+  | "web.fieldwork"
+  /** A Reddit comment or post LAURA queued, posted, held or was refused (outreach rail). */
+  | "web.outreach"
   | "swarm.health"
   | "error";
 
@@ -1293,8 +1299,66 @@ export interface SwarmState {
   pagerJobs?: PagerJobRecord[];
   /** Sweep's open notices to agents that are repeating themselves (expire on their own). */
   hygieneNotices?: HygieneNotice[];
+  /** Ranger's field reports from the open web, Reddit and forums, newest last (capped). */
+  fieldReports?: FieldReport[];
+  /** Reddit comments and posts on the outreach rail (queued, posted, held, refused). Caps count the posted ones. */
+  webOutreach?: WebOutreach[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
+}
+
+/* ------------------------------- Fieldwork -------------------------------- */
+
+export type FieldFindingKind = "signal" | "question" | "competitor" | "opportunity" | "risk" | "lead";
+
+export interface FieldFinding {
+  kind: FieldFindingKind;
+  text: string;
+  /** Where it was read (url). */
+  source: string;
+}
+
+/**
+ * One Ranger pass: the question it set out with, where it looked, what it
+ * found. Reports are the swarm's memory of the outside conversation, so the
+ * next pass can go somewhere new and the producers can cite a real thread.
+ */
+export interface FieldReport {
+  id: string;
+  ts: number;
+  runId: string | null;
+  brief: string;
+  summary: string;
+  findings: FieldFinding[];
+  /** Every url read and search run, for attribution and for not repeating. */
+  sources: string[];
+  toolCalls: number;
+}
+
+export type WebOutreachStatus = "queued" | "posted" | "held" | "refused";
+
+/**
+ * A Reddit comment or self post on the outreach rail. Written by Ranger
+ * from a thread it actually read; published by the scheduler's minute loop
+ * under the caps in web/outreach.ts, with the disclosure footer appended.
+ */
+export interface WebOutreach {
+  id: string;
+  ts: number;
+  channel: "reddit";
+  by: AgentId;
+  subreddit: string;
+  /** Comments: the parent fullname (t3_ or t1_). Self posts: null. */
+  parentFullname: string | null;
+  /** Thread permalink the comment belongs to (dedupe key), or the subreddit for a post. */
+  thread: string;
+  title: string | null;
+  text: string;
+  why: string;
+  status: WebOutreachStatus;
+  note: string | null;
+  postedAt: number | null;
+  url: string | null;
 }
 
 /* ------------------------------- The Cafe Bar ------------------------------ */
