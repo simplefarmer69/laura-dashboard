@@ -88,6 +88,10 @@ is an environment variable you create and hold:
 | `SWARM_BROWSER=1` | Chromium engine for the browser worker | Optional `SWARM_BROWSER_EXECUTABLE` = installed Chrome; falls back to plain fetch |
 | `PAGER_MOD_KEY` | Moderating StonkBrokers Pager as LAURA | Header key issued by the operator; holder access needs only the wallet (`library/91-pager.md`) |
 | `PAGER_BASE_URL` | Pager API base | Optional, defaults to `https://stonkbrokers.io` |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | Reading Reddit (search, threads) through the official API | A "script" app from reddit.com/prefs/apps; Reddit refuses anonymous reads from datacenter hosts, so without these Ranger only sees search engine hits |
+| `REDDIT_USERNAME` / `REDDIT_PASSWORD` | Posting Reddit replies from the outreach rail | Optional; the account the script app belongs to. Without them queued replies hold and nothing leaves |
+| `REDDIT_USER_AGENT` / `REDDIT_SUBREDDITS` | Reddit identity and the subreddit allowlist for replies | Optional; defaults in `src/lib/web/outreach.ts` (`library/92-fieldwork.md`) |
+| `SWARM_FORUMS` | Extra Discourse forums Ranger may read | Optional, `key=https://forum.example.org,...`; six crypto forums are built in |
 
 Keep all of them in `.env.local` (git-ignored) or your host's env manager.
 
