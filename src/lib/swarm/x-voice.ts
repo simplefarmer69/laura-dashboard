@@ -167,6 +167,10 @@ export interface XVoiceStudyResult {
   status: "ok" | "skipped" | "error";
   summary: string;
   durationMs: number;
+  /** Whether the model was actually asked. False on the pre-call exits (missing
+      skill, thin sample, X API failure) so the cycle's budget telemetry does not
+      count a study that never spent anything. */
+  called: boolean;
   usedMock: boolean;
   repaired: boolean;
 }
@@ -188,15 +192,17 @@ export async function runXVoiceStudy(input: {
   if (last !== null && now - last < X_VOICE_STRIDE_MS) return null;
   if (now - mem().lastErrorAt < ERROR_BACKOFF_MS) return null;
   const t0 = now;
+  let called = false;
   try {
     const current = (await loadSkills()).find((s) => s.name === X_VOICE_SKILL);
     if (!current) {
-      return { status: "skipped", summary: `skill "${X_VOICE_SKILL}" not found in the library`, durationMs: 0, usedMock: false, repaired: false };
+      return { status: "skipped", summary: `skill "${X_VOICE_SKILL}" not found in the library`, durationMs: 0, called: false, usedMock: false, repaired: false };
     }
     const [sample, own] = await Promise.all([fetchReferenceSample(), recentXPosts(15)]);
     if (sample.tweets.length < 10) {
-      return { status: "skipped", summary: `reference sample too small (${sample.tweets.length} posts)`, durationMs: Date.now() - t0, usedMock: false, repaired: false };
+      return { status: "skipped", summary: `reference sample too small (${sample.tweets.length} posts)`, durationMs: Date.now() - t0, called: false, usedMock: false, repaired: false };
     }
+    called = true;
     const out = await generateStructured(input.resolved, {
       schema: xVoiceSchema,
       system: agentSystem(input.coach),
@@ -209,6 +215,7 @@ export async function runXVoiceStudy(input: {
         status: "skipped",
         summary: input.resolved.model ? "the model returned no valid rewrite; the skill keeps its previous version" : "no model configured; the skill keeps its previous version",
         durationMs: Date.now() - t0,
+        called: true,
         usedMock: true,
         repaired: out.repaired,
       };
@@ -224,7 +231,7 @@ export async function runXVoiceStudy(input: {
         detail: `${problem}. Previous skill stands. Findings: ${out.value.findings.join(" ")}`.slice(0, 1500),
         refId: input.runId,
       });
-      return { status: "error", summary: `rewrite rejected: ${problem}`, durationMs: Date.now() - t0, usedMock: false, repaired: out.repaired };
+      return { status: "error", summary: `rewrite rejected: ${problem}`, durationMs: Date.now() - t0, called: true, usedMock: false, repaired: out.repaired };
     }
     const res = await writeSkill({ name: X_VOICE_SKILL, description: current.description, agents: current.agents, body });
     pushEvent(input.state, {
@@ -238,11 +245,12 @@ export async function runXVoiceStudy(input: {
       status: "ok",
       summary: `${X_VOICE_SKILL} rewritten (${body.length} chars): ${out.value.changes.slice(0, 160)}`,
       durationMs: Date.now() - t0,
+      called: true,
       usedMock: false,
       repaired: out.repaired,
     };
   } catch (err) {
     mem().lastErrorAt = Date.now();
-    return { status: "error", summary: String(err), durationMs: Date.now() - t0, usedMock: false, repaired: false };
+    return { status: "error", summary: String(err), durationMs: Date.now() - t0, called, usedMock: false, repaired: false };
   }
 }

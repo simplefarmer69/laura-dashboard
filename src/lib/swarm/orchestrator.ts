@@ -1699,7 +1699,9 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
     if (coach.status !== "paused") {
       const voice = await runXVoiceStudy({ state, resolved, coach, today: ctx.grade.date, runId: run.id });
       if (voice) {
-        tally({ usedMock: voice.usedMock, repaired: voice.repaired });
+        /* Pre-call exits (X API failure, thin sample) spent no model budget;
+           counting them as live calls was marking fallback cycles as budgeted. */
+        if (voice.called) tally({ usedMock: voice.usedMock, repaired: voice.repaired });
         step({ agentId: "coach", label: "X voice study", status: voice.status, summary: voice.summary, durationMs: voice.durationMs });
         await saveState(state);
       }
