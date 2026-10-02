@@ -142,8 +142,11 @@ export interface SubmitOutcome {
   errors: string[];
 }
 
+/** What the verifiers need: Anvil's projects and the direct launch tax tokens both fit. */
+export type VerifiableContract = Pick<ForgeProject, "contractAddress" | "source" | "contractName" | "txHash">;
+
 /** Submits the source to both verifiers; either acceptance is enough. Never throws. */
-export async function submitVerification(project: ForgeProject): Promise<SubmitOutcome> {
+export async function submitVerification(project: VerifiableContract): Promise<SubmitOutcome> {
   const address = project.contractAddress;
   if (!address) return { submitted: [], errors: ["no contract address"] };
   const submitted: SubmitOutcome["submitted"] = [];
