@@ -135,6 +135,22 @@ Keep all of them in `.env.local` (git-ignored) or your host's env manager.
   per deploy, the wallet never deploys below a 0.05 ETH floor, one deploy per
   tick, 15 minute backoff after failure, live re-validation at deploy time. Approved specs sit in an autonomous queue; the console shows each
   one's projected deploy time instead of an approval prompt.
+- **Direct rail** (`src/lib/direct-launch/`) - launches outside the
+  Stonklauncher, designed by Mint about every four hours. Two venues: a
+  **direct** launch deploys LAURA's own `LauraTaxToken` (fixed, code owned
+  Solidity: a buy tax on the token's own vDEX pool that decays by the minute,
+  split between claimable holder rewards, a burn and the treasury; a
+  "diamond" mode forfeits a seller's unclaimed rewards to everyone else;
+  `claimFor(list)` lets anyone push the rewards out, which is the airdrop),
+  opens the pool at the designed market cap, seeds the whole supply as a
+  single sided concentrated liquidity position, burns the admin key and
+  submits the source for verification; a **pons** launch creates a Pons V2
+  bonding curve with the creator tax paid to LAURA's wallet and an optional
+  small opening buy. Sells are never taxed (concentrated liquidity pools
+  reject tokens that tax inbound transfers). `DIRECT_LAUNCH_CAPS`: 2 a day,
+  7 a week, 4 h apart, 0.004 ETH all in per launch, 0.002 ETH opening buy
+  ceiling, gas ceiling, treasury floor. See
+  [`library/86-direct-launch.md`](library/86-direct-launch.md).
 - **Builder agent** (`src/lib/builder/`) - proposes and ships small on-chain
   utilities from audited templates, inside its own spend caps.
 - **Anvil, the contract smith** (`src/lib/forge/`) - writes small standalone
