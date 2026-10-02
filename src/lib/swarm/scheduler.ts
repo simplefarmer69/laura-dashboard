@@ -5,6 +5,7 @@ import { hasPendingApprovals, sweepPendingApprovals } from "@/lib/swarm/autonomy
 import { isCycleRunning, runCycle, runGrader } from "@/lib/swarm/orchestrator";
 import { forumRoundStartedAt, isForumRoundRunning, lastForumPostAt, runForumRound } from "@/lib/swarm/forum";
 import { runLaunchExecutor } from "@/lib/launchpad/executor";
+import { directLaunchWork, runDirectLaunchExecutor } from "@/lib/direct-launch/executor";
 import { runEarningsMaintenance } from "@/lib/launchpad/earnings";
 import { runTreasuryTick } from "@/lib/launchpad/treasury";
 import { runSmartLpTick } from "@/lib/launchpad/smart-lp";
@@ -297,6 +298,11 @@ async function tick(): Promise<void> {
   );
   if (state.settings.autoExecuteLaunches && launchWork) {
     await runLaunchExecutor();
+  }
+  /* Direct rail (own tax tokens on the vDEX, Pons launches): same autonomy
+     flag, its own caps and queue; one launch per tick at most. */
+  if (state.settings.autoExecuteLaunches && directLaunchWork(state)) {
+    await runDirectLaunchExecutor();
   }
 
   /* The wallet-touching ticks below run under a chain-work mark so

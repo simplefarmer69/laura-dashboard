@@ -71,6 +71,11 @@ import {
 import { launcherGrid } from "@/lib/launchpad/service";
 import { launchCapacityDigest } from "@/lib/launchpad/treasury";
 import { isDuplicateLaunch, reservedLaunchNameHit } from "@/lib/launchpad/spec";
+import { DIRECT_LAUNCH_CAPS, directCapacityDigest, queuedDirectLaunches } from "@/lib/direct-launch/caps";
+import { directLaunchMock, directLaunchPrompt, directLaunchSchema, directLaunchesDigest, directSpecProblem, isDuplicateAcrossRails } from "@/lib/direct-launch/spec";
+import { enqueueDirectLaunch } from "@/lib/direct-launch/executor";
+import { ethUsdNow } from "@/lib/direct-launch/onchain";
+import { ponsStatus } from "@/lib/direct-launch/pons";
 import { ensureLaunchArt } from "@/lib/launchpad/art";
 import { libraryDigest, libraryDocText, libraryFileIndex, writeLibraryDoc } from "@/lib/swarm/library";
 import { AUTO_APPROVE_NOTE } from "@/lib/swarm/autonomy";
@@ -163,6 +168,19 @@ const FORGE_STRIDE_MS = 6 * 60 * 60_000;
 const TRAINER_STRIDE_MS = 1.5 * 60 * 60_000;
 /** Ticker designs a market-tape launch at most this often (Mint keeps the per-cycle pace). */
 const TICKER_LAUNCH_STRIDE_MS = 3 * 60 * 60_000;
+/** Mint's turn on the direct rail (own tax tokens on the vDEX, Pons launches) comes at most this often. */
+const DIRECT_LAUNCH_STRIDE_MS = 4 * 60 * 60_000;
+
+declare global {
+  var __lauraDirectDesignAttemptAt: number | undefined;
+}
+/** Last time Mint was asked for a direct rail design (skips included), so a skip does not repeat every cycle. */
+function lastDirectDesignAttemptAt(): number {
+  return globalThis.__lauraDirectDesignAttemptAt ?? 0;
+}
+function markDirectDesignAttempt(): void {
+  globalThis.__lauraDirectDesignAttemptAt = Date.now();
+}
 
 /* On globalThis, not module scope: under dev HMR every compile gets its own
    module copy, and two copies (e.g. the scheduler loop and a manual /api/cycle
@@ -1280,6 +1298,87 @@ async function executeCycle(trigger: CycleRun["trigger"]): Promise<CycleRun> {
         pushEvent(state, { kind: "error", agentId: "mint", title: "Mint failed", detail: String(err), refId: run.id });
       }
       await saveState(state);
+    }
+
+    /* 4b. Mint: the direct rail (operator directive 2026-10-02). Every few
+       hours Mint also designs ONE launch outside the Stonklauncher: LAURA's
+       own tax token seeded single sided on the vDEX, or a Pons V2 curve. Its
+       own caps and queue; the pad gate above does not apply. The stride is
+       measured from the last attempt (in memory) and the last design (event),
+       so a skip does not cost a model call every cycle. */
+    if (mint.status !== "paused") {
+      const lastDesign = state.events.filter((e) => e.kind === "direct.proposed").reduce((m, e) => Math.max(m, e.ts), 0);
+      const sinceLast = Date.now() - Math.max(lastDesign, lastDirectDesignAttemptAt());
+      const queued = queuedDirectLaunches(state);
+      if (sinceLast < DIRECT_LAUNCH_STRIDE_MS) {
+        step({ agentId: "mint", label: "Direct launch", status: "skipped", summary: `Strided: next direct rail design in ~${Math.ceil((DIRECT_LAUNCH_STRIDE_MS - sinceLast) / 60_000)} min`, durationMs: 0 });
+      } else if (queued.length >= DIRECT_LAUNCH_CAPS.maxQueued) {
+        step({ agentId: "mint", label: "Direct launch", status: "skipped", summary: `${queued.length} direct spec(s) already queued (limit ${DIRECT_LAUNCH_CAPS.maxQueued})`, durationMs: 0 });
+      } else {
+        markDirectDesignAttempt();
+        try {
+          const [pons, ethUsd] = await Promise.all([
+            ponsStatus().catch((err) => ({ open: false, reason: `Pons read failed: ${String(err).slice(0, 120)}`, launchFeeEth: 0, maxCreatorTaxBps: 0 })),
+            ethUsdNow().catch(() => null),
+          ]);
+          const out = await timed(async () =>
+            tally(
+              await generateStructured(resolved, {
+                schema: directLaunchSchema,
+                system: agentSystem(mint),
+                prompt: directLaunchPrompt({
+                  ctx: cachedContext(ctx, "mint").ctx,
+                  spoken: directLaunchesDigest(state.directLaunches ?? []),
+                  padSpoken: spokenLaunchesDigest(state.launches),
+                  capacity: directCapacityDigest(state),
+                  ponsOpen: pons.open,
+                  ponsReason: pons.reason,
+                  ethUsd,
+                }),
+                stable: cachedContext(ctx, "mint").stable,
+                mock: () => directLaunchMock(ctx, null),
+              }),
+            ),
+          );
+          let spec = out.value.value.launch ? stripLaunchSignoffs(out.value.value.launch) : null;
+          let skipReason = out.value.value.skipReason ?? "No direct launch this turn";
+          if (spec) {
+            const problem = directSpecProblem(spec);
+            if (problem) {
+              skipReason = `Dropped ${spec.name} ($${spec.symbol}): ${problem}`;
+              spec = null;
+            }
+          }
+          if (spec && spec.venue === "pons" && !pons.open) {
+            skipReason = `Dropped ${spec.name} ($${spec.symbol}): Pons is closed (${pons.reason})`;
+            spec = null;
+          }
+          if (spec && isDuplicateAcrossRails(state.launches, state.directLaunches ?? [], spec.name, spec.symbol)) {
+            skipReason = `Dropped duplicate concept: ${spec.name} ($${spec.symbol}) already exists on a rail`;
+            spec = null;
+          }
+          if (spec && reservedLaunchNameHit(spec.name, spec.symbol)) {
+            skipReason = `Dropped reserved name: ${spec.name} ($${spec.symbol})`;
+            spec = null;
+          }
+          if (spec) {
+            await enqueueDirectLaunch(state, run, spec, mint);
+            step({
+              agentId: "mint",
+              label: "Direct launch",
+              status: "ok",
+              summary: `${spec.venue === "direct" ? "Direct" : "Pons"}: ${spec.name} ($${spec.symbol})${spec.venue === "direct" ? ` tax ${spec.startTaxBps}->${spec.floorTaxBps} bps, holders ${spec.holderShareBps / 100}% (${spec.rewardMode})` : ` creator tax ${spec.creatorTaxBps / 100}%`}${out.value.usedMock ? " (fallback)" : ""}`,
+              durationMs: out.ms,
+            });
+          } else {
+            step({ agentId: "mint", label: "Direct launch", status: "skipped", summary: skipReason, durationMs: out.ms });
+          }
+        } catch (err) {
+          step({ agentId: "mint", label: "Direct launch", status: "error", summary: String(err), durationMs: 0 });
+          pushEvent(state, { kind: "error", agentId: "mint", title: "Direct launch design failed", detail: String(err), refId: run.id });
+        }
+        await saveState(state);
+      }
     }
 
     /* 4a. Ticker: market-tape launches (operator directive 2026-09-13). On a

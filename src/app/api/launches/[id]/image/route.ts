@@ -3,20 +3,24 @@ import { isViewerMode } from "@/lib/viewer/mode";
 import { readSnapshot } from "@/lib/viewer/store";
 import { loadState } from "@/lib/store";
 import { ensureLaunchArt, generateTokenArt } from "@/lib/launchpad/art";
-import type { LaunchProposal } from "@/lib/types";
+import type { DirectLaunch, LaunchProposal } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-async function findLaunch(id: string): Promise<LaunchProposal | null> {
+/** What the art needs; pad launches and direct rail launches both carry it. */
+type ArtSource = Pick<LaunchProposal, "id" | "name" | "symbol" | "artMotif" | "artPalette" | "artStyle" | "imageQuery">;
+
+async function findLaunch(id: string): Promise<ArtSource | null> {
   /* Public viewer: read the launch from the published snapshot; the art is
      deterministic from the spec, so it regenerates in memory (no data dir). */
   if (isViewerMode()) {
     const snapshot = await readSnapshot();
     const launches = (snapshot?.launches ?? []) as LaunchProposal[];
-    return launches.find((l) => l.id === id) ?? null;
+    const direct = ((snapshot as { directLaunches?: DirectLaunch[] } | null)?.directLaunches ?? []) as DirectLaunch[];
+    return launches.find((l) => l.id === id) ?? direct.find((l) => l.id === id) ?? null;
   }
   const state = await loadState();
-  return state.launches.find((l) => l.id === id) ?? null;
+  return state.launches.find((l) => l.id === id) ?? (state.directLaunches ?? []).find((l) => l.id === id) ?? null;
 }
 
 /** Serves a launch's procedurally generated token logo (256px WebP). */

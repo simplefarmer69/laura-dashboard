@@ -46,7 +46,7 @@ const SETTINGS_KEYS: (keyof Settings)[] = [
 
 /** Optional state sections (newer work streams); all public-safe by content:
     X-read intel snapshots and on-chain treasury buys (tx hashes are public). */
-const OPTIONAL_STATE_KEYS = ["treasuryBuys", "intel", "influence", "utilityProjects", "forgeProjects"] as const;
+const OPTIONAL_STATE_KEYS = ["treasuryBuys", "intel", "influence", "utilityProjects", "forgeProjects", "directLaunches"] as const;
 
 /**
  * Size budget. The viewer runs on Vercel, whose functions cap request AND

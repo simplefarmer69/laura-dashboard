@@ -23,6 +23,7 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "brief.created":
     case "draft.created":
     case "launch.proposed":
+    case "direct.proposed":
     case "utility.proposed":
     case "onchain.observed":
     case "intel.catalyst":
@@ -88,6 +89,9 @@ function groupOf(kind: SwarmEventKind): Exclude<Group, "all"> {
     case "launch.armed":
     case "launch.verified":
     case "launch.failed":
+    case "direct.deployed":
+    case "direct.verified":
+    case "direct.failed":
     case "utility.approved":
     case "utility.rejected":
     case "utility.acquired":
@@ -146,6 +150,8 @@ export function kindTone(kind: SwarmEventKind): string {
     case "launch.armed":
     case "launch.verified":
     case "launch.commented":
+    case "direct.deployed":
+    case "direct.verified":
     case "utility.approved":
     case "utility.shipped":
     case "forge.deployed":
@@ -155,6 +161,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "proposal.rejected":
     case "launch.rejected":
     case "launch.failed":
+    case "direct.failed":
     case "utility.rejected":
     case "utility.failed":
     case "forge.failed":
@@ -175,6 +182,7 @@ export function kindTone(kind: SwarmEventKind): string {
     case "web.outreach":
     case "proposal.created":
     case "launch.proposed":
+    case "direct.proposed":
     case "utility.proposed":
     case "forge.proposed":
     case "x.watched":

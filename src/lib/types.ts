@@ -732,6 +732,13 @@ export type SwarmEventKind =
   | "web.fieldwork"
   /** A Reddit comment or post LAURA queued, posted, held or was refused (outreach rail). */
   | "web.outreach"
+  /** Mint designed a launch outside the Stonklauncher (own tax token on a vDEX pool, or Pons). */
+  | "direct.proposed"
+  /** The direct launch is live: token deployed and pool seeded, or the Pons curve open. */
+  | "direct.deployed"
+  /** The explorer accepted the tax token source. */
+  | "direct.verified"
+  | "direct.failed"
   | "swarm.health"
   | "error";
 
@@ -1303,8 +1310,82 @@ export interface SwarmState {
   fieldReports?: FieldReport[];
   /** Reddit comments and posts on the outreach rail (queued, posted, held, refused). Caps count the posted ones. */
   webOutreach?: WebOutreach[];
+  /** Launches outside the Stonklauncher: LAURA's own tax tokens seeded straight into a vDEX pool, and Pons launches (DIRECT_LAUNCH_CAPS computed from this). */
+  directLaunches?: DirectLaunch[];
   /** UTC date the auto-tuner last ran (it runs at most once per day). */
   lastTuneDate: string | null;
+}
+
+/* ----------------------------- Direct launches ----------------------------- */
+
+/** direct: LAURA's own tax token plus a single sided vDEX pool. pons: a Pons V2 bonding curve launch. */
+export type DirectVenue = "direct" | "pons";
+
+/** dividend keeps a holder's unclaimed rewards across transfers; diamond forfeits them to everyone else when the holder sends or sells. */
+export type DirectRewardMode = "dividend" | "diamond";
+
+/**
+ * A launch that does not go through the Stonklauncher pads. Designed by Mint
+ * on a stride, deployed by the direct launch executor within
+ * DIRECT_LAUNCH_CAPS. Both venues share the record; the venue decides which
+ * fields the executor reads.
+ */
+export interface DirectLaunch {
+  id: string;
+  cycleId: string;
+  createdAt: number;
+  venue: DirectVenue;
+  name: string;
+  symbol: string;
+  /** Whole tokens. Direct venue only: Pons fixes its supply in the launch config. */
+  supplyTokens: number;
+  /** Direct venue: the pool opens at this market cap and the token only range runs up to rangeTopMcapUsd. */
+  startMcapUsd: number;
+  rangeTopMcapUsd: number;
+  /** Direct venue tax: buy tax in bps decaying by decayBpsPerMinute a minute from start to floor after the pool is marked. */
+  startTaxBps: number;
+  floorTaxBps: number;
+  decayBpsPerMinute: number;
+  /** Direct venue tax split: holders and burn in bps of the tax; the remainder goes to LAURA's wallet. */
+  holderShareBps: number;
+  burnShareBps: number;
+  rewardMode: DirectRewardMode;
+  /** Pons venue: creator tax in bps (factory ceiling 1000), paid to LAURA's wallet on every curve trade. */
+  creatorTaxBps: number;
+  /** Pons venue: opening buy in ETH right after the launch (capped in code; 0 for none). */
+  devBuyEth: number;
+  /** Pons venue: opt into the protocol's buyback and lock for this launch. */
+  buybackEnabled: boolean;
+  concept: string;
+  rationale: string;
+  /** The one statement this launch makes, written for the people who will see it appear. */
+  message: string;
+  artMotif: string | null;
+  artPalette: string | null;
+  artStyle: string | null;
+  imageQuery: string | null;
+  status: LaunchStatus;
+  reviewedAt: number | null;
+  reviewerNote: string | null;
+  priority?: number;
+  /** Populated as the deploy progresses */
+  txHash: string | null;
+  tokenAddress: string | null;
+  /** Direct: the vDEX CL pool. Pons: the bonding curve. */
+  poolAddress: string | null;
+  /** Direct: the position NFT id LAURA holds (no exit path in code). */
+  lpTokenId: string | null;
+  /** Pons: the opening buy transaction, when one was made */
+  devBuyTxHash: string | null;
+  deployedAt: number | null;
+  /** Direct: explorer accepted the token source */
+  verifiedAt: number | null;
+  verifyAttempts: number;
+  /** ETH spent on the launch (gas, fee, opening buy) */
+  costEth: number | null;
+  /** Public page for the token: Pons launchpad page or the explorer token page */
+  pageUrl: string | null;
+  error: string | null;
 }
 
 /* ------------------------------- Fieldwork -------------------------------- */

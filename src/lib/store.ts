@@ -389,6 +389,14 @@ function mergeStates(base: SwarmState, work: SwarmState, current: SwarmState): S
       (o) => o.id,
       (o) => o.ts,
     ),
+    /* Direct launches: designed inside the cycle, deployed from the scheduler loop. */
+    directLaunches: mergeById(
+      base.directLaunches ?? [],
+      work.directLaunches ?? [],
+      current.directLaunches ?? [],
+      (l) => l.id,
+      (l) => l.createdAt,
+    ),
     lastTuneDate: pick3(base.lastTuneDate, work.lastTuneDate, current.lastTuneDate),
   };
   return merged;
