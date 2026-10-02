@@ -87,6 +87,21 @@ const MIN_CACHEABLE_CHARS = 1024 * 3.5;
 const MAX_STABLE_BLOCKS = 3;
 
 /**
+ * Cache breakpoints for a multi-step tool loop. Every turn of the loop
+ * re-sends the system prompt, the tool definitions and the opening user
+ * prompt; marking the last of those caches the whole prefix, so turns two
+ * onward read it at a tenth of the price. The first Ranger pass sent 141k
+ * uncached input tokens over nine turns with nothing marked.
+ */
+export function cachedLoopPrompt(system: string, prompt: string): { instructions: SystemModelMessage[]; messages: ModelMessage[] } {
+  const mark = (content: string) => (content.length >= MIN_CACHEABLE_CHARS ? { providerOptions: CACHE_CONTROL } : {});
+  return {
+    instructions: [{ role: "system", content: system, ...mark(system) }],
+    messages: [{ role: "user", content: prompt, ...mark(prompt) }],
+  };
+}
+
+/**
  * One line per call so the saving is a fact in the log rather than a claim.
  * Cache reads are billed at a tenth of the base input rate; writes at a
  * quarter more. A cold cycle after a library edit will show writes, and every
