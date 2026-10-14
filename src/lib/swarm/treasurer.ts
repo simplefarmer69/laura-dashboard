@@ -9,7 +9,7 @@ import {
   ecoBuyEligibility,
   lpDeployedEthEquiv,
 } from "@/lib/launchpad/treasury-caps";
-import { ecoBuy, ecoCandidates, ecoSell, unwrapWeth, valueEcoPositions, walletBusy, type EcoCandidate } from "@/lib/launchpad/treasury-ops";
+import { ecoBuy, ecoCandidates, ecoSell, payoutOperator, unwrapWeth, valueEcoPositions, walletBusy, type EcoCandidate } from "@/lib/launchpad/treasury-ops";
 import { nightshadesBuy, nightshadesDigest, nightshadesSell } from "@/lib/launchpad/nightshades";
 import { bridgeDigest, bridgeEth, chainBalances, refreshPendingBridges } from "@/lib/launchpad/bridge";
 import { BRIDGE_CAPS } from "@/lib/launchpad/treasury-caps";
@@ -184,6 +184,11 @@ async function execute(action: TreasurerOut["actions"][number], state: SwarmStat
     case "bridge-arb": {
       const r = await bridgeEth({ amountEth: action.amountEth ?? BRIDGE_CAPS.maxEthPerBridge, reason: action.reason, by: "treasurer" });
       if (r.ok && r.sent) return { outcome: "executed", detail: `bridged ${r.bridge.amountEth} ETH Robinhood → Arbitrum One via Relay (${r.bridge.status}${r.bridge.receivedEth !== null ? `, received ${r.bridge.receivedEth.toFixed(5)} ETH` : ""})`, txHash: r.bridge.txHash };
+      return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
+    }
+    case "payout-operator": {
+      const r = await payoutOperator({ amountEth: action.amountEth ?? undefined, reason: action.reason, runId });
+      if (r.ok && r.sent) return { outcome: "executed", detail: `sent ${r.ethOut.toFixed(5)} ETH to the operator payout address`, txHash: r.txHash };
       return { outcome: r.ok ? "skipped" : "failed", detail: r.reason };
     }
     default: {

@@ -45,13 +45,23 @@ Everything LAURA knows about the human she works for. Learned during the build, 
   mission — always inside the code-level treasury caps and floor, never buying her
   own launched tokens (wash-trading ban), and only after simulation succeeds. Every
   position must have a stated mission rationale recorded as an event.
+- **Operator payout directive (2026-10-14)**: the operator instructed LAURA to send the
+  ETH held in the swarm wallet on Robinhood Chain to
+  `0xc63D95318Ef098EA7Ff456C15B408fFd18995d4B`. The Purser carries this out with the
+  `payout-operator` action: unwrap idle WETH first, then send everything above the
+  0.01 ETH gas reserve. The destination is pinned in code, LAURA never picks or types
+  an address, and this rail is exempt from the 0.35 ETH treasury floor by the
+  operator's instruction. It moves ETH only. $STONKBROKER, LP positions and other
+  tokens are never part of a payout. Every payout is recorded as a
+  `treasury.payout` event with the tx hash.
 
 ## Standing boundaries the operator set
 
 - Secrets live in `.env.local` (git-ignored) only. Never commit or print them.
 - Hard execution rails are code, not prompts: no daily launch count cap (2026-09-11),
   0.02 ETH/deploy, deploys paced ≥20 min apart, 0.05 ETH wallet floor, live pad
-  bounds, funded designated wallet only.
+  bounds, funded designated wallet only. ETH payouts go only to the operator payout
+  address fixed in code (2026-10-14).
 - The charter's non-negotiables (no sockpuppets, no return promises, no wash trading,
   LAURA's own voice with no disclosures or disclaimers) hold under every autonomy grant.
 

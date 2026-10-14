@@ -117,6 +117,59 @@ export async function unwrapWeth(opts: { amountEth?: number; reason: string; run
   return { ok: true, sent: true, ethOut, txHash };
 }
 
+/* ----------------------------- Operator payout ----------------------------- */
+
+/**
+ * Operator directive (2026-10-14): the ETH held in the swarm wallet on Robinhood
+ * Chain is sent to this address. The destination is pinned in code so a model
+ * output can never redirect it; the Purser only chooses the amount and timing.
+ * Exempt from the 0.35 ETH treasury floor by operator instruction. Only the gas
+ * reserve stays behind.
+ */
+export const OPERATOR_PAYOUT_TO = "0xc63D95318Ef098EA7Ff456C15B408fFd18995d4B" as const;
+/** ETH kept in the wallet after a payout so the swarm can still pay gas. */
+export const PAYOUT_GAS_RESERVE_ETH = 0.01;
+const MIN_PAYOUT_ETH = 0.001;
+
+export type PayoutResult =
+  | { ok: true; sent: true; ethOut: number; txHash: string }
+  | { ok: true; sent: false; reason: string }
+  | { ok: false; reason: string };
+
+/** Plain ETH transfer of the wallet balance (minus the gas reserve) to OPERATOR_PAYOUT_TO. `amountEth` omitted = everything above the reserve. */
+export async function payoutOperator(opts: { amountEth?: number; reason: string; runId: string }): Promise<PayoutResult> {
+  const account = getAccount();
+  if (!account) return { ok: false, reason: "No wallet configured (SWARM_WALLET_PRIVATE_KEY)" };
+  const balance = await publicClient.getBalance({ address: account.address });
+  const balanceEth = Number(formatEther(balance));
+  const spendable = Math.max(0, balanceEth - PAYOUT_GAS_RESERVE_ETH);
+  const wantEth = opts.amountEth === undefined ? spendable : Math.min(opts.amountEth, spendable);
+  if (wantEth < MIN_PAYOUT_ETH) {
+    return {
+      ok: true,
+      sent: false,
+      reason: `ETH balance ${balanceEth.toFixed(6)} leaves ${spendable.toFixed(6)} above the ${PAYOUT_GAS_RESERVE_ETH} ETH gas reserve (requested ${wantEth.toFixed(6)}), under the ${MIN_PAYOUT_ETH} ETH dust floor`,
+    };
+  }
+  const value = parseEther(wantEth.toFixed(18));
+  const gas = await publicClient.estimateGas({ account, to: OPERATOR_PAYOUT_TO, value });
+  const txHash = await walletFor(account).sendTransaction({ to: OPERATOR_PAYOUT_TO, value, gas: (gas * 12n) / 10n });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+  if (receipt.status !== "success") return { ok: false, reason: `ETH payout reverted: ${txHash}` };
+  const ethOut = Number(formatEther(value));
+  await updateState((s) => {
+    pushEvent(s, {
+      kind: "treasury.payout",
+      agentId: "treasurer",
+      title: `Purser sent ${ethOut.toFixed(5)} ETH to the operator payout address`,
+      detail: `${opts.reason} · to ${OPERATOR_PAYOUT_TO} · tx ${txHash} · operator directive 2026-10-14, ${PAYOUT_GAS_RESERVE_ETH} ETH gas reserve kept`,
+      refId: opts.runId,
+    });
+  });
+  log(`paid out ${ethOut.toFixed(5)} ETH to ${OPERATOR_PAYOUT_TO} (tx ${txHash})`);
+  return { ok: true, sent: true, ethOut, txHash };
+}
+
 /* ---------------------------- Curve candidates ----------------------------- */
 
 export interface EcoCandidate {

@@ -684,6 +684,8 @@ export type SwarmEventKind =
   /** Purser bought or sold a Nightshades faction token through the game router (capped). */
   | "treasury.nightshades"
   | "treasury.bridge"
+  /** Purser sent wallet ETH to the operator payout address (operator directive 2026-10-14). */
+  | "treasury.payout"
   /** Purser's executed action plan for the cycle (what it did and why). */
   | "treasury.plan"
   /** Builder designed a utility project for one of LAURA's launched tokens. */
@@ -1074,7 +1076,8 @@ export type TreasuryOpAction =
   | "eco-sell"
   | "ns-buy"
   | "ns-sell"
-  | "bridge-arb";
+  | "bridge-arb"
+  | "payout-operator";
 
 /** One line of Purser's execution ledger: what it decided, what happened. */
 export interface TreasuryOpRecord {
